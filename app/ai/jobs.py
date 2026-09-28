@@ -574,7 +574,9 @@ async def job_program(uid: str, inp: dict) -> dict:
     excluded = excluded_codes(uid, prof)
     # «не предлагать» и чего нет в зале — из профиля (SPEC-v3 п. 17–18)
     ex_prefs = prof.get("exercise_prefs") or {}
-    skip_ids = set((ex_prefs.get("exclude") or {}).keys())
+    # «не предлагать» с учётом места: «нигде», «в зале»/«дома» - для программы этого места; «только в разминке» - не касается
+    skip_ids = {k for k, v in (ex_prefs.get("exclude") or {}).items()
+                if (v or {}).get("scope", "all") in ("all", "gym" if place == "gym" else "home")}
     liked_ex = [i for i in ex_prefs.get("like") or [] if i not in skip_ids]
     gym_missing = set(((prof.get("gym_equipment") or {}).get("missing")) or [])
     catalog = allowed_exercises(place, equipment, excluded, missing=gym_missing if place == "gym" else None, skip_ids=skip_ids)

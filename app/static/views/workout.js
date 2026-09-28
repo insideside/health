@@ -174,7 +174,7 @@ function makeHomeLocal({ minutes, focus, date, title }) {
   const prof = profile();
   const have = new Set(['mat', 'chair', ...(prof.equipment || [])]);
   const excl = H.safe(() => P.excludedFor?.(), new Set());
-  const skip = PF.excludedIds();
+  const skip = PF.excludedIds(undefined, { place: 'home' });
   const ok = e => (e.place || []).includes('home') && !skip.has(e.id) && (e.equipment || []).every(q => have.has(q)) && !(e.contraindications || []).some(c => excl.has?.(c));
   const all = [...S.exMap.values()].filter(ok);
   const PAT = {

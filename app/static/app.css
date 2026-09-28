@@ -382,3 +382,15 @@ html, body { overflow-x: clip; }
 button.sync.ai-sleep { color: var(--ink-3, var(--muted)); }
 button.sync.ai-sleep::before { background: var(--ink-3, var(--muted)); }
 .ai-hint { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* «Здоровье»: статус, схема «команда ← автоматизация», быстрый путь */
+.hg-status { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; margin: 14px 0 6px; border-left: 3px solid var(--ink-3); }
+.hg-status.ok { border-left-color: var(--good, #6fae5a); }
+.hg-flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; margin: 6px 0 10px; }
+.hg-box { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; }
+.hg-arrow { align-self: center; font-size: 22px; color: var(--accent); }
+.hg-quick { padding: 16px; }
+.hg-quick > b { font-size: 17px; }
+.hg-ol { padding-left: 1.2em; font-size: 15px; }
+.hg-ol li { margin: 6px 0; }
+@media (max-width: 480px) { .hg-flow { grid-template-columns: minmax(0, 1fr); } .hg-arrow { transform: rotate(90deg); justify-self: center; } }
+.hg-quick .btn { white-space: normal; height: auto; min-height: 44px; line-height: 1.2; max-width: 100%; }

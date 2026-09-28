@@ -499,7 +499,7 @@ function localPick(module, minutes, date, seed) {
     return false;
   };
   const excl = safe(() => P.excludedFor?.(), new Set());
-  const skip = PF.excludedIds();
+  const skip = PF.excludedIds(undefined, { place: 'home', module });
   let pool = [...S.exMap.values()].filter(e => fit(e) && home(e) && !skip.has(e.id) && !(e.contraindications || []).some(c => excl.has?.(c)));
   if (!pool.length) pool = [...S.exMap.values()].filter(e => e.morning);
   pool.sort((a, b) => hash(seed + a.id) - hash(seed + b.id));
@@ -523,7 +523,7 @@ async function makeRoutine(module, minutes, date) {
   if (P.pickExercises) exercises = safe(() => P.pickExercises({ tags: m.tags, minutes, place: 'home', date, seed }), null);
   if (!exercises?.length) exercises = localPick(module, minutes, date, seed);
   if (module === 'morning' && !prev) {
-    const pins = pinnedOf().filter(id => S.exMap.has(id) && !PF.isExcluded(id) && !exercises.some(x => x.id === id));
+    const pins = pinnedOf().filter(id => S.exMap.has(id) && !PF.isExcluded(id, undefined, { place: 'home', module: 'morning' }) && !exercises.some(x => x.id === id));
     exercises = [...pins.map(id => { const e = S.exMap.get(id); return { id, amount: e.unit === 'seconds' ? '30 с' : '10 раз', per_side: !!e.per_side, pinned: true }; }), ...exercises];
   }
   if (!exercises.length) { toast('Каталог упражнений ещё не загружен'); return; }

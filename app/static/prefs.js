@@ -39,9 +39,25 @@ export function exPrefs(uid = store.uid()) {
   const p = prof(uid).exercise_prefs || {};
   return { exclude: p.exclude || {}, like: p.like || [], keep: p.keep || {} };
 }
-export const excludedIds = (uid = store.uid()) => new Set(Object.keys(exPrefs(uid).exclude));
+// Где не предлагать: только в утренней разминке, дома, в зале или нигде (старые отметки без scope - «нигде»).
+// where - контекст подбора: { place: 'home'|'gym', module?: 'morning'|… }; без него учитываются только «нигде».
+export const EXCLUDE_SCOPES = [['morning', 'в утренней разминке'], ['home', 'дома'], ['gym', 'в зале'], ['all', 'нигде']];
+export const SCOPE_NAME = { morning: 'в разминке', home: 'дома', gym: 'в зале', all: 'нигде' };
+export function excludeApplies(v, where) {
+  const sc = v?.scope || 'all';
+  if (sc === 'all') return true;
+  if (!where) return false;
+  return sc === 'morning' ? where.module === 'morning' : sc === where.place;
+}
+// сцена по контексту на экране: разминка → «в разминке», другие комплексы → «дома», тренировка → её место
+export function scopeFor(ctx, place) {
+  if (ctx?.kind === 'routine') return (ctx.module || 'morning') === 'morning' ? 'morning' : 'home';
+  return place === 'gym' ? 'gym' : place === 'home' ? 'home' : 'all';
+}
+export const excludedIds = (uid = store.uid(), where) => new Set(Object.entries(exPrefs(uid).exclude).filter(([, v]) => excludeApplies(v, where)).map(([id]) => id));
 export const likedIds = (uid = store.uid()) => new Set(exPrefs(uid).like);
-export const isExcluded = (id, uid) => id in exPrefs(uid).exclude;
+export const isExcluded = (id, uid, where) => { const v = exPrefs(uid).exclude[id]; return !!v && excludeApplies(v, where); };
+export const exclusionOf = (id, uid) => exPrefs(uid).exclude[id] || null;   // отмечено хоть где-то
 export const isLiked = (id, uid) => exPrefs(uid).like.includes(id);
 
 async function savePrefs(fn, extra = p => ({})) {
@@ -51,15 +67,15 @@ async function savePrefs(fn, extra = p => ({})) {
   await store.put('profile', profId(uid), { ...p, exercise_prefs: next, ...extra(p) });
 }
 // «не предлагать»: из любимых и «оставить» — прочь; закреплённое в утренней разминке — открепляем
-export async function exclude(id, reason = 'other', via = '') {
+export async function exclude(id, reason = 'other', via = '', scope = 'all') {
   await savePrefs(x => {
-    x.exclude[id] = { reason, at: Date.now(), ...(via ? { via } : {}) };
-    x.like = x.like.filter(i => i !== id);
+    x.exclude[id] = { reason, at: Date.now(), scope, ...(via ? { via } : {}) };
+    if (scope === 'all') x.like = x.like.filter(i => i !== id);      // «любимое» остаётся, если убрали только из одного места
     delete x.keep[id];
     return x;
   }, p => {
     const mo = p.modules?.morning;
-    if (!mo?.pinned?.includes(id)) return {};
+    if (!mo?.pinned?.includes(id) || scope === 'gym') return {};
     return { modules: { ...p.modules, morning: { ...mo, pinned: mo.pinned.filter(i => i !== id) } } };
   });
 }

@@ -175,10 +175,10 @@ export const ctxAttrs = ctx => (ctx ? `data-ctx="${esc(ctx.kind)}" data-date="${
 export function showTech(id, ctx = null) {
   const e = S.exMap.get(id);
   if (!e) return toast('Описание не загружено');
-  const off = PF.isExcluded(id), liked = PF.isLiked(id);
+  const exv = PF.exclusionOf(id), off = !!exv, liked = PF.isLiked(id);
   openModal(`<div class="modal-head"><div class="kicker smallcaps">${esc((e.muscles || []).join(', '))}</div><h2>${esc(e.name)}</h2></div>
     <div class="modal-body">${techHtml(e)}
-      ${off ? '<p class="note">Вы отметили «не предлагать» - в новых разминках и тренировках его нет.</p>' : ''}</div>
+      ${off ? `<p class="note">Вы отметили «не предлагать» - ${(exv.scope || 'all') === 'all' ? 'нигде: ни в разминках, ни в тренировках' : `только ${esc(PF.SCOPE_NAME[exv.scope])}; в остальных местах тренер его предлагает`}.</p>` : ''}</div>
     <div class="modal-foot fx-tech-acts">
       ${off ? `<button class="btn quiet" data-act="ex-unexcl" data-ex="${esc(id)}" ${ctxAttrs(ctx)}>Снова предлагать</button>`
         : `${ctx ? `<button class="btn quiet" data-act="ex-swap-open" data-ex="${esc(id)}" ${ctxAttrs(ctx)}>Заменить</button>` : ''}<button class="btn quiet" data-act="ex-excl-open" data-ex="${esc(id)}" ${ctxAttrs(ctx)}>Не предлагать</button>

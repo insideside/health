@@ -99,9 +99,9 @@ function userLevel(uid) {
 }
 
 // пул упражнений под место, инвентарь, ограничения и уровень
-function pool({ place = 'home', equipment, level, uid = store.uid(), noJump, quiet } = {}) {
+function pool({ place = 'home', equipment, level, uid = store.uid(), noJump, quiet, module } = {}) {
   const excl = excludedFor(uid);
-  const skip = PF.excludedIds(uid);                 // «не предлагать» (profile.exercise_prefs.exclude)
+  const skip = PF.excludedIds(uid, { place, module });   // «не предлагать» там, где отметили (разминка / дома / зал / нигде)
   const missing = place === 'gym' ? PF.gymMissing(uid) : null;   // чего нет в зале
   const noHigh = noJump || quiet || NO_IMPACT.some(x => excl.has(x));
   let eq = null;
@@ -131,10 +131,10 @@ function setSec(e, amount) {
 const fmtAmount = (e, n) => e.unit === 'seconds' ? `${n} с` : `${n} раз`;
 
 // Внутренний подбор: → { list: [{id, name, amount, per_side, unit, n, sec}], rounds, sec }
-function pickInternal({ tags, fallback, zones, minutes = 10, place = 'home', date = C.today(), seed, level, uid = store.uid(),
+function pickInternal({ tags, fallback, zones, minutes = 10, place = 'home', date = C.today(), seed, level, uid = store.uid(), module,
   avoid = [], equipment, noJump, quiet, secAmount = 30, repAmount = 10, maxPerPattern = 2, requireZones = false, maxItems = 99, excludeTags = [] } = {}) {
   const budget = Math.max(60, minutes * 60);
-  const base = pool({ place, equipment, level, uid, noJump, quiet });
+  const base = pool({ place, equipment, level, uid, noJump, quiet, module });
   const has = (e, ts) => !ts || !ts.length || ts.some(t => e._tags.has(t));
   const base2 = excludeTags.length ? base.filter(e => !excludeTags.some(t => e._tags.has(t))) : base;
   let cand = base2.filter(e => has(e, tags) && (!requireZones || !zones?.length || e._zones.some(z => zones.includes(z))));
@@ -258,7 +258,7 @@ export async function makeRoutine(module, a, b, opts = {}) {
   const seed = `${date}|${module}|${uid}${rebuild ? `|${rebuild}` : ''}`;
   if (rebuild) for (const x of cur?.data.exercises || []) if (!x.pinned) avoid.push(x.id);   // не повторять только что показанное
   // закреплённые пользователем упражнения («моя зарядка») идут первыми, генератор добирает остальное время
-  const skipIds = PF.excludedIds(uid);
+  const skipIds = PF.excludedIds(uid, { place: 'home', module });
   const pinned = module === 'morning' ? (prof(uid).modules?.morning?.pinned || []).filter(x => !skipIds.has(x) && catalog().some(e => e.id === x)) : [];
   const pinnedList = pinned.map(pid => {
     const e = catalog().find(x => x.id === pid);
@@ -266,7 +266,7 @@ export async function makeRoutine(module, a, b, opts = {}) {
   });
   minutes = Math.max(2, minutes - pinned.length * 0.75);
   avoid.push(...pinned);
-  const res = pickInternal({ tags, fallback: cfg.fallback, zones: cfg.zones, requireZones: !!cfg.requireZones, minutes, place: 'home', date, seed, avoid,
+  const res = pickInternal({ tags, fallback: cfg.fallback, zones: cfg.zones, requireZones: !!cfg.requireZones, minutes, place: 'home', module, date, seed, avoid,
     secAmount: cfg.sec, repAmount: cfg.reps, maxPerPattern: cfg.maxPerPattern ?? 99, uid, maxItems: Math.max(3, Math.round(minutes * cfg.perMin)), excludeTags: cfg.excludeTags || [] });
   if (!res.list.length && !pinnedList.length) return null;     // каталог ещё не загружен
   const total = asked;
@@ -788,10 +788,10 @@ export { placeOfWorkout };
 
 // Альтернативы упражнению: тот же паттерн / категория / зоны, разрешённые местом, инвентарём, ограничениями
 // и «не предлагать». → [упражнение каталога] по убыванию похожести
-export function alternativesFor(id, { place = 'home', exclude = [], n = 4, uid = store.uid() } = {}) {
+export function alternativesFor(id, { place = 'home', module, exclude = [], n = 4, uid = store.uid() } = {}) {
   const e = exById(id);
   const skip = new Set([id, ...exclude]);
-  const base = pool({ place, uid, level: 3 }).filter(x => !skip.has(x.id));
+  const base = pool({ place, module, uid, level: 3 }).filter(x => !skip.has(x.id));
   if (!e) return base.slice(0, n);
   const lv = userLevel(uid), liked = PF.likedIds(uid), zs = new Set(e._zones || []);
   const KEY_TAGS = ['morning', 'warmup', 'mobility', 'recovery', 'posture', 'neck', 'face', 'cardio', 'core'];
@@ -812,7 +812,7 @@ export function ctxInfo(ctx, uid = store.uid()) {
   if (ctx.kind === 'routine') {
     const rec = store.get(`routine:${uid}:${ctx.date}:${ctx.module}`);
     const exs = rec?.data.exercises || [];
-    return rec && exs[ctx.i] ? { id: exs[ctx.i].id, place: 'home', others: exs.map(x => x.id) } : null;
+    return rec && exs[ctx.i] ? { id: exs[ctx.i].id, place: 'home', module: ctx.module, others: exs.map(x => x.id) } : null;
   }
   const w = C.workout(ctx.date, uid);
   if (!w) return null;
@@ -822,7 +822,7 @@ export function ctxInfo(ctx, uid = store.uid()) {
 }
 export function alternativesIn(ctx, n = 4, uid = store.uid()) {
   const inf = ctxInfo(ctx, uid);
-  return inf ? alternativesFor(inf.id, { place: inf.place, exclude: inf.others, n, uid }) : [];
+  return inf ? alternativesFor(inf.id, { place: inf.place, module: inf.module, exclude: inf.others, n, uid }) : [];
 }
 
 // Заменить упражнение в текущей разминке/тренировке; отметки и логи остальных упражнений не трогаем.
@@ -863,14 +863,18 @@ export async function swapExercise(ctx, to, uid = store.uid()) {
 }
 
 // «Не предлагать» (+ сразу заменить в текущем списке, если он указан) → { alt } — на что заменили
-export async function excludeExercise(id, reason = 'other', ctx = null, via = '') {
+// scope - где не предлагать; по умолчанию там, где отметили (разминка / дома / в зале)
+export async function excludeExercise(id, reason = 'other', ctx = null, via = '', scope = null) {
+  const sc = scope || PF.scopeFor(ctx, ctxInfo(ctx)?.place);
   let alt = null;
-  if (ctx) {
+  const inf = ctxInfo(ctx);
+  const here = inf && PF.excludeApplies({ scope: sc }, { place: inf.place, module: inf.module });
+  if (ctx && here) {
     const a = alternativesIn(ctx, 1)[0];
-    await PF.exclude(id, reason, via);
+    await PF.exclude(id, reason, via, sc);
     if (a) alt = await swapExercise(ctx, a.id);
-  } else await PF.exclude(id, reason, via);
-  return { alt };
+  } else await PF.exclude(id, reason, via, sc);
+  return { alt, scope: sc };
 }
 
 // где сегодня стоит упражнение (не выполненное): для замены из чата и с «Сегодня»
@@ -891,7 +895,7 @@ export function findToday(id, date = C.today(), uid = store.uid()) {
 // сигнал тренера «заменить на X»: X — в любимые, прежнее — «не предлагать» (пропускаю), и замена в сегодняшнем списке
 export async function replaceExercise(id, to) {
   const ctx = findToday(id);
-  await PF.exclude(id, 'skipped', 'signal');
+  await PF.exclude(id, 'skipped', 'signal', PF.scopeFor(ctx, ctxInfo(ctx)?.place));
   if (to) await PF.setLike(to, true);
   if (ctx && to) await swapExercise(ctx, to);
 }

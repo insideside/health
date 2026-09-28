@@ -38,10 +38,15 @@ function exclModalHtml() {
   const f = S.forms.exx || {};
   const ctx = f.ctx;
   return `<div class="modal-head"><div class="kicker smallcaps">Не предлагать</div><h2>${esc(exName(f.id))}</h2></div>
-    <div class="modal-body"><div class="field"><span class="smallcaps">Почему</span><div class="chips">${PF.EXCLUDE_REASONS.map(([k, l]) =>
+    <div class="modal-body"><div class="field"><span class="smallcaps">Где не предлагать</span><div class="chips">${PF.EXCLUDE_SCOPES.map(([k, l]) =>
+      `<button type="button" class="chip ${f.scope === k ? 'on' : ''}" aria-pressed="${f.scope === k}" data-act="ex-excl-scope" data-v="${k}">${esc(l)}</button>`).join('')}</div></div>
+      <div class="field" style="margin-top:16px"><span class="smallcaps">Почему</span><div class="chips">${PF.EXCLUDE_REASONS.map(([k, l]) =>
       `<button type="button" class="chip ${f.reason === k ? 'on' : ''}" aria-pressed="${f.reason === k}" data-act="ex-excl-reason" data-v="${k}">${esc(l)}</button>`).join('')}</div></div>
       ${REASON_NOTE[f.reason] ? `<p class="note">${esc(REASON_NOTE[f.reason])}</p>` : ''}
-      <p class="note">Тренер уберёт его из разминок, домашних и зальных тренировок и из новых программ${ctx || P.findToday(f.id) ? ', а в сегодняшнем списке сразу заменит похожим' : ''}. Вернуть можно в профиле: «Мои упражнения».</p></div>
+      <p class="note">${({ morning: 'Тренер уберёт его только из утренней разминки - в комплексах и тренировках оно останется.',
+        home: 'Тренер уберёт его из разминок, комплексов и тренировок дома - в зале оно останется.',
+        gym: 'Тренер уберёт его из тренировок в зале и зальных программ - дома оно останется.',
+        all: 'Тренер уберёт его отовсюду: из разминок, комплексов, тренировок дома и в зале, из новых программ.' })[f.scope || 'all']}${ctx ? ' В сегодняшнем списке сразу заменит похожим.' : ''} Вернуть можно в профиле: «Мои упражнения».</p></div>
     <div class="modal-foot"><button class="btn quiet" data-act="close">Отмена</button><button class="btn solid" data-act="ex-excl-do">Не предлагать</button></div>`;
 }
 
@@ -143,7 +148,7 @@ export function myExBody() {
   const keep = Object.keys(p.keep);
   const row = (id, meta, btn) => `<div class="item-row fx-myrow"><span class="ell"><button class="a-linkbtn" data-act="tech" data-ex="${esc(id)}">${esc(exName(id))}</button>${meta ? `<span class="note"> · ${esc(meta)}</span>` : ''}</span>${btn}</div>`;
   return `<p class="note" style="margin-top:0">Отмечается прямо в упражнении: «Не предлагать», «Заменить», «нравится» - в разминке, тренировке и в описании техники.</p>
-    <div class="field"><span class="smallcaps">Не предлагать</span>${ex.length ? ex.map(([id, v]) => row(id, [PF.REASON_NAME[v.reason] || v.reason, v.at ? fmt(C.ymd(new Date(v.at)), { day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(', '),
+    <div class="field"><span class="smallcaps">Не предлагать</span>${ex.length ? ex.map(([id, v]) => row(id, [(v.scope || 'all') === 'all' ? 'нигде' : PF.SCOPE_NAME[v.scope], PF.REASON_NAME[v.reason] || v.reason, v.at ? fmt(C.ymd(new Date(v.at)), { day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(', '),
       `<button class="btn quiet" data-act="ex-unexcl" data-ex="${esc(id)}">Вернуть</button>`)).join('') : '<p class="note">Пусто - тренер предлагает всё, что подходит по инвентарю и здоровью.</p>'}</div>
     <div class="field" style="margin-top:12px"><span class="smallcaps">Любимые</span>${p.like.length ? p.like.map(id => row(id, '', `<button class="btn quiet" data-act="ex-like" data-ex="${esc(id)}">Убрать</button>`)).join('') : '<p class="note">Любимые упражнения тренер ставит чаще.</p>'}</div>
     ${keep.length ? `<div class="field" style="margin-top:12px"><span class="smallcaps">Оставлены, хотя пропускаются</span>${keep.map(id => row(id, '', `<button class="btn quiet" data-act="ex-unkeep" data-ex="${esc(id)}">Снова следить</button>`)).join('')}</div>` : ''}`;
@@ -164,19 +169,23 @@ export const actions = {
     await afterPrefs(ctx?.date);
   },
   'ex-excl-open': el => {
-    S.forms.exx = { id: el.dataset.ex, ctx: exCtx(el), reason: 'uncomfortable' };
+    const ctx = exCtx(el);
+    // по умолчанию - там, где нажали: в разминке - только в разминке, в тренировке - в её месте (дом/зал)
+    S.forms.exx = { id: el.dataset.ex, ctx, reason: 'uncomfortable', scope: ctx ? PF.scopeFor(ctx, P.ctxInfo(ctx)?.place) : 'all' };
     reopenExcl();
   },
   'ex-excl-reason': el => { (S.forms.exx ||= {}).reason = el.dataset.v; reopenExcl(); },
+  'ex-excl-scope': el => { (S.forms.exx ||= {}).scope = el.dataset.v; reopenExcl(); },
   'ex-excl-do': async () => {
     const f = S.forms.exx;
     if (!f?.id) return closeModal();
     const ctx = f.ctx || P.findToday(f.id);
     const name = exName(f.id);
-    const { alt } = await P.excludeExercise(f.id, f.reason || 'other', ctx);
+    const { alt, scope } = await P.excludeExercise(f.id, f.reason || 'other', ctx, '', f.scope || 'all');
     closeModal();
     delete S.forms.exx;
-    toast(alt ? `Больше не предлагаю «${name}». Вместо него - «${alt.name}».` : `Больше не предлагаю «${name}». Вернуть: Профиль → «Мои упражнения».`, 4000);
+    const where = scope === 'all' ? '' : ` ${PF.SCOPE_NAME[scope]}`;
+    toast(alt ? `Больше не предлагаю «${name}»${where}. Вместо него - «${alt.name}».` : `Больше не предлагаю «${name}»${where}. Вернуть: Профиль → «Мои упражнения».`, 4000);
     await afterPrefs(ctx?.date);
   },
   'ex-like': async el => {
