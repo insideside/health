@@ -446,6 +446,11 @@ def _activities_text(prof: dict) -> tuple[str, list[dict]]:
                      f"{' (' + days + ')' if days else ''}, ~{a.get('minutes') or '?'} мин, "
                      f"интенсивность {INTENSITY_LABEL.get(a.get('intensity'), 'средняя')}"
                      f"{', нагрузка: ' + info['load'] if info.get('load') else ''}{', зоны: ' + zones if zones else ''}")
+        sup = info.get("support") or {}
+        if sup.get("why"):
+            # чем дополнить этот спорт в зале/дома - программа должна это закрывать
+            lines.append(f"  дополнить: {', '.join(ZONE_LABEL.get(z, z) for z in sup.get('zones') or [])} - {sup['why']}"
+                         + (f" Осторожно: {sup['avoid']}" if sup.get("avoid") else ""))
         considered.append({"type": a.get("type"), "name": name, "per_week": a.get("per_week"),
                            "weekdays": a.get("weekdays") or [], "minutes": a.get("minutes"),
                            "intensity": a.get("intensity"), "zones": info.get("zones") or [], "load": info.get("load")})
@@ -644,7 +649,7 @@ async def job_program(uid: str, inp: dict) -> dict:
 Место: {'тренажёрный зал' if place == 'gym' else 'дома, инвентарь: ' + ', '.join(EQUIP_LABEL.get(x, x) for x in equipment)}.
 Тренировок в неделю: {n_days}, программа на {weeks} нед., дни повторяются каждую неделю.
 {chr(10).join(day_notes)}
-Другие активности клиента (их не планируй — он делает их сам, но учитывай нагрузку и восстановление):
+Другие активности клиента (их не планируй — он делает их сам, но учитывай нагрузку и восстановление; строки «дополнить» — что программа должна подтянуть в поддержку этого спорта):
 {acts_text or '— нет'}
 
 Каталог (id | название | категория | зона | паттерн | уровень | единица | доп.):

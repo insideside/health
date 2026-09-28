@@ -34,7 +34,8 @@ SYNC_LIMIT = 2000
 
 def build_hash() -> str:
     h = hashlib.md5()
-    for p in sorted(STATIC.rglob("*")):
+    # справочники упражнений, активностей и добавок тоже: устройства перечитывают их при смене версии
+    for p in [*sorted(STATIC.rglob("*")), *(db.SEED_DIR / n for n in ("exercises.json", "activities.json", "supplements.json"))]:
         if p.is_file():
             h.update(p.name.encode())
             h.update(p.read_bytes())

@@ -34,7 +34,22 @@
     ],
     "weather_sensitive": true,
     "cold_ok": true,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для ходьбы",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "posture"
+      ],
+      "why": "Ходьба почти не укрепляет мышцы: приседания, ягодичный мост и планка держат колени и осанку, а подъёмы на носки берегут стопу и голень.",
+      "avoid": null
+    }
   },
   {
     "id": "walk_fast",
@@ -70,7 +85,21 @@
     ],
     "weather_sensitive": true,
     "cold_ok": true,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для быстрой ходьбы",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "mobility"
+      ],
+      "why": "Темп держат ягодицы и икры: мост, выпады и подъёмы на носки, а подвижность голеностопа и бёдер снимает лишнюю нагрузку с голени.",
+      "avoid": null
+    }
   },
   {
     "id": "running",
@@ -94,7 +123,11 @@
       "бегала",
       "джоггинг",
       "трусца",
-      "бег трусцой"
+      "бег трусцой",
+      "марафон",
+      "полумарафон",
+      "забег",
+      "бегал марафон"
     ],
     "intensity_hint": {
       "low": "Лёгкая трусца около 7–8 км/ч, можно разговаривать",
@@ -109,7 +142,23 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для бега",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Бег - тысячи толчков на одной ноге: сила ягодиц и икр (включая камбаловидную), упражнения на одной ноге и кор держат таз и колено ровно и снижают риск травм колена, ахилла и голени.",
+      "avoid": "Тяжёлые ноги - не накануне длительной пробежки или интервалов."
+    }
   },
   {
     "id": "cycling",
@@ -131,7 +180,10 @@
       "вело",
       "велопрогулка",
       "катался на велосипеде",
-      "байк"
+      "байк",
+      "шоссейник",
+      "шоссейный велосипед",
+      "велогонка"
     ],
     "intensity_hint": {
       "low": "Прогулка до 16 км/ч по ровному, почти без усилия",
@@ -148,7 +200,23 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для велосипеда",
+      "zones": [
+        "back",
+        "glutes",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "posture"
+      ],
+      "why": "В седле работают в основном квадрицепсы, а спина и бёдра долго согнуты: задняя цепь (ягодицы, разгибатели спины), кор и растяжка сгибателей бедра и груди выравнивают осанку и берегут поясницу. Велосипед почти не нагружает кости, поэтому полезны силовые с весом.",
+      "avoid": null
+    }
   },
   {
     "id": "stationary_bike",
@@ -185,7 +253,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для велотренажёра",
+      "zones": [
+        "back",
+        "glutes",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "posture"
+      ],
+      "why": "В седле работают в основном квадрицепсы, а спина и бёдра долго согнуты: задняя цепь (ягодицы, разгибатели спины), кор и растяжка сгибателей бедра и груди выравнивают осанку и берегут поясницу. Велосипед почти не нагружает кости, поэтому полезны силовые с весом.",
+      "avoid": null
+    }
   },
   {
     "id": "elliptical_trainer",
@@ -213,7 +297,7 @@
     "intensity_hint": {
       "low": "Можно свободно разговаривать и даже напевать; дыхание почти не сбито",
       "mid": "Говорить можно фразами, но не петь; тепло, лёгкая испарина",
-      "high": "Говорить трудно — только отдельные слова; сильно вспотели, пульс высокий"
+      "high": "Говорить трудно - только отдельные слова; сильно вспотели, пульс высокий"
     },
     "setting": [
       "indoor"
@@ -223,7 +307,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для эллипса",
+      "zones": [
+        "glutes",
+        "legs",
+        "back",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Эллипс даёт кардио без ударов, но мало силы и почти не нагружает кости: приседания, тяги и кор дополняют его.",
+      "avoid": null
+    }
   },
   {
     "id": "indoor_rowing",
@@ -260,7 +359,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для гребного тренажёра",
+      "zones": [
+        "abs",
+        "back",
+        "chest",
+        "shoulders"
+      ],
+      "tags": [
+        "core",
+        "strength",
+        "mobility"
+      ],
+      "why": "Гребок - это тяга ногами и спиной: отжимания и жимы уравновешивают плечи, кор и ягодицы берегут поясницу, а подвижность бёдер и грудного отдела даёт правильный захват.",
+      "avoid": "Не грести с круглой поясницей после тяжёлой становой тяги."
+    }
   },
   {
     "id": "jump_rope",
@@ -296,7 +411,21 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для скакалки",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "mobility"
+      ],
+      "why": "Прыжки нагружают икры и ахилл: подъёмы на носки, приседания и подвижность голеностопа готовят сухожилия к ударам.",
+      "avoid": "Объём прыжков наращивать постепенно, особенно при лишнем весе."
+    }
   },
   {
     "id": "nordic_walking",
@@ -334,7 +463,22 @@
     ],
     "weather_sensitive": true,
     "cold_ok": true,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для скандинавской ходьбы",
+      "zones": [
+        "glutes",
+        "legs",
+        "back",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "posture"
+      ],
+      "why": "Палки уже включают руки и плечи; ягодицы, кор и мышцы спины помогают держать прямой корпус и длинный шаг.",
+      "avoid": null
+    }
   },
   {
     "id": "hiking",
@@ -391,7 +535,23 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для походов",
+      "zones": [
+        "legs",
+        "glutes",
+        "back",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Спуски с рюкзаком нагружают колени в уступающем режиме: выпады, зашагивания и приседания на одной ноге, кор и спина под рюкзак, подвижный голеностоп для неровной тропы.",
+      "avoid": "Тяжёлые ноги - не за 2 дня до похода."
+    }
   },
   {
     "id": "step_aerobics",
@@ -427,7 +587,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для аэробики",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Аэробика - кардио с прыжками и шагами: ягодицы и кор делают колени и таз устойчивее, а тяги спины добавляют то, чего нет на занятии.",
+      "avoid": null
+    }
   },
   {
     "id": "swimming",
@@ -503,7 +678,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для плавания",
+      "zones": [
+        "back",
+        "shoulders",
+        "abs",
+        "chest"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Гребок - тысячи повторов на плечо: наружные ротаторы и мышцы лопаток (разведения, тяги с лентой), кор для положения тела и подвижность грудного отдела берегут плечи. Вода почти не нагружает кости, поэтому нужны силовые с весом.",
+      "avoid": "Тяжёлые жимы над головой - не перед заплывом."
+    }
   },
   {
     "id": "aqua_aerobics",
@@ -541,7 +732,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для аквааэробики",
+      "zones": [
+        "glutes",
+        "legs",
+        "back",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "posture"
+      ],
+      "why": "Вода разгружает суставы, но почти не нагружает кости: немного силовых с весом на ноги и спину и упражнения на равновесие дополняют занятия.",
+      "avoid": null
+    }
   },
   {
     "id": "rowing",
@@ -583,7 +789,23 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для гребли на лодке",
+      "zones": [
+        "back",
+        "abs",
+        "sides",
+        "shoulders"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "В лодке работают спина, корпус с поворотами и плечи: тяги и кор с ротацией добавляют силы гребку, жимы уравновешивают мышцы, стабильность лопаток бережёт плечи.",
+      "avoid": null
+    }
   },
   {
     "id": "sup",
@@ -623,7 +845,22 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для сапборда",
+      "zones": [
+        "abs",
+        "sides",
+        "legs",
+        "shoulders"
+      ],
+      "tags": [
+        "core",
+        "strength"
+      ],
+      "why": "На доске всё держит равновесие: кор с поворотами, упражнения на одной ноге и стабильность плеч для гребка.",
+      "avoid": null
+    }
   },
   {
     "id": "surfing",
@@ -663,7 +900,23 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для серфинга",
+      "zones": [
+        "shoulders",
+        "back",
+        "abs",
+        "chest"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Серфинг - это гребля лёжа и резкий подъём на доску: отжимания и выход в стойку, мышцы лопаток, подвижность грудного отдела и бёдер, кор.",
+      "avoid": "Наружные ротаторы плеча укреплять до сезона, а не в поездке."
+    }
   },
   {
     "id": "snowboard",
@@ -699,7 +952,23 @@
     ],
     "weather_sensitive": true,
     "cold_ok": true,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для сноуборда",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "На доске долго держится полуприсед и много падений: приседания и выпады, устойчивое колено, кор с ротацией; начинать за 6-8 недель до сезона.",
+      "avoid": null
+    }
   },
   {
     "id": "alpine_skiing",
@@ -735,7 +1004,21 @@
     ],
     "weather_sensitive": true,
     "cold_ok": true,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для горных лыж",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Лыжи - долгая работа бёдер в уступающем режиме и контроль колена: приседания, выпады, стульчик у стены, упражнения на одной ноге и задняя поверхность бедра (защита крестообразной связки), лучше за 6-8 недель до сезона.",
+      "avoid": "Тяжёлые ноги - не во время горнолыжной поездки."
+    }
   },
   {
     "id": "cross_country_skiing",
@@ -765,7 +1048,7 @@
     "intensity_hint": {
       "low": "Спокойная прогулка классическим ходом, около 4 км/ч",
       "mid": "Уверенный темп 6–8 км/ч, говорить фразами",
-      "high": "Коньковый ход, подъёмы, гонка — говорить трудно"
+      "high": "Коньковый ход, подъёмы, гонка - говорить трудно"
     },
     "setting": [
       "outdoor"
@@ -775,7 +1058,24 @@
     ],
     "weather_sensitive": true,
     "cold_ok": true,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для беговых лыж",
+      "zones": [
+        "back",
+        "abs",
+        "shoulders",
+        "arms",
+        "glutes"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Толчок палками - это тяга корпусом и руками (пресс, широчайшие, трицепс), а толчок ногой требует сильных ягодиц и равновесия на одной ноге.",
+      "avoid": null
+    }
   },
   {
     "id": "ice_skating",
@@ -812,7 +1112,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": true,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для коньков",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Толчок в сторону и равновесие на лезвии: боковые выпады, отведение бедра, упражнения на одной ноге и кор.",
+      "avoid": null
+    }
   },
   {
     "id": "dance",
@@ -838,7 +1153,14 @@
       "сальса",
       "бачата",
       "хип-хоп",
-      "бальные"
+      "бальные",
+      "бальные танцы",
+      "латина",
+      "танго",
+      "вальс",
+      "стрип-пластика",
+      "хилс",
+      "high heels"
     ],
     "intensity_hint": {
       "low": "Медленные танцы, разучивание движений",
@@ -895,7 +1217,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для танцев",
+      "zones": [
+        "abs",
+        "glutes",
+        "legs",
+        "back"
+      ],
+      "tags": [
+        "core",
+        "strength",
+        "mobility"
+      ],
+      "why": "Танцу помогают сильный кор, ягодицы и икры для прыжков и поворотов; тяги для спины дополняют то, чего в танце почти нет.",
+      "avoid": null
+    }
   },
   {
     "id": "aerial",
@@ -967,7 +1305,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для воздушной гимнастики",
+      "zones": [
+        "shoulders",
+        "back",
+        "abs",
+        "chest"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Висы и подъёмы нагружают плечи и хват: мышцы лопаток и наружные ротаторы, толкающие упражнения для баланса мышц и подвижность плеч.",
+      "avoid": "Тяжёлые тяги на спину - не в день занятия на снаряде."
+    }
   },
   {
     "id": "yoga",
@@ -995,7 +1349,7 @@
     "intensity_hint": {
       "low": "Мягкая практика, инь-йога, долгие расслабленные позы",
       "mid": "Хатха, умеренные удержания, лёгкое тепло",
-      "high": "Виньяса, аштанга, пауэр-йога — непрерывный поток, пот"
+      "high": "Виньяса, аштанга, пауэр-йога - непрерывный поток, пот"
     },
     "fields": [
       {
@@ -1047,7 +1401,21 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для йоги",
+      "zones": [
+        "back",
+        "arms",
+        "glutes",
+        "legs"
+      ],
+      "tags": [
+        "strength"
+      ],
+      "why": "В йоге много жима своим весом и растяжки, но почти нет тяг и работы с весом: подтягивания, тяги гантелей и приседания с весом дополняют её и защищают гибкие суставы.",
+      "avoid": null
+    }
   },
   {
     "id": "pilates",
@@ -1083,7 +1451,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для пилатеса",
+      "zones": [
+        "back",
+        "legs",
+        "glutes",
+        "arms"
+      ],
+      "tags": [
+        "strength",
+        "cardio"
+      ],
+      "why": "Пилатес хорошо развивает кор и контроль, но мало нагружает крупные мышцы и сердце: приседания, тяги, жимы с весом и кардио дополняют его.",
+      "avoid": null
+    }
   },
   {
     "id": "stretching",
@@ -1121,7 +1504,21 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для растяжки",
+      "zones": [
+        "back",
+        "glutes",
+        "legs",
+        "abs"
+      ],
+      "tags": [
+        "strength"
+      ],
+      "why": "Гибкость без силы делает суставы неустойчивыми: силовые в полной амплитуде (приседания, выпады, тяги) закрепляют растяжку.",
+      "avoid": null
+    }
   },
   {
     "id": "tennis",
@@ -1142,8 +1539,7 @@
     "impact": "mid",
     "aliases": [
       "большой теннис",
-      "корт",
-      "падел"
+      "корт"
     ],
     "intensity_hint": {
       "low": "Парная игра или спокойный обмен ударами",
@@ -1159,7 +1555,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для тенниса",
+      "zones": [
+        "sides",
+        "abs",
+        "shoulders",
+        "legs"
+      ],
+      "tags": [
+        "core",
+        "strength",
+        "mobility"
+      ],
+      "why": "Удар идёт от ног через поворот корпуса: кор с ротацией, наружные ротаторы плеча и лопатки, боковые выпады для рывков и предплечья для локтя.",
+      "avoid": "Тяжёлые упражнения на плечи - не накануне игры."
+    }
   },
   {
     "id": "badminton",
@@ -1195,7 +1607,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для бадминтона",
+      "zones": [
+        "legs",
+        "glutes",
+        "shoulders",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Выпады к сетке и прыжки за воланом: сила бёдер и икр на одной ноге, устойчивое плечо для ударов над головой и кор с ротацией.",
+      "avoid": null
+    }
   },
   {
     "id": "table_tennis",
@@ -1230,7 +1658,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для настольного тенниса",
+      "zones": [
+        "legs",
+        "sides",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "core",
+        "posture",
+        "strength"
+      ],
+      "why": "Низкая стойка и быстрые повороты: кор с ротацией, ноги для стойки и упражнения на осанку против наклона над столом.",
+      "avoid": null
+    }
   },
   {
     "id": "football",
@@ -1252,7 +1696,8 @@
       "футбол",
       "мини-футбол",
       "футзал",
-      "мяч погонять"
+      "мяч погонять",
+      "играл в футбол"
     ],
     "intensity_hint": {
       "low": "Попинать мяч, стоять на воротах",
@@ -1268,7 +1713,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для футбола",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Футбол - спринты, рывки и удары: задняя поверхность бедра в уступающем режиме (скандинавские сгибания), приводящие мышцы паха, ягодицы и кор - основа профилактики травм (как в программе FIFA 11+).",
+      "avoid": "Тяжёлые ноги - не за 1-2 дня до игры."
+    }
   },
   {
     "id": "volleyball",
@@ -1288,7 +1749,6 @@
     "impact": "mid",
     "aliases": [
       "волейбол",
-      "пляжный волейбол",
       "кружок"
     ],
     "intensity_hint": {
@@ -1305,7 +1765,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для волейбола",
+      "zones": [
+        "legs",
+        "glutes",
+        "shoulders",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Прыжки и удары над головой: мягкое приземление, приседания и упражнения на одной ноге, наружные ротаторы плеча и кор.",
+      "avoid": "Прыжковые упражнения - не в день игры."
+    }
   },
   {
     "id": "basketball",
@@ -1342,7 +1817,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для баскетбола",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Прыжки, остановки и смена направления: сила ног на одной ноге, мягкое приземление, устойчивые голеностоп и колено, кор.",
+      "avoid": "Тяжёлые ноги - не накануне игры."
+    }
   },
   {
     "id": "squash",
@@ -1378,7 +1869,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для сквоша",
+      "zones": [
+        "legs",
+        "glutes",
+        "sides",
+        "shoulders"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Резкие выпады и повороты на тесном корте: выпады вперёд и в стороны, кор с ротацией, устойчивое плечо и подвижные бёдра.",
+      "avoid": null
+    }
   },
   {
     "id": "boxing",
@@ -1405,7 +1912,11 @@
       "груша",
       "муай тай",
       "тайский бокс",
-      "спарринг"
+      "спарринг",
+      "боксировал",
+      "боксировала",
+      "муай-тай",
+      "тайский"
     ],
     "intensity_hint": {
       "low": "Техника с тренером, бой с тенью в спокойном темпе",
@@ -1420,7 +1931,24 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для бокса",
+      "zones": [
+        "abs",
+        "sides",
+        "shoulders",
+        "back",
+        "neck"
+      ],
+      "tags": [
+        "core",
+        "strength",
+        "mobility"
+      ],
+      "why": "Бокс - это ротация корпуса и работа плеч: кор с поворотами, стабильность плеч и шея добавляют силы удару и берегут от травм.",
+      "avoid": "Тяжёлые упражнения на плечи - не в день спаррингов."
+    }
   },
   {
     "id": "martial_arts",
@@ -1442,13 +1970,12 @@
     "impact": "mid",
     "aliases": [
       "карате",
-      "дзюдо",
-      "самбо",
-      "борьба",
       "айкидо",
-      "тхэквондо",
-      "джиу-джитсу",
-      "бжж"
+      "каратэ",
+      "ушу",
+      "кунг-фу",
+      "кёкусинкай",
+      "айкидока"
     ],
     "intensity_hint": {
       "low": "Отработка техники, ката, медленный темп",
@@ -1509,7 +2036,24 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для единоборств",
+      "zones": [
+        "abs",
+        "sides",
+        "glutes",
+        "legs",
+        "back"
+      ],
+      "tags": [
+        "core",
+        "strength",
+        "mobility"
+      ],
+      "why": "Удары ногами и стойки требуют сильных и подвижных бёдер, а удары и броски - сильного корпуса: кор с ротацией, ягодицы, растяжка бёдер.",
+      "avoid": null
+    }
   },
   {
     "id": "sauna",
@@ -1533,7 +2077,7 @@
     "intensity_hint": {
       "low": "Один-два мягких захода",
       "mid": "Несколько заходов, контрастный душ",
-      "high": "Сильный жар, веник, много заходов — пейте воду"
+      "high": "Сильный жар, веник, много заходов - пейте воду"
     },
     "fields": [
       {
@@ -1578,7 +2122,8 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": null
   },
   {
     "id": "massage",
@@ -1775,7 +2320,8 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": null
   },
   {
     "id": "breathing",
@@ -1799,7 +2345,7 @@
     "intensity_hint": {
       "low": "Спокойное сидение или лёжа, внимание на дыхании",
       "mid": "Структурированная практика: счёт вдохов, удлинённый выдох",
-      "high": "Активные дыхательные техники — осторожно при давлении"
+      "high": "Активные дыхательные техники - осторожно при давлении"
     },
     "fields": [
       {
@@ -1839,7 +2385,8 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": null
   },
   {
     "id": "gardening",
@@ -1880,7 +2427,23 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для огорода",
+      "zones": [
+        "back",
+        "glutes",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "posture"
+      ],
+      "why": "На грядках много наклонов и переноски: наклоны с прямой спиной (румынская тяга), приседания и кор берегут поясницу, растяжка снимает напряжение после работы.",
+      "avoid": "Тяжёлую тренировку спины - не в день работы на даче."
+    }
   },
   {
     "id": "cleaning",
@@ -1918,7 +2481,8 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": null
   },
   {
     "id": "dog_walking",
@@ -1954,7 +2518,22 @@
     ],
     "weather_sensitive": true,
     "cold_ok": true,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для прогулок с собакой",
+      "zones": [
+        "glutes",
+        "legs",
+        "back",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "posture"
+      ],
+      "why": "Прогулки почти не укрепляют мышцы, а рывки поводка нагружают плечо и спину: приседания, тяги и кор дополняют их.",
+      "avoid": null
+    }
   },
   {
     "id": "kids_play",
@@ -1992,7 +2571,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для игр с детьми",
+      "zones": [
+        "back",
+        "abs",
+        "glutes",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Детей поднимают и носят: приседания с прямой спиной, тяги и кор берегут поясницу.",
+      "avoid": null
+    }
   },
   {
     "id": "stairs",
@@ -2030,7 +2624,21 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для лестниц",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "mobility"
+      ],
+      "why": "Подъём - это толчок ягодицей и бедром, а спуск нагружает колени: зашагивания, выпады, упражнения на одной ноге и подвижный голеностоп.",
+      "avoid": null
+    }
   },
   {
     "id": "functional_training",
@@ -2055,9 +2663,8 @@
       "кроссфит",
       "функционалка",
       "круговая",
-      "хиит",
-      "hiit",
-      "табата"
+      "crossfit",
+      "круговая тренировка"
     ],
     "intensity_hint": {
       "low": "Круговая тренировка с длинными паузами",
@@ -2072,7 +2679,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для кроссфита",
+      "zones": [
+        "back",
+        "shoulders",
+        "abs"
+      ],
+      "tags": [
+        "mobility",
+        "recovery",
+        "core"
+      ],
+      "why": "Кроссфит уже силовой и интенсивный: подвижность плеч, грудного отдела и голеностопа, техника в лёгком весе и восстановление важнее новой нагрузки.",
+      "avoid": "Не добавлять тяжёлую тренировку на следующий день после комплекса."
+    }
   },
   {
     "id": "climbing",
@@ -2112,7 +2734,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для скалолазания",
+      "zones": [
+        "chest",
+        "shoulders",
+        "arms",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "mobility"
+      ],
+      "why": "Лазание - сплошная тяга: отжимания и жимы уравновешивают плечи, наружные ротаторы и лопатки берегут их, а разгибатели кисти - локти.",
+      "avoid": "Пальцам нужен отдых: без упражнений на хват дома в дни скалодрома."
+    }
   },
   {
     "id": "roller_skating",
@@ -2150,7 +2787,22 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для роликов",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Толчок в сторону и равновесие: боковые выпады, отведение бедра, упражнения на одной ноге и кор.",
+      "avoid": null
+    }
   },
   {
     "id": "scooter",
@@ -2186,7 +2838,22 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для самоката",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Толкается чаще одна нога: упражнения на одной ноге на обе стороны и кор выравнивают нагрузку.",
+      "avoid": null
+    }
   },
   {
     "id": "trampoline",
@@ -2207,7 +2874,9 @@
     "aliases": [
       "батут",
       "джампинг",
-      "фитнес на батутах"
+      "фитнес на батутах",
+      "джамп",
+      "jumping"
     ],
     "intensity_hint": {
       "low": "Лёгкие пружинящие прыжки",
@@ -2222,7 +2891,21 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для батута",
+      "zones": [
+        "abs",
+        "legs",
+        "glutes"
+      ],
+      "tags": [
+        "core",
+        "strength"
+      ],
+      "why": "Прыжки держит кор и мышцы ног: планки, приседания и подъёмы на носки делают приземление устойчивым; мышцы тазового дна тоже стоит тренировать.",
+      "avoid": null
+    }
   },
   {
     "id": "horse_riding",
@@ -2261,7 +2944,23 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": false
+    "cardio": false,
+    "support": {
+      "title": "Для верховой езды",
+      "zones": [
+        "abs",
+        "back",
+        "glutes",
+        "legs"
+      ],
+      "tags": [
+        "core",
+        "posture",
+        "mobility"
+      ],
+      "why": "В седле работают кор, приводящие мышцы и спина: планки, мост, укрепление бёдер и подвижность таза помогают сидеть ровно и гасить толчки.",
+      "avoid": null
+    }
   },
   {
     "id": "treadmill",
@@ -2299,7 +2998,23 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для беговой дорожки",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Бег - тысячи толчков на одной ноге: сила ягодиц и икр (включая камбаловидную), упражнения на одной ноге и кор держат таз и колено ровно и снижают риск травм колена, ахилла и голени.",
+      "avoid": null
+    }
   },
   {
     "id": "stepper",
@@ -2336,7 +3051,22 @@
     ],
     "weather_sensitive": false,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для степпера",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "mobility"
+      ],
+      "why": "Степпер нагружает бёдра и икры в одной плоскости: ягодицы на одной ноге, отведение бедра, кор и растяжка икр и сгибателей бедра.",
+      "avoid": null
+    }
   },
   {
     "id": "swimming_outdoor",
@@ -2380,6 +3110,3124 @@
     ],
     "weather_sensitive": true,
     "cold_ok": false,
-    "cardio": true
+    "cardio": true,
+    "support": {
+      "title": "Для плавания в открытой воде",
+      "zones": [
+        "back",
+        "shoulders",
+        "abs",
+        "chest"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Гребок - тысячи повторов на плечо: наружные ротаторы и мышцы лопаток (разведения, тяги с лентой), кор для положения тела и подвижность грудного отдела берегут плечи. Вода почти не нагружает кости, поэтому нужны силовые с весом.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "mma",
+    "name": "ММА / смешанные единоборства",
+    "group": "единоборства",
+    "met": {
+      "low": 6.0,
+      "mid": 8.5,
+      "high": 12.0
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "shoulders",
+      "abs",
+      "sides",
+      "back",
+      "neck"
+    ],
+    "load": "mixed",
+    "impact": "high",
+    "aliases": [
+      "мма",
+      "mma",
+      "смешанные единоборства",
+      "бои без правил",
+      "панкратион",
+      "кудо",
+      "ufc"
+    ],
+    "intensity_hint": {
+      "low": "Техника ударов и борьбы в спокойном темпе",
+      "mid": "Обычная тренировка: лапы, мешок, борьба в партере",
+      "high": "Спарринг или раунды без пауз"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для ММА",
+      "zones": [
+        "neck",
+        "abs",
+        "sides",
+        "back",
+        "glutes"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "neck"
+      ],
+      "why": "В ММА и удары, и борьба: сильная шея, кор с ротацией, тяги и ягодицы для проходов в ноги, плюс подвижность бёдер.",
+      "avoid": "Тяжёлые силовые - не в день спарринга."
+    }
+  },
+  {
+    "id": "bjj",
+    "name": "Джиу-джитсу / грэпплинг",
+    "group": "единоборства",
+    "met": {
+      "low": 5.3,
+      "mid": 7.3,
+      "high": 10.0
+    },
+    "zones": [
+      "back",
+      "arms",
+      "abs",
+      "sides",
+      "legs",
+      "neck"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "джиу-джитсу",
+      "бжж",
+      "bjj",
+      "грэпплинг",
+      "грепплинг",
+      "grappling",
+      "бразильское джиу-джитсу",
+      "джитсу"
+    ],
+    "intensity_hint": {
+      "low": "Отработка приёмов с партнёром в спокойном темпе",
+      "mid": "Тренировка с позиционными схватками",
+      "high": "Свободные схватки (роллы) раунд за раундом"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для джиу-джитсу",
+      "zones": [
+        "neck",
+        "back",
+        "abs",
+        "arms"
+      ],
+      "tags": [
+        "strength",
+        "neck",
+        "mobility"
+      ],
+      "why": "Борцовская схватка - это тяги, удержания и мосты: шея, хват, спина и кор держат нагрузку, а подвижность бёдер и грудного отдела бережёт поясницу и плечи.",
+      "avoid": "Упражнения на хват - не накануне тренировки."
+    }
+  },
+  {
+    "id": "wrestling",
+    "name": "Борьба",
+    "group": "единоборства",
+    "met": {
+      "low": 4.5,
+      "mid": 6.0,
+      "high": 9.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "arms",
+      "abs",
+      "neck"
+    ],
+    "load": "strength",
+    "impact": "high",
+    "aliases": [
+      "борьба",
+      "вольная борьба",
+      "греко-римская борьба",
+      "классическая борьба",
+      "боролся",
+      "боролась",
+      "wrestling",
+      "борец"
+    ],
+    "intensity_hint": {
+      "low": "Отработка техники в парах",
+      "mid": "Тренировка с борьбой в стойке и партере",
+      "high": "Схватки в полную силу"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для борьбы",
+      "zones": [
+        "neck",
+        "back",
+        "glutes",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "neck",
+        "mobility"
+      ],
+      "why": "Борьба требует мощной задней цепи и шеи: тяги, мост, кор и упражнения на шею снижают риск травм, а подвижность бёдер помогает проходам.",
+      "avoid": "Тяжёлые тяги - не в день схваток."
+    }
+  },
+  {
+    "id": "judo_sambo",
+    "name": "Дзюдо / самбо",
+    "group": "единоборства",
+    "met": {
+      "low": 5.3,
+      "mid": 7.3,
+      "high": 10.3
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "arms",
+      "abs",
+      "neck"
+    ],
+    "load": "mixed",
+    "impact": "high",
+    "aliases": [
+      "дзюдо",
+      "самбо",
+      "боевое самбо",
+      "judo",
+      "дзюдоист",
+      "самбист"
+    ],
+    "intensity_hint": {
+      "low": "Страховка, отработка бросков без сопротивления",
+      "mid": "Броски в движении и борьба в партере",
+      "high": "Схватки (рандори) в полную силу"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для дзюдо и самбо",
+      "zones": [
+        "back",
+        "neck",
+        "glutes",
+        "arms",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "neck",
+        "core"
+      ],
+      "why": "Броски - это тяга и разворот таза: тяги, сила хвата, ягодицы и кор, а укреплённая шея бережёт при падениях.",
+      "avoid": "Тяжёлые упражнения на хват и спину - не накануне схваток."
+    }
+  },
+  {
+    "id": "taekwondo",
+    "name": "Тхэквондо",
+    "group": "единоборства",
+    "met": {
+      "low": 5.3,
+      "mid": 7.3,
+      "high": 10.3
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "sides"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "тхэквондо",
+      "тхэквондист",
+      "taekwondo",
+      "тэквондо"
+    ],
+    "intensity_hint": {
+      "low": "Отработка техники и пхумсэ",
+      "mid": "Удары по лапам и связки в движении",
+      "high": "Спарринг или соревновательные раунды"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для тхэквондо",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Высокие удары ногами требуют силы в конце амплитуды: отведение бедра, ягодицы, стойка на одной ноге, кор и активная растяжка бёдер.",
+      "avoid": "Глубокую растяжку - после тренировки, а не перед спаррингом."
+    }
+  },
+  {
+    "id": "fencing",
+    "name": "Фехтование",
+    "group": "единоборства",
+    "met": {
+      "low": 4.5,
+      "mid": 6.0,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "shoulders"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "фехтование",
+      "фехтовал",
+      "фехтовала",
+      "шпага",
+      "рапира",
+      "fencing",
+      "историческое фехтование"
+    ],
+    "intensity_hint": {
+      "low": "Отработка техники, работа у стены",
+      "mid": "Уроки с тренером и учебные бои",
+      "high": "Соревновательные бои"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для фехтования",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Фехтование асимметрично: выпады одной ногой и работа одной рукой; силовые на обе стороны, ягодицы, задняя поверхность бедра и кор выравнивают нагрузку.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "capoeira",
+    "name": "Капоэйра",
+    "group": "единоборства",
+    "met": {
+      "low": 4.5,
+      "mid": 6.0,
+      "high": 8.5
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "shoulders",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "капоэйра",
+      "капоэра",
+      "capoeira"
+    ],
+    "intensity_hint": {
+      "low": "Разучивание движений, джинга",
+      "mid": "Тренировка с акробатикой и связками",
+      "high": "Игра в круге (рода) в быстром темпе"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для капоэйры",
+      "zones": [
+        "shoulders",
+        "arms",
+        "abs",
+        "glutes"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Стойки на руках и низкие движения: отжимания и упоры для запястий и плеч, кор, ягодицы и подвижность бёдер.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "self_defense",
+    "name": "Самооборона",
+    "group": "единоборства",
+    "met": {
+      "low": 4.0,
+      "mid": 5.5,
+      "high": 8.0
+    },
+    "zones": [
+      "arms",
+      "shoulders",
+      "legs",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "самооборона",
+      "крав-мага",
+      "крав мага",
+      "krav maga",
+      "курсы самообороны"
+    ],
+    "intensity_hint": {
+      "low": "Разбор приёмов, медленная отработка",
+      "mid": "Отработка в парах в среднем темпе",
+      "high": "Сценарии под нагрузкой, работа на лапах"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для самообороны",
+      "zones": [
+        "abs",
+        "sides",
+        "legs",
+        "back"
+      ],
+      "tags": [
+        "core",
+        "strength",
+        "cardio"
+      ],
+      "why": "Приёмам помогают сильные ноги и корпус и запас выносливости: приседания, кор с ротацией, тяги и короткие интервалы.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "gym_strength",
+    "name": "Силовая тренировка в зале",
+    "group": "сила",
+    "met": {
+      "low": 3.5,
+      "mid": 5.0,
+      "high": 6.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "chest",
+      "shoulders",
+      "arms"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "тренажёрный зал",
+      "тренажерный зал",
+      "качалка",
+      "качался",
+      "качалась",
+      "тренажёры",
+      "тренажеры",
+      "бодибилдинг",
+      "железо",
+      "силовая",
+      "силовая тренировка",
+      "фитнес-зал",
+      "gym",
+      "в зал ходил",
+      "в зал ходила"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкие веса, техника, длинный отдых",
+      "mid": "Рабочие подходы 8-12 повторов, отдых 1-2 минуты",
+      "high": "Тяжёлые подходы до отказа или суперсеты с коротким отдыхом"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для зала",
+      "zones": [
+        "back",
+        "abs",
+        "glutes"
+      ],
+      "tags": [
+        "mobility",
+        "cardio",
+        "posture"
+      ],
+      "why": "Силовые уже в зале: дополнить стоит кардио для сердца, подвижностью плеч и бёдер и тягами для баланса, если жимов больше.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "weightlifting",
+    "name": "Тяжёлая атлетика",
+    "group": "сила",
+    "met": {
+      "low": 4.0,
+      "mid": 5.0,
+      "high": 6.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "shoulders",
+      "arms"
+    ],
+    "load": "strength",
+    "impact": "mid",
+    "aliases": [
+      "тяжёлая атлетика",
+      "тяжелая атлетика",
+      "тяжатлетика",
+      "тяжка",
+      "штангист",
+      "рывок и толчок",
+      "weightlifting"
+    ],
+    "intensity_hint": {
+      "low": "Техника с грифом или лёгким весом",
+      "mid": "Рабочие подходы в рывке и толчке, приседания",
+      "high": "Выход на максимум, тяжёлые подходы"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для тяжёлой атлетики",
+      "zones": [
+        "shoulders",
+        "back",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "mobility",
+        "core",
+        "posture"
+      ],
+      "why": "Рывок и толчок требуют подвижных плеч, грудного отдела, бёдер и голеностопа в полном приседе, плюс крепкий кор.",
+      "avoid": "Дополнительная силовая на ноги и спину - только в лёгкие дни."
+    }
+  },
+  {
+    "id": "powerlifting",
+    "name": "Пауэрлифтинг",
+    "group": "сила",
+    "met": {
+      "low": 3.5,
+      "mid": 5.0,
+      "high": 6.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "chest",
+      "arms"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "пауэрлифтинг",
+      "пауэр",
+      "powerlifting",
+      "троеборье",
+      "пауэрлифтер"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкий или технический день",
+      "mid": "Рабочие подходы в приседе, жиме и тяге",
+      "high": "Тяжёлые подходы близко к максимуму"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для пауэрлифтинга",
+      "zones": [
+        "back",
+        "shoulders",
+        "abs",
+        "glutes"
+      ],
+      "tags": [
+        "mobility",
+        "cardio",
+        "posture"
+      ],
+      "why": "Тяжёлым тройкам помогают подвижность бёдер и грудного отдела, здоровые плечи (тяги, наружные ротаторы) и немного кардио для восстановления.",
+      "avoid": "Ещё одна тяжёлая тренировка ног или спины между основными не нужна."
+    }
+  },
+  {
+    "id": "calisthenics",
+    "name": "Воркаут / калистеника",
+    "group": "сила",
+    "met": {
+      "low": 3.8,
+      "mid": 5.0,
+      "high": 8.0
+    },
+    "zones": [
+      "back",
+      "arms",
+      "shoulders",
+      "chest",
+      "abs"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "воркаут",
+      "стрит-воркаут",
+      "street workout",
+      "калистеника",
+      "турник",
+      "турники",
+      "брусья",
+      "подтягивания",
+      "подтягивался"
+    ],
+    "intensity_hint": {
+      "low": "Базовые упражнения с паузами",
+      "mid": "Подходы подтягиваний, отжиманий и брусьев",
+      "high": "Сложные элементы, выход силой, круг без пауз"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": true,
+    "cardio": false,
+    "support": {
+      "title": "Для воркаута",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "shoulders"
+      ],
+      "tags": [
+        "strength",
+        "mobility"
+      ],
+      "why": "Воркаут обычно про верх тела: приседания, выпады и мост уравновешивают ноги, а наружные ротаторы и подвижность плеч берегут суставы при висах.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "kettlebell_sport",
+    "name": "Гиревой спорт",
+    "group": "сила",
+    "met": {
+      "low": 4.5,
+      "mid": 6.0,
+      "high": 9.8
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "shoulders",
+      "abs"
+    ],
+    "load": "strength",
+    "impact": "mid",
+    "aliases": [
+      "гиревой спорт",
+      "гири",
+      "гиря",
+      "гиревик",
+      "кеттлбелл",
+      "kettlebell",
+      "махи гирей"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкие гири, техника махов",
+      "mid": "Подходы толчка или рывка в среднем темпе",
+      "high": "Длинный цикл на время, тяжёлые гири"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для гиревого спорта",
+      "zones": [
+        "shoulders",
+        "back",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "mobility",
+        "core",
+        "strength"
+      ],
+      "why": "Долгая работа гирей нагружает плечи, поясницу и хват: подвижность плеч и грудного отдела, кор и упражнения для лопаток.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "armwrestling",
+    "name": "Армрестлинг",
+    "group": "сила",
+    "met": {
+      "low": 3.0,
+      "mid": 4.0,
+      "high": 5.0
+    },
+    "zones": [
+      "arms",
+      "shoulders",
+      "chest",
+      "back"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "армрестлинг",
+      "армреслинг",
+      "армспорт",
+      "борьба на руках",
+      "armwrestling"
+    ],
+    "intensity_hint": {
+      "low": "Отработка техники",
+      "mid": "Работа за столом и упражнения на кисть",
+      "high": "Поединки в полную силу"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для армрестлинга",
+      "zones": [
+        "back",
+        "shoulders",
+        "chest",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "mobility"
+      ],
+      "why": "Армрестлинг перегружает кисть, локоть и плечо: тяги, наружные ротаторы и мышцы лопаток уравновешивают нагрузку, а ноги и кор дают общую силу.",
+      "avoid": "Дополнительная работа на кисть - не накануне поединков."
+    }
+  },
+  {
+    "id": "strongman",
+    "name": "Стронгмен",
+    "group": "сила",
+    "met": {
+      "low": 5.0,
+      "mid": 6.0,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "shoulders",
+      "arms",
+      "abs"
+    ],
+    "load": "strength",
+    "impact": "mid",
+    "aliases": [
+      "стронгмен",
+      "strongman",
+      "силовой экстрим",
+      "тяни-толкай"
+    ],
+    "intensity_hint": {
+      "low": "Техника на снарядах с лёгким весом",
+      "mid": "Рабочие подходы: фермерская прогулка, камни, бревно",
+      "high": "Тяжёлые снаряды на время"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": true,
+    "cardio": false,
+    "support": {
+      "title": "Для стронгмена",
+      "zones": [
+        "back",
+        "abs",
+        "shoulders"
+      ],
+      "tags": [
+        "mobility",
+        "cardio",
+        "core"
+      ],
+      "why": "Снаряды грузят всё тело: подвижность бёдер и плеч, кор против скручивания и кардио для восстановления между подходами.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "hockey",
+    "name": "Хоккей",
+    "group": "игры",
+    "met": {
+      "low": 6.0,
+      "mid": 8.0,
+      "high": 10.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "sides",
+      "arms"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "хоккей",
+      "хоккей с шайбой",
+      "шайба",
+      "hockey",
+      "играл в хоккей"
+    ],
+    "intensity_hint": {
+      "low": "Катание и броски без счёта",
+      "mid": "Любительская игра со сменами",
+      "high": "Игра на счёт, короткие смены в полную силу"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для хоккея",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "sides",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Хоккей - низкая посадка и толчок в сторону: приводящие мышцы паха и отведение бедра, ягодицы, кор с ротацией для броска и растяжка сгибателей бедра.",
+      "avoid": "Тяжёлые ноги - не накануне игры."
+    }
+  },
+  {
+    "id": "handball",
+    "name": "Гандбол",
+    "group": "игры",
+    "met": {
+      "low": 6.0,
+      "mid": 8.0,
+      "high": 12.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "shoulders",
+      "arms",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "high",
+    "aliases": [
+      "гандбол",
+      "ручной мяч",
+      "handball"
+    ],
+    "intensity_hint": {
+      "low": "Броски и передачи без счёта",
+      "mid": "Любительская игра",
+      "high": "Соревновательная игра"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для гандбола",
+      "zones": [
+        "shoulders",
+        "legs",
+        "glutes",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Броски над головой и прыжки: наружные ротаторы и лопатки для плеча, приземления и упражнения на одной ноге для колена, кор с ротацией.",
+      "avoid": "Тяжёлые плечи - не накануне игры."
+    }
+  },
+  {
+    "id": "rugby",
+    "name": "Регби",
+    "group": "игры",
+    "met": {
+      "low": 6.3,
+      "mid": 8.3,
+      "high": 10.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "shoulders",
+      "neck",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "high",
+    "aliases": [
+      "регби",
+      "rugby",
+      "регбист",
+      "тэг-регби"
+    ],
+    "intensity_hint": {
+      "low": "Тач-регби без захватов",
+      "mid": "Тренировка с захватами и схватками",
+      "high": "Игра на счёт"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для регби",
+      "zones": [
+        "neck",
+        "shoulders",
+        "back",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "neck",
+        "core"
+      ],
+      "why": "Столкновения требуют сильной шеи и плеч, а спринты - задней поверхности бедра: упражнения на шею, тяги, жимы и скандинавские сгибания.",
+      "avoid": "Тяжёлые ноги - не за 1-2 дня до игры."
+    }
+  },
+  {
+    "id": "american_football",
+    "name": "Американский футбол",
+    "group": "игры",
+    "met": {
+      "low": 6.0,
+      "mid": 8.0,
+      "high": 9.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "shoulders",
+      "back",
+      "neck"
+    ],
+    "load": "mixed",
+    "impact": "high",
+    "aliases": [
+      "американский футбол",
+      "амфут",
+      "флаг-футбол"
+    ],
+    "intensity_hint": {
+      "low": "Флаг-футбол или отработка",
+      "mid": "Тренировка с контактом",
+      "high": "Игра на счёт"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для американского футбола",
+      "zones": [
+        "neck",
+        "shoulders",
+        "legs",
+        "glutes"
+      ],
+      "tags": [
+        "strength",
+        "neck",
+        "core"
+      ],
+      "why": "Рывки и контакт: шея и плечи держат удары, задняя поверхность бедра и ягодицы берегут от растяжений на спринтах.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "water_polo",
+    "name": "Водное поло",
+    "group": "вода",
+    "met": {
+      "low": 7.0,
+      "mid": 10.0,
+      "high": 12.0
+    },
+    "zones": [
+      "shoulders",
+      "arms",
+      "legs",
+      "back",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "водное поло",
+      "ватерпол",
+      "ватерполо",
+      "water polo"
+    ],
+    "intensity_hint": {
+      "low": "Броски и передачи без счёта",
+      "mid": "Тренировочная игра",
+      "high": "Игра на счёт"
+    },
+    "setting": [
+      "water",
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для водного поло",
+      "zones": [
+        "shoulders",
+        "back",
+        "abs",
+        "glutes"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Броски над головой и удержание на воде: плечевые ротаторы и лопатки, кор, приводящие мышцы и бёдра для «велосипеда». Вода не нагружает кости - нужны силовые с весом.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "baseball",
+    "name": "Бейсбол / софтбол",
+    "group": "игры",
+    "met": {
+      "low": 4.0,
+      "mid": 5.0,
+      "high": 6.0
+    },
+    "zones": [
+      "shoulders",
+      "arms",
+      "sides",
+      "legs"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "бейсбол",
+      "софтбол",
+      "baseball",
+      "softball",
+      "лапта"
+    ],
+    "intensity_hint": {
+      "low": "Броски и отбивание на тренировке",
+      "mid": "Любительская игра",
+      "high": "Игра на счёт с активной беготнёй"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для бейсбола",
+      "zones": [
+        "shoulders",
+        "sides",
+        "abs",
+        "glutes"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Подача и удар битой - взрывной поворот корпуса: кор с ротацией, наружные ротаторы плеча, лопатки и подвижность бёдер.",
+      "avoid": "Тяжёлые плечи - не накануне игры."
+    }
+  },
+  {
+    "id": "cricket",
+    "name": "Крикет",
+    "group": "игры",
+    "met": {
+      "low": 4.0,
+      "mid": 4.8,
+      "high": 6.0
+    },
+    "zones": [
+      "shoulders",
+      "arms",
+      "sides",
+      "legs"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "крикет",
+      "cricket"
+    ],
+    "intensity_hint": {
+      "low": "Отбивание и подача на тренировке",
+      "mid": "Любительская игра",
+      "high": "Соревновательная игра, много подач"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для крикета",
+      "zones": [
+        "shoulders",
+        "sides",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Подача и удар - поворот корпуса и бросок: кор с ротацией, плечевые ротаторы и спина.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "padel",
+    "name": "Падел",
+    "group": "игры",
+    "met": {
+      "low": 4.5,
+      "mid": 6.0,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "shoulders",
+      "sides"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "падел",
+      "падл",
+      "padel",
+      "падел-теннис"
+    ],
+    "intensity_hint": {
+      "low": "Спокойный обмен ударами",
+      "mid": "Парная игра на счёт",
+      "high": "Соревновательная игра, много рывков"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для падела",
+      "zones": [
+        "sides",
+        "abs",
+        "shoulders",
+        "legs"
+      ],
+      "tags": [
+        "core",
+        "strength",
+        "mobility"
+      ],
+      "why": "Короткие рывки в стороны и удары со стенок: кор с ротацией, наружные ротаторы плеча, боковые выпады и икры.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "beach_volleyball",
+    "name": "Пляжный волейбол",
+    "group": "игры",
+    "met": {
+      "low": 5.0,
+      "mid": 6.5,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "shoulders",
+      "arms"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "пляжный волейбол",
+      "пляжка",
+      "beach volleyball"
+    ],
+    "intensity_hint": {
+      "low": "Перекидывание без счёта",
+      "mid": "Любительская игра 2 на 2",
+      "high": "Соревновательная игра"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для пляжного волейбола",
+      "zones": [
+        "glutes",
+        "legs",
+        "shoulders",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Прыжки с песка и удары над головой: ягодицы и икры, наружные ротаторы плеча, кор и подвижность голеностопа.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "floorball",
+    "name": "Флорбол / хоккей на траве",
+    "group": "игры",
+    "met": {
+      "low": 5.0,
+      "mid": 7.8,
+      "high": 10.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "sides"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "флорбол",
+      "хоккей на траве",
+      "унихок",
+      "floorball"
+    ],
+    "intensity_hint": {
+      "low": "Отработка ударов и передач",
+      "mid": "Любительская игра",
+      "high": "Игра на счёт в полную силу"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для флорбола",
+      "zones": [
+        "legs",
+        "glutes",
+        "back",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "posture"
+      ],
+      "why": "Игра в наклоне и с рывками: задняя поверхность бедра, приводящие мышцы, кор с ротацией и разгибатели спины против постоянного наклона.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "frisbee",
+    "name": "Фрисби / алтимат",
+    "group": "игры",
+    "met": {
+      "low": 3.0,
+      "mid": 5.0,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "shoulders"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "фрисби",
+      "алтимат",
+      "ультимат",
+      "ultimate",
+      "frisbee"
+    ],
+    "intensity_hint": {
+      "low": "Перекидывание диска",
+      "mid": "Любительская игра",
+      "high": "Игра в алтимат на счёт"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для алтимата",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Рывки, остановки и прыжки за диском: задняя поверхность бедра, упражнения на одной ноге и кор с ротацией для броска.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "golf",
+    "name": "Гольф",
+    "group": "игры",
+    "met": {
+      "low": 3.0,
+      "mid": 4.3,
+      "high": 5.3
+    },
+    "zones": [
+      "sides",
+      "abs",
+      "back",
+      "legs"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "гольф",
+      "golf",
+      "поле для гольфа",
+      "гольф-клуб"
+    ],
+    "intensity_hint": {
+      "low": "Тренировочное поле, удары с места",
+      "mid": "Игра с гольф-каром",
+      "high": "Игра пешком с сумкой"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для гольфа",
+      "zones": [
+        "sides",
+        "abs",
+        "back",
+        "glutes"
+      ],
+      "tags": [
+        "mobility",
+        "core",
+        "strength"
+      ],
+      "why": "Свинг - поворот корпуса на устойчивом тазе: подвижность грудного отдела и бёдер, кор против скручивания и ягодицы берегут поясницу.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "bowling",
+    "name": "Боулинг",
+    "group": "игры",
+    "met": {
+      "low": 2.5,
+      "mid": 3.0,
+      "high": 3.8
+    },
+    "zones": [
+      "arms",
+      "legs"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "боулинг",
+      "bowling",
+      "кегли"
+    ],
+    "intensity_hint": {
+      "low": "Пара партий с друзьями",
+      "mid": "Несколько игр подряд",
+      "high": "Турнир, много бросков"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": null
+  },
+  {
+    "id": "billiards",
+    "name": "Бильярд",
+    "group": "игры",
+    "met": {
+      "low": 2.0,
+      "mid": 2.5,
+      "high": 2.8
+    },
+    "zones": [
+      "arms"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "бильярд",
+      "снукер",
+      "русский бильярд",
+      "американка",
+      "billiards"
+    ],
+    "intensity_hint": {
+      "low": "Пара партий",
+      "mid": "Игра весь вечер",
+      "high": "Долгий турнир"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": null
+  },
+  {
+    "id": "darts",
+    "name": "Дартс",
+    "group": "игры",
+    "met": {
+      "low": 1.8,
+      "mid": 2.5,
+      "high": 2.8
+    },
+    "zones": [
+      "arms"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "дартс",
+      "дротики",
+      "darts"
+    ],
+    "intensity_hint": {
+      "low": "Несколько бросков",
+      "mid": "Игра с друзьями",
+      "high": "Долгая игра на счёт"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": null
+  },
+  {
+    "id": "curling",
+    "name": "Кёрлинг",
+    "group": "зима",
+    "met": {
+      "low": 3.0,
+      "mid": 4.0,
+      "high": 5.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "back"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "кёрлинг",
+      "керлинг",
+      "curling"
+    ],
+    "intensity_hint": {
+      "low": "Отработка броска",
+      "mid": "Любительская игра",
+      "high": "Игра с активным натиранием льда"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": true,
+    "cardio": false,
+    "support": {
+      "title": "Для кёрлинга",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Бросок из глубокого выпада и натирание льда: выпады, подвижность бёдер и кор.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "trail_running",
+    "name": "Трейлраннинг",
+    "group": "кардио",
+    "met": {
+      "low": 7.0,
+      "mid": 9.0,
+      "high": 12.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "back"
+    ],
+    "load": "cardio",
+    "impact": "high",
+    "aliases": [
+      "трейл",
+      "трейлраннинг",
+      "трейловый бег",
+      "бег по горам",
+      "бег по лесу",
+      "скайраннинг",
+      "trail running"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкий бег по тропе, подъёмы шагом",
+      "mid": "Бег по пересечённой местности, говорить фразами",
+      "high": "Горный забег, крутые подъёмы и быстрые спуски"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для трейла",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Спуски и неровная тропа: уступающая работа бёдер (медленные приседания, зашагивания вниз), стабильность голеностопа на одной ноге и кор.",
+      "avoid": "Тяжёлые ноги - не за 2 дня до длинного забега."
+    }
+  },
+  {
+    "id": "triathlon",
+    "name": "Триатлон",
+    "group": "кардио",
+    "met": {
+      "low": 7.0,
+      "mid": 9.0,
+      "high": 11.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "shoulders",
+      "arms"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "триатлон",
+      "айронмен",
+      "ironman",
+      "дуатлон",
+      "акватлон",
+      "триатлет"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкая объёмная тренировка",
+      "mid": "Связка дисциплин в среднем темпе",
+      "high": "Старт или интервалы на пределе"
+    },
+    "setting": [
+      "water",
+      "outdoor",
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для триатлона",
+      "zones": [
+        "glutes",
+        "back",
+        "abs",
+        "shoulders"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Три однообразные нагрузки: ягодицы и упражнения на одной ноге для бега, задняя цепь для велосипеда, лопатки и ротаторы для плавания, плюс кор.",
+      "avoid": "Силовые - в лёгкие дни, не перед ключевыми тренировками."
+    }
+  },
+  {
+    "id": "mtb",
+    "name": "Маунтинбайк / МТБ",
+    "group": "кардио",
+    "met": {
+      "low": 6.0,
+      "mid": 8.5,
+      "high": 12.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "shoulders",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "маунтинбайк",
+      "мтб",
+      "mtb",
+      "горный велосипед",
+      "горный велик",
+      "эндуро",
+      "даунхилл"
+    ],
+    "intensity_hint": {
+      "low": "Лесные дорожки без крутых подъёмов",
+      "mid": "Пересечённая местность, подъёмы и спуски",
+      "high": "Гонка или техничные трассы"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для маунтинбайка",
+      "zones": [
+        "back",
+        "glutes",
+        "shoulders",
+        "arms",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "На спусках держат руль и корпус: отжимания и тяги, кор, ягодицы и задняя цепь, подвижные бёдра и грудной отдел против долгой посадки.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "orienteering",
+    "name": "Спортивное ориентирование",
+    "group": "кардио",
+    "met": {
+      "low": 6.0,
+      "mid": 9.0,
+      "high": 10.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "cardio",
+    "impact": "high",
+    "aliases": [
+      "ориентирование",
+      "рогейн",
+      "рогейнинг",
+      "orienteering",
+      "ориентирование по карте"
+    ],
+    "intensity_hint": {
+      "low": "Ходьба с картой по лесу",
+      "mid": "Бег по лесу с остановками у карты",
+      "high": "Соревновательный бег по пересечённой местности"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для ориентирования",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Бег по лесу - кочки и корни: стабильность голеностопа, упражнения на одной ноге, ягодицы и кор, как у трейлраннеров.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "mountaineering",
+    "name": "Альпинизм",
+    "group": "кардио",
+    "met": {
+      "low": 5.0,
+      "mid": 7.0,
+      "high": 9.5
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "shoulders",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "альпинизм",
+      "альпинист",
+      "восхождение",
+      "горовосхождение",
+      "ледник",
+      "mountaineering"
+    ],
+    "intensity_hint": {
+      "low": "Подходы по тропе с лёгким рюкзаком",
+      "mid": "Набор высоты с грузом",
+      "high": "Штурм вершины, снег и лёд, высота"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для альпинизма",
+      "zones": [
+        "legs",
+        "glutes",
+        "back",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "cardio",
+        "core"
+      ],
+      "why": "Многочасовой набор высоты с рюкзаком: зашагивания и выпады с весом, спуски в уступающем режиме, спина и кор под рюкзак, долгое кардио за 2-3 месяца до сезона.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "stroller_walk",
+    "name": "Прогулка с коляской",
+    "group": "повседневное",
+    "met": {
+      "low": 2.8,
+      "mid": 3.5,
+      "high": 4.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "коляска",
+      "с коляской",
+      "гулял с коляской",
+      "гуляла с коляской"
+    ],
+    "intensity_hint": {
+      "low": "Спокойная прогулка с остановками",
+      "mid": "Прогулка в обычном темпе",
+      "high": "Быстрый шаг или подъёмы с коляской"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для прогулок с коляской",
+      "zones": [
+        "back",
+        "abs",
+        "glutes"
+      ],
+      "tags": [
+        "posture",
+        "core",
+        "strength"
+      ],
+      "why": "Коляску толкают в лёгком наклоне, а ребёнка носят на руках: тяги и упражнения на осанку, кор и ягодичный мост; после родов кор восстанавливать постепенно.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "windsurfing",
+    "name": "Виндсёрфинг",
+    "group": "вода",
+    "met": {
+      "low": 3.0,
+      "mid": 5.0,
+      "high": 8.0
+    },
+    "zones": [
+      "back",
+      "arms",
+      "shoulders",
+      "abs",
+      "legs"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "виндсерфинг",
+      "виндсёрфинг",
+      "винд",
+      "windsurf",
+      "windsurfing"
+    ],
+    "intensity_hint": {
+      "low": "Слабый ветер, учебная доска",
+      "mid": "Уверенное катание на глиссировании",
+      "high": "Сильный ветер, гонка или фристайл"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "summer"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для виндсёрфинга",
+      "zones": [
+        "back",
+        "arms",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Парус держат спиной, руками и хватом, а доску - ногами: тяги, кор против скручивания, упражнения на хват и приседания.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "kitesurfing",
+    "name": "Кайтсёрфинг",
+    "group": "вода",
+    "met": {
+      "low": 4.0,
+      "mid": 6.0,
+      "high": 9.0
+    },
+    "zones": [
+      "legs",
+      "abs",
+      "sides",
+      "back"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "кайт",
+      "кайтинг",
+      "кайтсерфинг",
+      "кайтсёрфинг",
+      "кайтбординг",
+      "kitesurf",
+      "kiteboarding"
+    ],
+    "intensity_hint": {
+      "low": "Учёба, управление кайтом на воде",
+      "mid": "Уверенное катание галсами",
+      "high": "Прыжки, сильный ветер"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "summer"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для кайта",
+      "zones": [
+        "abs",
+        "sides",
+        "legs",
+        "glutes"
+      ],
+      "tags": [
+        "core",
+        "strength"
+      ],
+      "why": "Тягу кайта держит корпус через трапецию, а удары о воду гасят ноги: кор против скручивания, приседания и приземления на полусогнутые колени.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "wakeboard",
+    "name": "Вейкборд / водные лыжи",
+    "group": "вода",
+    "met": {
+      "low": 4.5,
+      "mid": 6.0,
+      "high": 7.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "arms",
+      "abs"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "вейк",
+      "вейкборд",
+      "вейкбординг",
+      "водные лыжи",
+      "вейксерф",
+      "wakeboard"
+    ],
+    "intensity_hint": {
+      "low": "Спокойное катание за лодкой или лебёдкой",
+      "mid": "Уверенные проходы, повороты",
+      "high": "Трюки и прыжки"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "summer"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для вейкборда",
+      "zones": [
+        "legs",
+        "glutes",
+        "back",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Фал тянет руки, а ноги держат полуприсед: приседания и выпады, тяги, кор и приземления на мягкие колени.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "diving",
+    "name": "Дайвинг / снорклинг",
+    "group": "вода",
+    "met": {
+      "low": 3.5,
+      "mid": 5.0,
+      "high": 7.0
+    },
+    "zones": [
+      "legs",
+      "back",
+      "abs"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "дайвинг",
+      "снорклинг",
+      "сноркелинг",
+      "ныряние",
+      "нырял",
+      "фридайвинг",
+      "акваланг",
+      "маска и трубка"
+    ],
+    "intensity_hint": {
+      "low": "Спокойное плавание с маской у поверхности",
+      "mid": "Погружение с аквалангом без течения",
+      "high": "Течение, долгие ласты, фридайвинг"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "summer"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для дайвинга",
+      "zones": [
+        "back",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "posture"
+      ],
+      "why": "Снаряжение тяжёлое, а ласты грузят бёдра и икры: спина и кор для переноски баллона, ноги и подвижность голеностопа.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "sailing",
+    "name": "Парусный спорт",
+    "group": "вода",
+    "met": {
+      "low": 2.5,
+      "mid": 3.0,
+      "high": 4.5
+    },
+    "zones": [
+      "back",
+      "arms",
+      "abs",
+      "legs"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "парусный спорт",
+      "яхта",
+      "яхтинг",
+      "парус",
+      "регата",
+      "sailing"
+    ],
+    "intensity_hint": {
+      "low": "Спокойный ход, мало манёвров",
+      "mid": "Работа со шкотами, частые повороты",
+      "high": "Гонка, откренивание, сильный ветер"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для парусного спорта",
+      "zones": [
+        "abs",
+        "back",
+        "legs",
+        "arms"
+      ],
+      "tags": [
+        "core",
+        "strength"
+      ],
+      "why": "Откренивание держит кор и бёдра, работа со шкотами - спину и хват: планки, тяги и приседания.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "skateboard",
+    "name": "Скейтборд / лонгборд",
+    "group": "прочее",
+    "met": {
+      "low": 4.0,
+      "mid": 5.0,
+      "high": 6.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "скейт",
+      "скейтборд",
+      "скейтбординг",
+      "лонгборд",
+      "катался на скейте",
+      "skateboard"
+    ],
+    "intensity_hint": {
+      "low": "Спокойное катание по ровному",
+      "mid": "Катание с отталкиванием, повороты",
+      "high": "Трюки, рампа, спуски"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для скейта",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Толкается одна нога, а приземления бьют по коленям и голеностопу: упражнения на одной ноге на обе стороны, стабильность голеностопа и кор.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "parkour",
+    "name": "Паркур / фриран",
+    "group": "прочее",
+    "met": {
+      "low": 5.0,
+      "mid": 7.0,
+      "high": 9.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "shoulders",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "high",
+    "aliases": [
+      "паркур",
+      "фриран",
+      "трейсер",
+      "parkour"
+    ],
+    "intensity_hint": {
+      "low": "Отработка приземлений и перелазов",
+      "mid": "Связки на площадке",
+      "high": "Длинные связки на скорость, прыжки"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для паркура",
+      "zones": [
+        "legs",
+        "glutes",
+        "shoulders",
+        "arms",
+        "abs"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Приземления и перелазы: мягкие приземления и приседания, икры и голеностоп, отжимания и упоры для запястий и плеч, кор.",
+      "avoid": "Прыжковые упражнения - не в день тренировки."
+    }
+  },
+  {
+    "id": "gymnastics",
+    "name": "Спортивная гимнастика / акробатика",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 3.8,
+      "mid": 5.5,
+      "high": 8.0
+    },
+    "zones": [
+      "arms",
+      "shoulders",
+      "abs",
+      "back",
+      "legs"
+    ],
+    "load": "strength",
+    "impact": "high",
+    "aliases": [
+      "спортивная гимнастика",
+      "гимнастика",
+      "акробатика",
+      "спортивная акробатика",
+      "цирковая акробатика",
+      "цирковая студия",
+      "сальто",
+      "gymnastics"
+    ],
+    "intensity_hint": {
+      "low": "Разминка, растяжка и простые элементы",
+      "mid": "Отработка элементов на снарядах",
+      "high": "Комбинации, прыжки, опорные прыжки"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для гимнастики",
+      "zones": [
+        "shoulders",
+        "back",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "core"
+      ],
+      "why": "Гимнастика нагружает запястья, плечи и поясницу: упражнения для лопаток и ротаторов, запястий, кор против прогиба и сила ног для приземлений.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "rhythmic_gymnastics",
+    "name": "Художественная гимнастика",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 3.8,
+      "mid": 5.0,
+      "high": 7.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "back"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "художественная гимнастика",
+      "художка",
+      "rhythmic gymnastics"
+    ],
+    "intensity_hint": {
+      "low": "Растяжка и работа с предметом",
+      "mid": "Отработка элементов и прыжков",
+      "high": "Прогон композиции в полную силу"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для художественной гимнастики",
+      "zones": [
+        "abs",
+        "back",
+        "glutes",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Гибкость здесь огромная, силы часто не хватает: кор против прогиба, ягодицы и бёдра для прыжков, сила в конце амплитуды бережёт поясницу и тазобедренные суставы.",
+      "avoid": "Растяжку на пределе не добавлять - её хватает на тренировках."
+    }
+  },
+  {
+    "id": "barre",
+    "name": "Барре",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 3.0,
+      "mid": 4.0,
+      "high": 5.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "arms"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "барре",
+      "barre",
+      "боди-балет",
+      "бодибалет"
+    ],
+    "intensity_hint": {
+      "low": "Спокойный класс с упором на технику",
+      "mid": "Обычный класс, мышцы ощутимо горят",
+      "high": "Интенсивный класс почти без пауз"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для барре",
+      "zones": [
+        "back",
+        "chest",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "cardio"
+      ],
+      "why": "Барре - много лёгких повторов: силовые с весом (приседания, тяги, жимы) и кардио дополняют его.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "bodyflex",
+    "name": "Бодифлекс / калланетика",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 2.0,
+      "mid": 2.5,
+      "high": 3.0
+    },
+    "zones": [
+      "abs",
+      "glutes",
+      "legs"
+    ],
+    "load": "recovery",
+    "impact": "low",
+    "aliases": [
+      "бодифлекс",
+      "калланетика",
+      "оксисайз"
+    ],
+    "intensity_hint": {
+      "low": "Короткий комплекс",
+      "mid": "Полное занятие 30-40 минут",
+      "high": "Долгое занятие с удержаниями"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для бодифлекса",
+      "zones": [
+        "legs",
+        "glutes",
+        "back",
+        "chest"
+      ],
+      "tags": [
+        "strength",
+        "cardio"
+      ],
+      "why": "Бодифлекс и калланетика почти не тратят энергию и мало нагружают мышцы: силовые с весом и ходьба дадут результат, которого от них ждут.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "hiit",
+    "name": "Табата / HIIT",
+    "group": "прочее",
+    "met": {
+      "low": 6.0,
+      "mid": 8.0,
+      "high": 10.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "arms",
+      "shoulders"
+    ],
+    "load": "cardio",
+    "impact": "high",
+    "aliases": [
+      "хиит",
+      "hiit",
+      "табата",
+      "tabata",
+      "интервальная тренировка",
+      "интервалы"
+    ],
+    "intensity_hint": {
+      "low": "Интервалы в щадящем темпе с длинным отдыхом",
+      "mid": "Работа 30-40 секунд, отдых 20",
+      "high": "Табата на пределе: 20/10, 8 раундов"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для HIIT",
+      "zones": [
+        "glutes",
+        "abs",
+        "back",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "recovery"
+      ],
+      "why": "Интервалы развивают сердце, но мало силы: базовые силовые с весом, подвижность голеностопа и бёдер для прыжков и дни отдыха между интервалами.",
+      "avoid": "Не больше 2-3 интервальных дней в неделю."
+    }
+  },
+  {
+    "id": "tai_chi",
+    "name": "Тай-чи / цигун",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 2.5,
+      "mid": 3.0,
+      "high": 4.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back"
+    ],
+    "load": "recovery",
+    "impact": "low",
+    "aliases": [
+      "тай-чи",
+      "тайчи",
+      "тайцзи",
+      "тайцзицюань",
+      "цигун",
+      "tai chi",
+      "qigong"
+    ],
+    "intensity_hint": {
+      "low": "Спокойные упражнения стоя",
+      "mid": "Полная форма в обычном темпе",
+      "high": "Низкие стойки, долгие связки"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для тай-чи",
+      "zones": [
+        "legs",
+        "glutes",
+        "back",
+        "arms"
+      ],
+      "tags": [
+        "strength",
+        "cardio"
+      ],
+      "why": "Тай-чи хорошо развивает равновесие, но мало нагружает мышцы и сердце: силовые с весом и быстрая ходьба дополняют его.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "ballet",
+    "name": "Балет / хореография",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 3.5,
+      "mid": 5.0,
+      "high": 6.8
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "back"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "балет",
+      "хореография",
+      "классический танец",
+      "станок",
+      "балетный класс",
+      "ballet"
+    ],
+    "intensity_hint": {
+      "low": "Экзерсис у станка",
+      "mid": "Класс: станок и середина",
+      "high": "Прыжки и репетиция в полную силу"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true,
+    "support": {
+      "title": "Для балета",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Выворотность и прыжки грузят бёдра, колени и стопы: ягодицы и наружные ротаторы бедра, икры, стопа и кор, плюс тяги для верха.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "biathlon",
+    "name": "Биатлон",
+    "group": "зима",
+    "met": {
+      "low": 7.0,
+      "mid": 9.0,
+      "high": 12.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "back",
+      "shoulders"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "биатлон",
+      "biathlon",
+      "биатлонист"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкий ход, стрельба без спешки",
+      "mid": "Тренировка со стрельбой в рабочем темпе",
+      "high": "Гонка"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "winter"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для биатлона",
+      "zones": [
+        "back",
+        "abs",
+        "shoulders",
+        "glutes"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "posture"
+      ],
+      "why": "Как у лыжника - толчок палками и ногами, плюс винтовка за спиной: тяги, кор, ягодицы и мышцы спины для устойчивой позы на стрельбе.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "figure_skating",
+    "name": "Фигурное катание",
+    "group": "зима",
+    "met": {
+      "low": 5.0,
+      "mid": 7.0,
+      "high": 9.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "sides"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "фигурное катание",
+      "фигурка",
+      "фигурист",
+      "фигуристка"
+    ],
+    "intensity_hint": {
+      "low": "Скольжение и базовые шаги",
+      "mid": "Отработка шагов, вращений и простых прыжков",
+      "high": "Прыжки и прокат программы"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для фигурного катания",
+      "zones": [
+        "glutes",
+        "legs",
+        "abs",
+        "sides"
+      ],
+      "tags": [
+        "strength",
+        "core",
+        "mobility"
+      ],
+      "why": "Прыжки и приземления на одну ногу: ягодицы, отведение бедра, прыжковые упражнения на мягкие колени, кор для вращений.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "ski_touring",
+    "name": "Ски-тур / фрирайд",
+    "group": "зима",
+    "met": {
+      "low": 6.0,
+      "mid": 8.0,
+      "high": 11.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "скитур",
+      "ски-тур",
+      "скитуринг",
+      "фрирайд",
+      "бэккантри",
+      "splitboard",
+      "сплитборд"
+    ],
+    "intensity_hint": {
+      "low": "Спокойный подъём, спуск по лёгкому склону",
+      "mid": "Набор высоты 500-800 м и спуск по целине",
+      "high": "Долгий подъём, крутые спуски"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "winter",
+      "spring"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true,
+    "support": {
+      "title": "Для ски-тура",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "cardio",
+        "core"
+      ],
+      "why": "Долгий подъём и спуск по целине: зашагивания и выпады, уступающая работа бёдер, кор и спина под рюкзак, кардио до сезона.",
+      "avoid": null
+    }
+  },
+  {
+    "id": "moving_house",
+    "name": "Переезд / переноска тяжестей",
+    "group": "повседневное",
+    "met": {
+      "low": 4.0,
+      "mid": 5.8,
+      "high": 7.5
+    },
+    "zones": [
+      "back",
+      "legs",
+      "glutes",
+      "arms",
+      "abs"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "переезд",
+      "переезжал",
+      "переезжала",
+      "таскал коробки",
+      "носил тяжести",
+      "грузчик",
+      "разгружал"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкие коробки, много пауз",
+      "mid": "Коробки и сумки весь день",
+      "high": "Мебель и тяжести по лестнице"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": true,
+    "cardio": false,
+    "support": {
+      "title": "Для переноски тяжестей",
+      "zones": [
+        "back",
+        "glutes",
+        "abs",
+        "legs"
+      ],
+      "tags": [
+        "strength",
+        "core"
+      ],
+      "why": "Поднимать тяжести безопасно помогают приседания и наклоны с прямой спиной, кор и сила хвата.",
+      "avoid": "В день переезда отдельная тренировка спины и ног не нужна."
+    }
+  },
+  {
+    "id": "standing_work",
+    "name": "Работа на ногах",
+    "group": "повседневное",
+    "met": {
+      "low": 2.3,
+      "mid": 3.0,
+      "high": 3.8
+    },
+    "zones": [
+      "legs",
+      "back"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "работа на ногах",
+      "весь день на ногах",
+      "на ногах весь день",
+      "официант",
+      "продавец",
+      "стоячая работа",
+      "смена на ногах"
+    ],
+    "intensity_hint": {
+      "low": "Стою на месте, немного хожу",
+      "mid": "Постоянно хожу между залом и кухней",
+      "high": "Быстрая работа с переноской"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false,
+    "support": {
+      "title": "Для работы на ногах",
+      "zones": [
+        "legs",
+        "glutes",
+        "abs",
+        "back"
+      ],
+      "tags": [
+        "strength",
+        "mobility",
+        "recovery"
+      ],
+      "why": "Долгое стояние грузит стопы, икры и поясницу: подъёмы на носки, ягодицы и кор, растяжка икр и отдых с поднятыми ногами.",
+      "avoid": null
+    }
   }
 ]

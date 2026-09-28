@@ -204,6 +204,30 @@ const MODULES = {
   stretch: { title: 'Растяжка', tags: ['mobility', 'recovery'], fallback: ['posture'], minutes: 10, sec: 40, reps: 8, perMin: 0.8, excludeTags: ['face'] },
   cardio: { title: 'Кардио дома', tags: ['cardio'], fallback: ['strength'], minutes: 15, sec: 40, reps: 20, perMin: 0.6, maxPerPattern: 3 },
 };
+// ── «Для вашего спорта»: комплекс в поддержку активности (support из activities.json) ──
+// модуль sport_<id вида>: зоны и теги - что подтянуть, текст - зачем
+export function sportModule(module) {
+  if (!String(module).startsWith('sport_')) return null;
+  const a = (store.getMeta('activities', []) || []).find(x => x.id === module.slice(6));
+  const sup = a?.support;
+  if (!sup) return null;
+  // основа - сила и кор по нужным зонам; подвижность и осанка - только добивкой (иначе вытесняют силовую работу)
+  const main = (sup.tags || []).filter(t => ['strength', 'core', 'cardio', 'neck'].includes(t));
+  return { title: sup.title || `Для: ${a.name}`, tags: main.length ? main : ['strength', 'core'], fallback: ['mobility', 'posture'],
+    zones: sup.zones || [], requireZones: true, minutes: 15, sec: 40, reps: 12, perMin: 0.55, maxPerPattern: 2,
+    excludeTags: ['face', ...((sup.tags || []).includes('mobility') ? [] : ['mobility'])], why: sup.why, avoid: sup.avoid || null };
+}
+// виды спорта человека: из профиля и те, что отмечал 2+ раза за 30 дней; только с support
+export function mySports(uid = store.uid()) {
+  const cat = store.getMeta('activities', []) || [];
+  const n = new Map();
+  for (const a of prof(uid).activities || []) if (a.type) n.set(a.type, (n.get(a.type) || 0) + 3);
+  const since = C.addDays(C.today(), -30);
+  for (const r of store.list('activity', uid, r => r.date >= since)) n.set(r.data.type, (n.get(r.data.type) || 0) + 1);
+  return [...n.entries()].filter(([id, k]) => k >= 2 && cat.find(x => x.id === id)?.support)
+    .sort((a, b) => b[1] - a[1]).map(([id]) => cat.find(x => x.id === id)).slice(0, 4);
+}
+
 export const MODULE_NOTES = {
   neck: 'Упражнения укрепляют мышцы шеи и улучшают осанку, подбородок выглядит подтянутее. Жир под подбородком уходит только вместе с общим снижением жира - упражнения его не «сжигают».',
 };
@@ -213,7 +237,7 @@ export async function makeRoutine(module, a, b, opts = {}) {
   let date = C.today(), minutes = null;
   if (typeof a === 'number') { minutes = a; date = b || date; } else { date = a || date; if (typeof b === 'number') minutes = b; }
   const rebuild = Number(opts.rebuild) || 0;       // пересборка: другой набор по тем же правилам
-  const cfg = MODULES[module];
+  const cfg = MODULES[module] || sportModule(module);
   if (!cfg) throw new Error(`Неизвестный модуль: ${module}`);
   const uid = store.uid();
   const id = `routine:${uid}:${date}:${module}`;
@@ -252,6 +276,7 @@ export async function makeRoutine(module, a, b, opts = {}) {
     done: false, seed, rounds: res.rounds, seed_n: rebuild,
   };
   if (MODULE_NOTES[module]) data.note = MODULE_NOTES[module];
+  if (cfg.why) data.note = cfg.why + (cfg.avoid ? ` ${cfg.avoid}` : '');
   return store.put('routine', id, data, date);
 }
 

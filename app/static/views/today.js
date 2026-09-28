@@ -476,11 +476,19 @@ const MODULES = {
     note: 'Честно: упражнения укрепляют мышцы шеи и улучшают осанку, а жир под подбородком уходит только вместе с общим снижением жира.' },
   posture: { title: 'Осанка', mins: [5, 10, 15], def: 10, tags: ['posture', 'mobility'] },
 };
-const modNote = k => safe(() => P.MODULE_NOTES?.[k], MODULES[k].note || '');
+// «Для бокса», «Для бега»…: комплекс в поддержку вида спорта (activities.json → support), модуль sport_<id>
+function modDef(k) {
+  if (MODULES[k]) return MODULES[k];
+  const c = safe(() => P.sportModule?.(k), null);
+  return c ? { title: c.title, mins: [10, 15, 20, 30], def: 15, tags: c.tags, zones: c.zones, note: c.why + (c.avoid ? ` ${c.avoid}` : ''), sport: true } : null;
+}
+const sportKeys = () => safe(() => (P.mySports?.() || []).map(a => `sport_${a.id}`), []);
+const modKeys = () => [...Object.keys(MODULES), ...sportKeys()];
+const modNote = k => (modDef(k)?.sport ? modDef(k).note : safe(() => P.MODULE_NOTES?.[k], MODULES[k]?.note || ''));
 const routineId = (date, m) => `routine:${store.uid()}:${date}:${m}`;
 
 function localPick(module, minutes, date, seed) {
-  const m = MODULES[module];
+  const m = modDef(module);
   const home = e => (e.place || []).includes('home') || (e.equipment || []).every(q => ['mat', 'chair'].includes(q));
   const fit = e => {
     if (m.zones && !(e.zones || []).some(z => m.zones.includes(z))) return false;
@@ -500,7 +508,8 @@ function localPick(module, minutes, date, seed) {
 }
 
 async function makeRoutine(module, minutes, date) {
-  const m = MODULES[module];
+  const m = modDef(module);
+  if (!m) return;
   const prev = store.get(routineId(date, module))?.data;
   const seed = `${date}:${module}:${minutes}:${(prev?.seed_n || 0) + 1}`;
   let exercises = null;
@@ -601,14 +610,17 @@ function modulesBlock(date) {
   const inMorning = C.items().some(i => i.data.type === 'routine' && (i.data.module || 'morning') === 'morning');
   const sel = S.forms.td?.mod_sel || null, hid = S.forms.td?.mod_hidden || [];
   // собранные комплексы открыты, пока их не свернули повторным нажатием на чип (сам комплекс и отметки остаются)
-  const made = Object.keys(MODULES).filter(k => store.get(routineId(date, k)) && !(k === 'morning' && inMorning));
+  const keys = modKeys();
+  // собранный сегодня комплекс для спорта, которого уже нет в «моих», тоже показываем
+  for (const r of store.byDate('routine', date)) if (String(r.data.module).startsWith('sport_') && !keys.includes(r.data.module)) keys.push(r.data.module);
+  const made = keys.filter(k => modDef(k) && store.get(routineId(date, k)) && !(k === 'morning' && inMorning));
   const shown = [...made.filter(k => !hid.includes(k)), ...(sel && !made.includes(sel) && !hid.includes(sel) ? [sel] : [])];
   const chip = k => {
-    const m = MODULES[k], has = !!store.get(routineId(date, k)), on = shown.includes(k);
+    const m = modDef(k), has = !!store.get(routineId(date, k)), on = shown.includes(k);
     return `<button type="button" class="chip a-modchip ${on ? 'on' : ''}" data-act="td-mod-sel" data-m="${k}" aria-pressed="${on}">${esc(m.title)}${has ? ` <span class="mono muted">${store.get(routineId(date, k)).data.minutes || ''} мин</span>` : ''}</button>`;
   };
   return `<div class="section" data-dom="train"><div class="section-title"><span class="smallcaps">Короткие комплексы</span><span class="note">по желанию · дома, под ваш инвентарь</span></div>
-    <div class="chips a-modchips">${Object.keys(MODULES).map(chip).join('')}</div>
+    <div class="chips a-modchips">${keys.filter(k => modDef(k)).map(chip).join('')}</div>
     ${shown.map(k => k === 'morning' && inMorning ? morningHint(date) : moduleCard(k, date)).join('')}</div>`;
 }
 // Тренер сам предлагает вставить комплекс в день - если сегодня ещё ничего такого нет.
@@ -619,7 +631,7 @@ export function suggestModule(now = new Date(), uid = store.uid()) {
   if (hour < 7 || hour >= 21 || !S.exMap.size) return null;
   const dt = safe(() => C.dayType(date, uid), null);
   if (dt === 'sick' || dt === 'special') return null;
-  const any = Object.keys(MODULES).some(k => k !== 'morning' && store.get(routineId(date, k)));
+  const any = modKeys().some(k => k !== 'morning' && store.get(routineId(date, k)));
   if (any) return null;
   const w = C.workout(date, uid), hasWorkout = w && w.data.variant !== 'moved' && !['recovery'].includes(w.data.variant);
   const r = safe(() => P.readiness(date, uid), null);
@@ -636,6 +648,17 @@ export function suggestModule(now = new Date(), uid = store.uid()) {
   if (!hasWorkout && !low && cw && ct && ct.minutes - cw.done >= 30 && !actToday && hour >= 12) {
     return { k: 'cardio', min: 15, why: `До недельной нормы кардио ${ct.minutes - cw.done} мин. Если на улицу не выходит - кардио дома на 15 минут.` };
   }
+  // свой спорт: комплекс в поддержку раз в неделю - в день без тренировки и без самого спорта
+  if (!hasWorkout && !low && hour >= 10) {
+    for (const a of safe(() => P.mySports?.(uid) || [], [])) {
+      const k = `sport_${a.id}`;
+      if (store.byDate('activity', date, uid).some(r => r.data.type === a.id)) continue;
+      const recent = [0, 1, 2, 3, 4, 5, 6].some(i => store.get(routineId(C.addDays(date, -i), k))?.data.exercises?.some(x => x.done));
+      if (recent) continue;
+      const d = modDef(k);
+      if (d) return { k, min: 15, why: `${d.title}: ${d.note}` };
+    }
+  }
   const mods = profile().modules || {};
   for (const k of ['posture', 'neck']) {
     if (!mods[k]?.enabled) continue;
@@ -651,7 +674,7 @@ C.extend('lines', now => {
   const s = safe(() => suggestModule(now), null);
   if (!s) return [];
   return [{ event: 'module_suggest', mood: 'info', text: s.why, pri: 47,
-    act: { act: 'td-mod-add', label: `Добавить: ${MODULES[s.k].title.toLowerCase()}, ${s.min} мин`, data: { m: s.k, min: s.min, date: C.today() } } }];
+    act: { act: 'td-mod-add', label: `Добавить: ${modDef(s.k).title.toLowerCase()}, ${s.min} мин`, data: { m: s.k, min: s.min, date: C.today() } } }];
 });
 
 function morningHint(date) {
@@ -670,7 +693,8 @@ document.addEventListener('toggle', e => {
 }, true);
 
 function moduleCard(k, date) {
-  const m = MODULES[k];
+  const m = modDef(k);
+  if (!m) return '';
   const rec = store.get(routineId(date, k));
   const mods = profile().modules || {};
   if (!rec) {
@@ -736,7 +760,7 @@ function actModalHtml() {
   const def = f.type ? activityDef(f.type) : null;
   const q = (f.q || '').trim().toLowerCase();
   const list = activityList();
-  const match = a => !q || [a.name, ...(a.aliases || [])].some(s => String(s).toLowerCase().includes(q));
+  const match = a => !q || [a.name, ...(a.aliases || [])].some(s => (' ' + String(s).toLowerCase()).includes(' ' + q));
   const hint = def?.intensity_hint;
   const hintText = f.intensity ? (typeof hint === 'string' ? hint : hint?.[f.intensity] || ACT_HINT[f.intensity]) : '';
   const fieldHtml = fd => {
@@ -791,7 +815,8 @@ document.addEventListener('input', e => {
   (S.forms.act ||= {}).q = e.target.value;
   let any = false;
   document.querySelectorAll('#modal .a-types [data-search]').forEach(b => {
-    const ok = !q || b.dataset.search.includes(q) || b.classList.contains('on');
+    // по началу слов: «мма» - это ММА, а не «хаммам»
+    const ok = !q || (' ' + b.dataset.search).includes(' ' + q) || b.classList.contains('on');
     b.hidden = !ok; any = any || ok;
   });
   const nr = document.querySelector('#modal .a-noresults');
@@ -1057,11 +1082,11 @@ export const actions = {
   },
   'td-mod-redo': async el => {
     const cur = store.get(routineId(el.dataset.date, el.dataset.m))?.data;
-    await makeRoutine(el.dataset.m, cur?.minutes || MODULES[el.dataset.m].def, el.dataset.date);
+    await makeRoutine(el.dataset.m, cur?.minutes || modDef(el.dataset.m)?.def || 15, el.dataset.date);
   },
   'td-goto-mod': async el => {
     const { m, date } = el.dataset;
-    if (!store.get(routineId(date, m))) await makeRoutine(m, Number(profile().modules?.[m]?.minutes || MODULES[m].def), date);
+    if (!store.get(routineId(date, m))) await makeRoutine(m, Number(profile().modules?.[m]?.minutes || modDef(m)?.def || 15), date);
     S.render();
     setTimeout(() => document.getElementById(`mod-${m}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   },
