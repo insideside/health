@@ -2,7 +2,7 @@
 // PWA не видит HealthKit — данные приносит команда на телефоне. Текст встроен сюда, чтобы
 // инструкция открывалась и без связи с сервером. Полная версия — docs/HEALTH-SHORTCUT.md.
 import * as store from '../store.js';
-import { S, esc, toast, shortDate } from '../ui.js';
+import { S, esc, toast, shortDate, IS_ANDROID } from '../ui.js';
 
 let token = null, tokenError = null;
 
@@ -44,7 +44,23 @@ const PARTS = [['steps', 'шаги'], ['kcal', 'активные калории'
 let parts = (() => { try { const v = JSON.parse(localStorage.getItem('hg-parts') || 'null'); return Array.isArray(v) ? v : null; } catch (e) { return null; } })()
   || ['steps', 'kcal', 'rhr', 'hrv', 'sleep', 'weight'];
 
+// Android: «Здоровья» iPhone нет, а к Health Connect веб-приложение доступа не имеет - говорим честно
+function androidView() {
+  const url = `${location.origin}/api/health/import`;
+  return `<div class="kicker smallcaps">Профиль · данные с телефона</div>
+    <h1>Шаги и сон с Android</h1>
+    <p class="lede">Автоматического импорта с Android пока нет: веб-приложение не может читать Health Connect (Google Fit, Samsung Health), а готового проверенного способа передать данные у Тренера нет.</p>
+    <div class="notice">Пока - вручную: шаги вводятся в пункте «Шаги» на «Сегодня», сон - в карточке «Как спалось?», тренировки - «+ Активность». Это пара касаний в день.</div>
+    <div class="section"><div class="section-title"><span class="smallcaps">Для опытных</span><span class="note">не проверено</span></div>
+      <p class="small">Если вы пользуетесь приложением-автоматизатором (Tasker, MacroDroid, Automate), которое умеет читать Health Connect и отправлять HTTP-запросы, можно настроить отправку самостоятельно:</p>
+      <ul class="small"><li>POST на <code>${esc(url)}</code></li>
+        <li>заголовок <code>X-Trainer-Token</code> - ваш токен (${token ? `<code>${esc(token)}</code> <button class="btn quiet a-mini" data-act="hg-copy" data-v="${esc(token)}">Скопировать</button>` : esc(tokenError || 'загружаю…')})</li>
+        <li>тело JSON: <code>{"date": "ГГГГ-ММ-ДД", "steps": 8214, "active_kcal": 320, "weight": 72.4, "resting_hr": 58, "sleep": {"bed": "23:40", "wake": "07:05"}}</code> - любые поля по желанию</li></ul>
+      <p class="note">Повторная отправка за тот же день перезаписывает данные, а не добавляет. Сертификат Тренера должен быть установлен на телефоне (как для самого приложения).</p></div>`;
+}
+
 function view() {
+  if (IS_ANDROID) return androidView();
   const url = `${location.origin}/api/health/import`;
   const last = lastImport();
   const today = new Date().toISOString().slice(0, 10);

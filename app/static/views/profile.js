@@ -1,6 +1,6 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
-import { S, esc, num, fmt, WD, profile, goal, toast, field, fval, input, textarea, select, chips, openModal, closeModal, jobFor, addJob, afterChange, glyph } from '../ui.js';
+import { S, esc, num, fmt, WD, profile, goal, toast, field, fval, input, textarea, select, chips, openModal, closeModal, jobFor, addJob, afterChange, glyph , IS_ANDROID } from '../ui.js';
 import { competeBody, competeSummary } from './together.js';
 import * as BR from '../brain.js';
 import * as GL from '../goals.js';
@@ -207,13 +207,13 @@ function viewProfile() {
     sec('privacy', 'Данные и приватность', BR.privacySummary(), BR.privacyBody()),
     sec('norms', 'Нормы', tg ? `${num(tg.kcal)} ккал · белок ${tg.p} г · ${num(tg.steps_manual || tg.steps)} шагов` : 'ещё не считались', normsBody(tgRec)),
     sec('checklist', 'Чек-лист', `${store.list('item').filter(i => i.data.active !== false).length} пунктов`, checklistBody()),
-    sec('iphone', 'Здоровье iPhone', 'шаги, сон и вес через «Команды»', iphoneBody()),
+    IS_ANDROID ? '' : sec('iphone', 'Здоровье iPhone', 'шаги, сон и вес через «Команды»', iphoneBody()),
     sec('app', 'Приложение', 'тема, адрес, экспорт, выход', appBody()),
   ];
 
   return `<div class="kicker smallcaps">Профиль</div><h1>${esc(prof.name || store.me()?.name || 'Профиль')}</h1>
     <div class="pf-quick">
-      <a class="btn" href="#install">Установка на iPhone</a><a class="btn quiet" href="#health">Здоровье iPhone</a>
+      <a class="btn" href="#install">${IS_ANDROID ? 'Установка на телефон' : 'Установка на iPhone'}</a>${IS_ANDROID ? '' : '<a class="btn quiet" href="#health">Здоровье iPhone</a>'}
       <a class="btn quiet" href="#connect">Адреса сервера</a><a class="btn quiet" href="#about">Как это работает</a>
       ${themeSwitch()}</div>
     <p class="lede">${prof.setup_done ? 'Всё, что тренер знает о вас. Откройте нужный раздел, поправьте и сохраните.'

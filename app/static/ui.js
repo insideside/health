@@ -4,6 +4,8 @@ import * as store from './store.js';
 import * as C from './coach.js';
 import * as PF from './prefs.js';
 
+// Android: нет «Здоровья» iPhone и «Команд» - этих блоков там не показываем
+export const IS_ANDROID = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
 export const S = {
   exMap: new Map(),       // id → упражнение из каталога
   activities: new Map(),  // id → вид активности из справочника
