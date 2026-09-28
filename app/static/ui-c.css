@@ -1,0 +1,150 @@
+/* «Вместе»: соревнование пары (views/together.js), строка дуэли на «Сегодня», настройки в профиле.
+   Только токены «Стенограммы». Вы — чернила --c1, партнёр — --c2; цвет оценки дня — --g-good/--g-ok/--g-bad (ui-a.css). */
+
+/* ── заголовок со счётом ── */
+.t-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex-wrap: nowrap; }
+.t-title > .ell { flex: 0 1 auto; }
+.t-score { flex: 0 0 auto; font-size: .85em; font-weight: 400; color: var(--ink-2); }
+.t-score i { font-style: normal; }
+.t-score i.lead { color: var(--accent); }
+
+/* ── счёт по категориям ── */
+.t-board { display: flex; flex-direction: column; }
+.t-row { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.t-row.t-head { padding: 0 0 6px; color: var(--ink-3); }
+.t-row.t-head .smallcaps { color: var(--ink-3); }
+.t-cat { color: var(--ink-2); }
+.t-side { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.t-v { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.t-v b { font-weight: 400; font-size: 15px; color: var(--ink); }
+.t-side.me .groove > .fill { background: var(--c1); }
+.t-side.them .groove > .fill { background: var(--c2); }
+.t-mark { flex: 0 0 auto; font-size: 11px; color: var(--accent); line-height: 1; }
+.t-mark.tie { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+.t-row.w-me .me .t-v b, .t-row.w-them .them .t-v b { color: var(--ink-strong); font-weight: 700; }
+.t-row.w-me .them .t-v b, .t-row.w-them .me .t-v b { color: var(--ink-3); }
+.t-foot { margin-top: 8px; font-size: 13px; }
+
+/* ── гонка по дням ── */
+.t-race { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 12px 10px 8px; border-radius: var(--r-sm); }
+.t-col { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.t-col .smallcaps { color: var(--ink-3); font-size: 10.5px; }
+.t-col.today .smallcaps { color: var(--accent); }
+.t-col.future { opacity: .45; }
+.t-bars { display: flex; align-items: flex-end; justify-content: center; gap: 3px; width: 100%; height: 88px;
+  border-bottom: 1px solid var(--rule-2); }
+.t-bar { display: block; width: min(14px, 38%); min-height: 3px; border-radius: 3px 3px 0 0; background: var(--rule-2); }
+.t-bar.g-good { background: var(--g-good); }
+.t-bar.g-ok { background: var(--g-ok); }
+.t-bar.g-bad { background: var(--g-bad); }
+.t-bar.me { box-shadow: inset 0 3px 0 var(--c1); }
+.t-bar.them { box-shadow: inset 0 3px 0 var(--c2); }
+.t-legend { display: inline-flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-key { display: inline-block; width: 12px; height: 3px; border-radius: 2px; flex: 0 0 auto; }
+.t-key.me { background: var(--c1); }
+.t-key.them { background: var(--c2); margin-left: 6px; }
+
+/* ── задания на двоих ── */
+.t-ch { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 22px; }
+.t-chi { display: flex; flex-direction: column; gap: 7px; padding: 10px 0 8px; border-top: 1px solid var(--rule); min-width: 0; }
+.t-chi-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.t-chi-h b { font-weight: 400; color: var(--ink-strong); white-space: normal; overflow-wrap: anywhere; }
+.t-chi-h .chip { flex: 0 0 auto; white-space: nowrap; }
+.t-chi.done .groove > .fill { background: var(--g-good); }
+.t-chi .mono.note { font-style: normal; font-size: 13px; }
+
+/* ── подбодрить ── */
+.t-presets .chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+.t-cheer { display: flex; gap: 10px; align-items: center; margin-top: 12px; min-width: 0; }
+.t-cheer .control { flex: 1 1 auto; min-width: 0; }
+.t-cheer .btn { flex: 0 0 auto; }
+.t-cheer-in { display: flex; align-items: center; justify-content: space-between; gap: 12px; white-space: normal; }
+.t-cheer-in .t-cheer-txt { min-width: 0; overflow-wrap: anywhere; }
+.t-cheer-in .smallcaps { font-style: normal; color: var(--ink-2); margin-right: 4px; }
+.t-cheer-in .btn { flex: 0 0 auto; }
+
+/* ── история ── */
+.t-tally { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: baseline; }
+.t-tally > span { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; max-width: 100%; }
+.t-tally b { font-size: 22px; font-weight: 400; color: var(--ink-strong); }
+.t-weeks { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin-top: 12px; max-width: 30rem; }
+.t-wk { display: flex; align-items: center; justify-content: center; height: 34px; min-width: 0; border-radius: var(--r-sm); text-decoration: none;
+  background: var(--sheet-2); border: 1px solid var(--rule); box-shadow: var(--shadow-raised); color: var(--ink-3); }
+.t-wk:hover { border-color: var(--rule-2); }
+.t-wk.r-me { color: var(--c1); border-bottom: 2px solid var(--c1); }
+.t-wk.r-them { color: var(--c2); border-bottom: 2px solid var(--c2); }
+.t-wk.r-draw { color: var(--ink-2); }
+.t-wk.r-none { opacity: .55; }
+.t-joint { margin: 14px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.t-joint b { font-size: 20px; font-weight: 400; color: var(--ink-strong); }
+.t-ach { margin-top: 12px; }
+.t-ach .chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+
+/* ── «Сегодня»: строка дуэли в блоке партнёра ── */
+.t-duel-line { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 10px 2px 0; min-width: 0; }
+.t-duel-line .note { margin: 0; min-width: 0; }
+.t-duel-line a { flex: 0 0 auto; white-space: nowrap; }
+
+/* ── профиль: что показывать ── */
+.pf-compete .chips .chip { white-space: nowrap; }
+
+@media (max-width: 600px) {
+  .t-row { grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .t-v b { font-size: 14px; }
+  .t-cat { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+  .t-race { gap: 3px; padding: 10px 6px 6px; }
+  .t-bars { height: 72px; gap: 2px; }
+  .t-cheer { flex-wrap: wrap; }
+  .t-cheer .control { flex-basis: 100%; }
+  .t-cheer-in { flex-wrap: wrap; }
+}
+
+/* ── «Прогресс»: третья карточка-ссылка «Вместе» ── */
+.pg-links:has(> :nth-child(3)) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 600px) {
+  .pg-links:has(> :nth-child(3)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-links > :nth-child(3) { grid-column: 1 / -1; }
+}
+
+/* ── Проверка UX (SPEC-v3 п. 16): сенсорные экраны ──
+   На iPhone/iPad всё, что нажимают, — не меньше 40 px по короткой стороне. Вид мелких элементов не меняем:
+   где вырастить сам элемент нельзя (галочка, ссылка «план →», индикатор синхронизации), расширяем зону нажатия. */
+@media (pointer: coarse) {
+  .btn, a.btn { min-height: 40px; }
+  .datenav .btn, .a-entry-btns .btn { min-width: 40px; }
+  button.chip { min-height: 40px; min-width: 40px; justify-content: center; }
+  .a-tabs a { padding-block: 13px; }
+  input.control:not([type=checkbox]):not([type=radio]), select.control { min-height: 40px; }
+  .actions > a.link { padding-block: 10px; }
+  .sync { min-height: 40px; margin-block: -5px; }
+  .stepper button { width: 40px; height: 40px; }
+  .chk { min-height: 40px; }
+  .theme-switch button { min-height: 40px; }
+  /* зоны нажатия шире видимого: отступ внутрь + такой же отрицательный margin (вёрстка не сдвигается) */
+  .go, .sync, .a-mtitle-l, table a.link { padding-block: 10px; margin-block: -10px; }
+  /* строчный элемент: отступ строку не раздвигает; пунктир — подчёркиванием, чтобы не уехал вниз вместе с отступом */
+  .row .title button { padding-block: 10px; border-bottom: 0; text-decoration: underline dotted var(--ink-3); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+  .row .tick { width: 40px; height: 40px; margin: -7px; position: relative; background: none; border: 0; box-shadow: none; }
+  .row .tick::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; border: 1.5px solid var(--rule-2);
+    background: var(--sunken); box-shadow: var(--shadow-inset); transition: .15s; }
+  .row .tick.on::before { background: linear-gradient(180deg, var(--accent), var(--accent-2)); border-color: transparent; box-shadow: none; }
+  .row.done .tick.on::before { background: var(--ok); }
+  .row .tick.part::before { border-color: var(--accent); }
+  .row .tick svg { position: relative; }
+}
+/* уведомление не должно закрывать нижние вкладки, панель «Сохранить» профиля и поле чата */
+@media (max-width: 900px) {
+  .toast { bottom: calc(var(--tab-h) + 14px + env(safe-area-inset-bottom)); }
+  body:has(.pf-savebar) .toast { bottom: calc(var(--tab-h) + 84px + env(safe-area-inset-bottom)); }
+  body:has(.composer) .toast { bottom: calc(var(--tab-h) + 128px + env(safe-area-inset-bottom)); }
+}
+/* «Сегодня»: следующий шаг нового пользователя */
+.a-next { margin: 16px 0 4px; }
+.a-next p { margin: 6px 0 0; }
+.a-next .actions { margin-top: 10px; }
+/* окно активности: выбранный вид вместо длинного списка */
+.a-picked { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.a-picked .note { margin: 0; }
+/* профиль: своя цель шагов — число целиком, без многоточия */
+.pf-steps .pf-num { width: 110px; }

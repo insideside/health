@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+data/
+.DS_Store
+*.pyc
+.ruff_cache/
+# внутренние рабочие заметки разработки (личный контекст) - только локально
+CLAUDE.md
+docs/SPEC-v2.md
+docs/SPEC-v3.md
+# сертификаты, база, резервные копии - в data/ (выше); на всякий случай
+*.pem
+*.db
+*.db-wal
+*.db-shm
+settings.env

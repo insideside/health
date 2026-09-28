@@ -1,0 +1,246 @@
+/* accents.css — смысловая палитра «Тренера» поверх «Стенограммы».
+   Бумага и чернила остаются; цвет получает не «украшение», а смысл: каждый вид данных — свои чернила.
+   Цвет — на точках, полосках, кромках карточек, галочках, значках и крупных числах; текст остаётся чернилами.
+   Контраст цветов с листом ≥ 4,5 : 1 в обеих темах (цветом можно набирать и подписи).
+   Подключение: <… data-dom="sleep|water|food|train|move|mood|goal|coach|prot|fat|carb"> — внутри доступны
+   --dom и --dom-soft. Одна .btn.solid на экран по-прежнему терракотовая, кнопки по доменам не красим. */
+
+/* ───────── токены ───────── */
+:root, :root[data-theme="dark"] {           /* тёмная: яркие, но мягкие чернила на графите */
+  --sleep: #8f9dff;   /* сон — индиго */
+  --water: #4cc6ea;   /* вода — циан */
+  --food:  #f2b447;   /* питание — янтарь */
+  --fat-own: #e3d35e;  /* жиры — желтее калорий, чтобы полосы БЖУ различались */
+  --train: #ef7458;   /* тренировки — терракота ярче акцента */
+  --move:  #6fd48f;   /* шаги и активности — зелёный */
+  --mood:  #f28cb5;   /* самочувствие — роза */
+  --goal:  #b590ff;   /* цели, уровни, опыт — фиалка */
+  --prot:  #7ab4ff;   /* белки — синий */
+  --carb:  #6fdcb4;   /* углеводы — мята */
+  --good:  #86d46a;   /* оценки */
+  --okay:  #e8c547;
+  --bad:   #ff6b6b;
+  --on-dom: #17150f;  /* галочка на цветном кружке */
+}
+:root[data-theme="light"] {                 /* светлая: глубокие чернила на льне */
+  --sleep: #3f4fc2;
+  --water: #086d8e;
+  --food:  #8c5a00;
+  --fat-own: #676000;
+  --train: #b23c24;
+  --move:  #1f7539;
+  --mood:  #ad3a72;
+  --goal:  #6f45c8;
+  --prot:  #2c63bd;
+  --carb:  #177252;
+  --good:  #35731d;
+  --okay:  #7a5d00;
+  --bad:   #bb2d2d;
+  --on-dom: #fffaf2;
+  /* заливки оценок крупными пятнами (клетки года, столбики, кольцо) — светлее текстовых чернил */
+  --good-fill: #5a9e3a; --okay-fill: #d6a622; --bad-fill: #d24d45;
+}
+:root {
+  --coach: var(--accent);
+  --fat: var(--fat-own, var(--food));
+  --soft-k: 13%;
+  --sleep-soft: color-mix(in srgb, var(--sleep) var(--soft-k), transparent);
+  --water-soft: color-mix(in srgb, var(--water) var(--soft-k), transparent);
+  --food-soft:  color-mix(in srgb, var(--food) var(--soft-k), transparent);
+  --train-soft: color-mix(in srgb, var(--train) var(--soft-k), transparent);
+  --move-soft:  color-mix(in srgb, var(--move) var(--soft-k), transparent);
+  --mood-soft:  color-mix(in srgb, var(--mood) var(--soft-k), transparent);
+  --goal-soft:  color-mix(in srgb, var(--goal) var(--soft-k), transparent);
+  --good-soft:  color-mix(in srgb, var(--good) var(--soft-k), transparent);
+  --okay-soft:  color-mix(in srgb, var(--okay) var(--soft-k), transparent);
+  --bad-soft:   color-mix(in srgb, var(--bad) var(--soft-k), transparent);
+  --good-fill: var(--good); --okay-fill: var(--okay); --bad-fill: var(--bad);
+  --scold: color-mix(in srgb, var(--bad) 55%, var(--train));
+  /* прежние имена оценок и «готово» — теперь на ярких токенах */
+  --ok: var(--good);
+  --g-good: var(--good); --g-ok: var(--okay); --g-bad: var(--bad);
+}
+
+/* домены: --dom и его «мягкая» подложка */
+[data-dom="sleep"] { --dom: var(--sleep); }
+[data-dom="water"] { --dom: var(--water); }
+[data-dom="food"]  { --dom: var(--food); }
+[data-dom="train"] { --dom: var(--train); }
+[data-dom="move"]  { --dom: var(--move); }
+[data-dom="mood"]  { --dom: var(--mood); }
+[data-dom="goal"]  { --dom: var(--goal); }
+[data-dom="coach"] { --dom: var(--coach); }
+[data-dom="prot"]  { --dom: var(--prot); }
+[data-dom="fat"]   { --dom: var(--fat); }
+[data-dom="carb"]  { --dom: var(--carb); }
+[data-dom] { --dom-soft: color-mix(in srgb, var(--dom) var(--soft-k), transparent); --dom-ink: color-mix(in srgb, var(--dom) 72%, var(--ink-2)); }
+
+/* ───────── заголовки разделов: цветная точка перед капителью ───────── */
+.section[data-dom] > .section-title > .smallcaps:first-child,
+.a-card[data-dom] > .a-card-head > .smallcaps:first-child,
+.a-dsec[data-dom] > .smallcaps,
+.meal-title[data-dom] > .smallcaps,
+.macro[data-dom] .top > .smallcaps,
+.pg-part[data-dom] > .smallcaps,
+.a-parts > [data-dom] > .smallcaps { color: var(--dom-ink); }
+.section[data-dom] > .section-title > .smallcaps:first-child::before,
+.a-card[data-dom] > .a-card-head > .smallcaps:first-child::before,
+.a-dsec[data-dom] > .smallcaps::before,
+.meal-title[data-dom] > .smallcaps::before,
+.t-row[data-dom] > .t-cat::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; vertical-align: 1px;
+  background: var(--dom); box-shadow: 0 0 0 3px var(--dom-soft);
+}
+
+/* ───────── карточки домена: тонкая цветная кромка сверху и лёгкий тон ───────── */
+.raised[data-dom] {
+  background: linear-gradient(180deg, var(--dom-soft), transparent 110px) var(--sheet-2);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--dom) 85%, transparent), var(--shadow-raised);
+}
+/* повторяющиеся карточки (упражнения, записи еды, слоты рациона) — линейка слева, без заливки */
+.raised.ex[data-dom], .raised.entry[data-dom], .raised.mp-slot[data-dom] {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dom) 8%, transparent), transparent 90px) var(--sheet-2);
+  box-shadow: inset 3px 0 0 var(--dom), var(--shadow-raised);
+}
+.raised.mp-slot.mp-past[data-dom] { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--dom) 40%, transparent); background: var(--sheet-2); }
+.a-module.is-done[data-dom] { box-shadow: inset 0 2px 0 var(--good), var(--shadow-raised); background: linear-gradient(180deg, var(--good-soft), transparent 110px) var(--sheet-2); }
+
+/* ───────── полоски прогресса: цвет того, что измеряют ───────── */
+[data-dom] .groove > .fill, .groove[data-dom] > .fill {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dom) 72%, var(--sunken)), var(--dom));
+}
+.macro[data-dom] .groove > .fill, .macro[data-dom] .groove:not(.over) > .fill {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dom) 72%, var(--sunken)), var(--dom));
+}
+.macro[data-dom] .groove.over > .fill { background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 72%, var(--sunken)), var(--bad)); }
+.macro[data-dom] .top .mono { color: var(--ink); }
+.a-parts .groove, .pg-part .groove { height: 6px; }
+
+/* ───────── крупные числа домена ───────── */
+[data-dom] .a-sleep-res > b, [data-dom] .pg-stats b, .a-bal > [data-dom] b, .lvl .num { color: var(--dom, var(--goal)); }
+.pg-level[data-dom] { border-color: color-mix(in srgb, var(--dom) 35%, var(--rule-2)); background: linear-gradient(90deg, var(--dom-soft), transparent 60%); }
+.pg-level-t .mono { color: var(--dom-ink, var(--ink-3)); }
+[data-dom] .pg-stats > div, [data-dom] .pg-m { border-color: color-mix(in srgb, var(--dom) 28%, var(--rule-2)); }
+.chip[data-dom] { background: var(--dom-soft); border-color: color-mix(in srgb, var(--dom) 38%, transparent); color: var(--ink-strong); box-shadow: none; }
+
+/* ───────── выбор-«таблетки» внутри домена (сон, самочувствие, вид активности) ───────── */
+[data-dom] .chip.on, [data-dom] .chip[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--dom) 18%, var(--sheet)); border-color: color-mix(in srgb, var(--dom) 55%, transparent); color: var(--ink-strong);
+}
+.a-types[data-dom] .chip { border-left: 2px solid color-mix(in srgb, var(--dom) 55%, transparent); }
+
+/* ───────── чек-лист: галочка в цвете пункта ───────── */
+.row[data-dom] .tick.part { border-color: var(--dom); box-shadow: var(--shadow-inset), inset 0 0 0 2px var(--dom-soft); }
+.row[data-dom] .tick.on, .row.done[data-dom] .tick.on { background: var(--dom); border-color: transparent; box-shadow: none; color: var(--on-dom); }
+.row[data-dom] .go:hover { color: var(--dom); }
+.row[data-dom].done .hint { color: var(--dom-ink); }
+@media (pointer: coarse) {
+  .row[data-dom] .tick.on { background: none; }
+  .row[data-dom] .tick.on::before, .row.done[data-dom] .tick.on::before { background: var(--dom); }
+  .row[data-dom] .tick.part::before { border-color: var(--dom); }
+}
+.glasses i { border-color: color-mix(in srgb, var(--water) 35%, var(--rule-2)); }
+.glasses i.on { background: var(--water); border-color: transparent; }
+/* «открыть →» у разминки — кнопка: без серой подложки браузера */
+button.go { background: none; border: 0; padding-inline: 0; cursor: pointer; }
+/* «+ моё» у упражнения разминки — справа в строке, а не в узкой колонке галочки */
+.a-ex:has(> .a-pin) { grid-template-columns: 30px minmax(0, 1fr) auto; }
+.a-ex.done .tick.on, .a-ex .tick.on { background: var(--train); border-color: transparent; color: var(--on-dom); box-shadow: none; }
+
+/* ───────── активности ───────── */
+.section[data-dom] .a-act { border-left: 2px solid var(--dom); padding-left: 12px; background: linear-gradient(90deg, var(--dom-soft), transparent 40%); }
+.section[data-dom] .a-act-main:hover .a-act-name { color: var(--dom); }
+
+/* ───────── готовность и вариант тренировки ───────── */
+.a-variant { border-left-color: color-mix(in srgb, var(--train) 70%, transparent); }
+.a-variant.suggest { border-left-color: var(--okay); }
+
+/* ───────── тренер: цвет настроения ───────── */
+.coach { background: linear-gradient(90deg, var(--accent-soft), transparent 55%) var(--sunken); }
+.coach.praise { border-left-color: var(--good); background: linear-gradient(90deg, var(--good-soft), transparent 55%) var(--sunken); }
+.coach.scold { border-left-color: var(--scold); background: linear-gradient(90deg, color-mix(in srgb, var(--scold) 13%, transparent), transparent 55%) var(--sunken); }
+.coach.info { border-left-color: var(--sleep); background: linear-gradient(90deg, var(--sleep-soft), transparent 55%) var(--sunken); }
+.coach li.praise::before { color: var(--good); }
+.coach li.scold::before { color: var(--scold); }
+.coach li.info::before { color: var(--sleep); }
+.msg.m-coach.src-rule .bubble { border-left-color: var(--sleep); }
+.msg.m-coach.src-rule.mood-praise .bubble { border-left-color: var(--good); }
+.msg.m-coach.src-rule.mood-scold .bubble { border-left-color: var(--scold); }
+
+/* ───────── кольцо дня — цвет оценки ───────── */
+.ring.g-good .fg, .ring.full .fg { stroke: var(--good-fill); }
+.ring.g-ok .fg, .ring.g-live .fg { stroke: var(--okay-fill); }
+.ring.g-bad .fg { stroke: var(--bad-fill); }
+
+/* ───────── оценки: календарь, неделя, дуэль ───────── */
+.a-day.g-good, .a-day.g-ok, .a-day.g-bad, .a-day.g-live { --gc: var(--good-fill); color: var(--ink-strong);
+  background: color-mix(in srgb, var(--gc) 20%, var(--sunken));
+  box-shadow: inset 0 3px 0 var(--gc), inset 0 0 0 1px color-mix(in srgb, var(--gc) 30%, transparent); }
+.a-day.g-ok, .a-day.g-live { --gc: var(--okay-fill); }
+.a-day.g-bad { --gc: var(--bad-fill); }
+.a-day.g-live { background: color-mix(in srgb, var(--gc) 10%, var(--sunken)); box-shadow: inset 0 3px 0 color-mix(in srgb, var(--gc) 55%, transparent), var(--shadow-inset); }
+:root[data-theme="light"] .a-day.g-good, :root[data-theme="light"] .a-day.g-ok, :root[data-theme="light"] .a-day.g-bad { background: color-mix(in srgb, var(--gc) 16%, var(--sheet)); }
+.a-day.g-good .n, .a-day.g-ok .n, .a-day.g-bad .n { color: color-mix(in srgb, var(--gc) 70%, var(--ink-strong)); font-weight: 700; }
+:root[data-theme="light"] .a-day.g-good .n, :root[data-theme="light"] .a-day.g-ok .n, :root[data-theme="light"] .a-day.g-bad .n { color: color-mix(in srgb, var(--gc) 45%, var(--ink-strong)); }
+.a-cell.g-good { background: var(--good-fill); }
+.a-cell.g-ok { background: color-mix(in srgb, var(--okay-fill) 88%, var(--sunken)); }
+.a-cell.g-bad { background: color-mix(in srgb, var(--bad-fill) 85%, var(--sunken)); }
+.a-gdot.g-good, .t-bar.g-good, .a-pbar i.g-good { background: var(--good-fill); }
+.a-gdot.g-ok, .t-bar.g-ok, .a-pbar i.g-ok { background: var(--okay-fill); }
+.a-gdot.g-bad, .t-bar.g-bad, .a-pbar i.g-bad { background: var(--bad-fill); }
+.a-gdot.g-live { box-shadow: inset 0 0 0 2px var(--okay-fill); }
+.a-wgrade b.g-good-t, .pg-link b.g-good-t { color: var(--good); }
+.a-wgrade b.g-ok-t, .pg-link b.g-ok-t { color: var(--okay); }
+.a-wgrade b.g-bad-t, .pg-link b.g-bad-t { color: var(--bad); }
+.pg-score.g-good { border-color: var(--good); background: var(--good-soft); }
+.pg-score.g-ok { border-color: var(--okay); background: var(--okay-soft); }
+.pg-score.g-bad { border-color: var(--bad); background: var(--bad-soft); }
+.a-gbig.g-good { background: var(--good-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--good) 35%, transparent); }
+.a-gbig.g-ok { background: var(--okay-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--okay) 35%, transparent); }
+.a-gbig.g-bad { background: var(--bad-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 35%, transparent); }
+.pg-part i.up { color: var(--good); } .pg-part i.down { color: var(--bad); }
+.pg-table .hit { color: var(--good); } .pg-table .over, .pg-table .under { color: var(--bad); }
+
+/* неделя в календаре: подписи колонок в цвете метрики */
+.a-met[data-dom] > .smallcaps { color: color-mix(in srgb, var(--dom) 50%, var(--ink-3)); }
+.a-met.warn .mono { color: var(--bad); }
+
+/* ───────── графики ───────── */
+[data-dom] .pg-line { stroke: var(--dom); }
+[data-dom] .pg-dot { stroke: color-mix(in srgb, var(--dom) 55%, var(--ink-3)); }
+[data-dom] .pg-chart.mini .pg-dot { stroke: var(--dom); }
+.chart .line { stroke: var(--goal); } .chart .pt { fill: var(--goal); }
+
+/* ───────── цели и уровень ───────── */
+[data-dom] .pg-mark.on { background: var(--dom); border-color: var(--dom); }
+[data-dom] .pg-mark.next { border-color: var(--dom); box-shadow: 0 0 0 3px var(--dom-soft); }
+.ach > .raised:not(.off) { box-shadow: inset 0 2px 0 var(--goal), var(--shadow-raised); background: linear-gradient(180deg, var(--goal-soft), transparent 70%) var(--sheet-2); }
+
+/* ───────── питание ───────── */
+.a-win-bar i { background: color-mix(in srgb, var(--food) 50%, var(--sunken)); }
+.fp-st { background: var(--food-soft); border-color: color-mix(in srgb, var(--food) 35%, transparent); color: var(--ink); }
+.mp-time { color: var(--food); }
+.btn.a-star.on { color: var(--food); }
+.src-ai, .fp-gen { color: var(--goal); }
+
+/* ───────── тренировка ───────── */
+.set.done { background: color-mix(in srgb, var(--good) 16%, var(--sunken)); }
+.set.done .tick { background: var(--good); color: var(--on-dom); }
+.a-prog .smallcaps { color: var(--good); }
+
+/* ───────── «Вместе» ───────── */
+.t-row[data-dom] > .t-cat { color: var(--ink-2); }
+.t-chi.done .groove > .fill { background: var(--good); }
+
+/* ───────── навигация: значок активного раздела — в его цвете ───────── */
+.nav a.on[data-dom] svg { color: var(--dom); }
+.nav a.on:not([data-dom]) svg { color: var(--ink-strong); }
+.nav a.on[data-dom] { box-shadow: inset 2px 0 0 var(--dom), var(--shadow-raised); }
+@media (max-width: 900px) {
+  .tabbar a.on { color: var(--ink-strong); }
+  .tabbar a.on[data-dom] svg { color: var(--dom); }
+  .tabbar a.on::after { content: ""; position: absolute; top: -6px; left: 30%; right: 30%; height: 2px; border-radius: 0 0 2px 2px; background: var(--dom, var(--ink-2)); }
+}
+
+/* пульс тренировки из «Здоровья» */
+.a-hr { color: var(--bad); white-space: normal; }

@@ -1,0 +1,2385 @@
+[
+  {
+    "id": "walking",
+    "name": "Ходьба",
+    "group": "кардио",
+    "met": {
+      "low": 2.8,
+      "mid": 3.5,
+      "high": 4.3
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "прогулка",
+      "гулял",
+      "гуляла",
+      "пешком",
+      "шаги"
+    ],
+    "intensity_hint": {
+      "low": "Прогулочный шаг, около 3 км/ч, можно рассматривать витрины",
+      "mid": "Обычный городской шаг, около 4–5 км/ч, разговор без усилий",
+      "high": "Энергичный шаг около 5,5 км/ч, лёгкое тепло в теле"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true
+  },
+  {
+    "id": "walk_fast",
+    "name": "Быстрая ходьба",
+    "group": "кардио",
+    "met": {
+      "low": 4.3,
+      "mid": 5.0,
+      "high": 7.0
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "быстрый шаг",
+      "фитнес-ходьба",
+      "спортивная ходьба",
+      "ходьба быстро"
+    ],
+    "intensity_hint": {
+      "low": "Около 5,5–6 км/ч, говорить можно спокойно",
+      "mid": "Около 6,5 км/ч, руки работают, говорить фразами",
+      "high": "7 км/ч и быстрее или в горку; разговаривать трудно"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true
+  },
+  {
+    "id": "running",
+    "name": "Бег",
+    "group": "кардио",
+    "met": {
+      "low": 8.3,
+      "mid": 9.8,
+      "high": 11.5
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "cardio",
+    "impact": "high",
+    "aliases": [
+      "пробежка",
+      "бегал",
+      "бегала",
+      "джоггинг",
+      "трусца",
+      "бег трусцой"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкая трусца около 7–8 км/ч, можно разговаривать",
+      "mid": "Темп около 9–10 км/ч (6–6:30 мин/км), говорить фразами",
+      "high": "Быстрее 11 км/ч или интервалы; только отдельные слова"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "cycling",
+    "name": "Велосипед",
+    "group": "кардио",
+    "met": {
+      "low": 4.0,
+      "mid": 6.8,
+      "high": 10.0
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "велик",
+      "вело",
+      "велопрогулка",
+      "катался на велосипеде",
+      "байк"
+    ],
+    "intensity_hint": {
+      "low": "Прогулка до 16 км/ч по ровному, почти без усилия",
+      "mid": "Около 19–22 км/ч, ощутимая работа ног, говорить фразами",
+      "high": "Быстрее 22 км/ч, подъёмы, говорить трудно"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "stationary_bike",
+    "name": "Велотренажёр",
+    "group": "кардио",
+    "met": {
+      "low": 3.5,
+      "mid": 6.8,
+      "high": 8.8
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "велотренажер",
+      "вело в зале",
+      "сайкл",
+      "спиннинг",
+      "cycle"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкое сопротивление, около 50–90 Вт",
+      "mid": "Среднее сопротивление, 100–150 Вт, лёгкая испарина",
+      "high": "Тяжёлое сопротивление или интервалы, 150–200+ Вт"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "elliptical_trainer",
+    "name": "Эллипс",
+    "group": "кардио",
+    "met": {
+      "low": 4.0,
+      "mid": 5.0,
+      "high": 7.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "эллиптический тренажёр",
+      "орбитрек",
+      "эллипсоид",
+      "эллипс",
+      "эллиптический тренажер"
+    ],
+    "intensity_hint": {
+      "low": "Можно свободно разговаривать и даже напевать; дыхание почти не сбито",
+      "mid": "Говорить можно фразами, но не петь; тепло, лёгкая испарина",
+      "high": "Говорить трудно — только отдельные слова; сильно вспотели, пульс высокий"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "indoor_rowing",
+    "name": "Гребной тренажёр",
+    "group": "кардио",
+    "met": {
+      "low": 4.8,
+      "mid": 7.0,
+      "high": 8.5
+    },
+    "zones": [
+      "back",
+      "legs",
+      "arms",
+      "glutes"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "гребной",
+      "гребля в зале",
+      "concept"
+    ],
+    "intensity_hint": {
+      "low": "Около 50 Вт, спокойный ритм 18–20 гребков в минуту",
+      "mid": "Около 100 Вт, 22–26 гребков в минуту",
+      "high": "150 Вт и больше или интервалы, говорить трудно"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "jump_rope",
+    "name": "Скакалка",
+    "group": "кардио",
+    "met": {
+      "low": 8.8,
+      "mid": 11.8,
+      "high": 12.3
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "shoulders"
+    ],
+    "load": "cardio",
+    "impact": "high",
+    "aliases": [
+      "прыжки через скакалку",
+      "скакалка"
+    ],
+    "intensity_hint": {
+      "low": "Медленные прыжки, меньше 100 в минуту, с паузами",
+      "mid": "Около 100–120 прыжков в минуту",
+      "high": "Быстро, двойные прыжки или интервалы"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "nordic_walking",
+    "name": "Скандинавская ходьба",
+    "group": "кардио",
+    "met": {
+      "low": 4.8,
+      "mid": 5.5,
+      "high": 7.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "shoulders",
+      "back"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "скандинавка",
+      "ходьба с палками",
+      "нордик"
+    ],
+    "intensity_hint": {
+      "low": "Спокойный шаг, палки лишь касаются земли",
+      "mid": "Активный толчок палками, 5–6 км/ч",
+      "high": "Быстрый шаг или подъёмы, энергичная работа рук"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true
+  },
+  {
+    "id": "hiking",
+    "name": "Поход",
+    "group": "кардио",
+    "met": {
+      "low": 5.3,
+      "mid": 6.0,
+      "high": 7.8
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "back"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "хайкинг",
+      "треккинг",
+      "поход в горы",
+      "пеший поход",
+      "горы"
+    ],
+    "intensity_hint": {
+      "low": "Ровная тропа, лёгкий рюкзак",
+      "mid": "Пересечённая местность, умеренные подъёмы",
+      "high": "Крутые подъёмы, тяжёлый рюкзак, высота"
+    },
+    "fields": [
+      {
+        "key": "distance",
+        "label": "Расстояние, км",
+        "type": "text"
+      },
+      {
+        "key": "elevation",
+        "label": "Набор высоты, м",
+        "type": "text"
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "step_aerobics",
+    "name": "Степ / аэробика",
+    "group": "кардио",
+    "met": {
+      "low": 5.0,
+      "mid": 7.3,
+      "high": 8.5
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "степ",
+      "аэробика",
+      "степ-аэробика",
+      "групповая тренировка"
+    ],
+    "intensity_hint": {
+      "low": "Низкоударная аэробика без прыжков",
+      "mid": "Степ-платформа 15–20 см, связки в среднем темпе",
+      "high": "Высокая платформа, прыжковые связки, быстрый темп"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "swimming",
+    "name": "Бассейн / плавание",
+    "group": "вода",
+    "met": {
+      "low": 5.8,
+      "mid": 8.3,
+      "high": 9.8
+    },
+    "zones": [
+      "back",
+      "shoulders",
+      "arms",
+      "chest",
+      "legs"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "бассейн",
+      "плавал",
+      "плавала",
+      "плавание",
+      "заплыв"
+    ],
+    "intensity_hint": {
+      "low": "Спокойное плавание с остановками у бортика",
+      "mid": "Непрерывное плавание в умеренном темпе, дыхание ровное",
+      "high": "Быстрые отрезки, дыхание сильно сбивается"
+    },
+    "fields": [
+      {
+        "key": "style",
+        "label": "Стиль",
+        "type": "choice",
+        "options": [
+          [
+            "crawl",
+            "Кроль"
+          ],
+          [
+            "breast",
+            "Брасс"
+          ],
+          [
+            "back",
+            "На спине"
+          ],
+          [
+            "mixed",
+            "Смешанный"
+          ]
+        ]
+      },
+      {
+        "key": "distance",
+        "label": "Дистанция, м",
+        "type": "text"
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "water",
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "aqua_aerobics",
+    "name": "Аквааэробика",
+    "group": "вода",
+    "met": {
+      "low": 4.0,
+      "mid": 5.5,
+      "high": 7.5
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "abs"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "аква",
+      "аквафитнес",
+      "аквааэробика"
+    ],
+    "intensity_hint": {
+      "low": "Спокойные движения в воде, растяжка",
+      "mid": "Активное занятие в группе, всё время в движении",
+      "high": "Аквабег, прыжки в воде, интенсивные связки"
+    },
+    "setting": [
+      "water",
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "rowing",
+    "name": "Гребля (лодка, каяк)",
+    "group": "вода",
+    "met": {
+      "low": 3.5,
+      "mid": 5.8,
+      "high": 9.0
+    },
+    "zones": [
+      "back",
+      "arms",
+      "shoulders",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "каяк",
+      "байдарка",
+      "каноэ",
+      "лодка",
+      "сплав"
+    ],
+    "intensity_hint": {
+      "low": "Прогулочная гребля по спокойной воде",
+      "mid": "Уверенный ровный темп, лёгкая испарина",
+      "high": "Против течения, гонка или быстрые отрезки"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "sup",
+    "name": "SUP (сапборд)",
+    "group": "вода",
+    "met": {
+      "low": 4.0,
+      "mid": 6.0,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "abs",
+      "sides",
+      "back",
+      "arms"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "сап",
+      "сапборд",
+      "sup",
+      "доска с веслом"
+    ],
+    "intensity_hint": {
+      "low": "Спокойная прогулка по штилю",
+      "mid": "Ровный темп, лёгкий ветер или волна",
+      "high": "Против ветра, быстрый темп, сап-фитнес"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "summer"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "surfing",
+    "name": "Серфинг",
+    "group": "вода",
+    "met": {
+      "low": 3.0,
+      "mid": 5.0,
+      "high": 6.0
+    },
+    "zones": [
+      "shoulders",
+      "back",
+      "arms",
+      "abs",
+      "legs"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "сёрф",
+      "серф",
+      "сёрфинг",
+      "бодиборд"
+    ],
+    "intensity_hint": {
+      "low": "Больше сидите на доске и ждёте волну",
+      "mid": "Регулярный гребок к волне и попытки встать",
+      "high": "Много гребли на сильной волне, постоянное катание"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "summer"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "snowboard",
+    "name": "Сноуборд",
+    "group": "зима",
+    "met": {
+      "low": 4.3,
+      "mid": 5.3,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "сноуборд",
+      "борд",
+      "катался на борде"
+    ],
+    "intensity_hint": {
+      "low": "Пологие трассы, много отдыха на подъёмнике",
+      "mid": "Уверенное катание по средним трассам",
+      "high": "Сложные трассы, целина, парк, почти без пауз"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "winter"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": false
+  },
+  {
+    "id": "alpine_skiing",
+    "name": "Горные лыжи",
+    "group": "зима",
+    "met": {
+      "low": 4.3,
+      "mid": 5.3,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "горнолыжка",
+      "лыжи в горах",
+      "катание на лыжах"
+    ],
+    "intensity_hint": {
+      "low": "Пологие трассы, спокойные дуги",
+      "mid": "Средние трассы, уверенные повороты",
+      "high": "Крутые трассы, бугры, соревновательный темп"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "winter"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": false
+  },
+  {
+    "id": "cross_country_skiing",
+    "name": "Беговые лыжи",
+    "group": "зима",
+    "met": {
+      "low": 6.8,
+      "mid": 9.0,
+      "high": 12.5
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "back",
+      "shoulders"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "лыжи",
+      "беговые",
+      "лыжня",
+      "коньковый ход",
+      "классика"
+    ],
+    "intensity_hint": {
+      "low": "Спокойная прогулка классическим ходом, около 4 км/ч",
+      "mid": "Уверенный темп 6–8 км/ч, говорить фразами",
+      "high": "Коньковый ход, подъёмы, гонка — говорить трудно"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "winter"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true
+  },
+  {
+    "id": "ice_skating",
+    "name": "Коньки",
+    "group": "зима",
+    "met": {
+      "low": 5.5,
+      "mid": 7.0,
+      "high": 9.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "каток",
+      "коньки",
+      "катался на коньках"
+    ],
+    "intensity_hint": {
+      "low": "Неспешное катание по кругу, с остановками",
+      "mid": "Непрерывное уверенное катание",
+      "high": "Быстрое катание, хоккей, фигурные элементы"
+    },
+    "setting": [
+      "outdoor",
+      "indoor"
+    ],
+    "season": [
+      "winter"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": true,
+    "cardio": true
+  },
+  {
+    "id": "dance",
+    "name": "Танцы",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 3.0,
+      "mid": 5.0,
+      "high": 7.3
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "sides"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "танцевал",
+      "танцевала",
+      "зумба",
+      "сальса",
+      "бачата",
+      "хип-хоп",
+      "бальные"
+    ],
+    "intensity_hint": {
+      "low": "Медленные танцы, разучивание движений",
+      "mid": "Социальные танцы или класс в среднем темпе",
+      "high": "Зумба, хип-хоп, быстрые связки почти без пауз"
+    },
+    "fields": [
+      {
+        "key": "style",
+        "label": "Стиль",
+        "type": "choice",
+        "options": [
+          [
+            "salsa",
+            "Сальса"
+          ],
+          [
+            "bachata",
+            "Бачата"
+          ],
+          [
+            "hiphop",
+            "Хип-хоп"
+          ],
+          [
+            "contemporary",
+            "Контемпорари"
+          ],
+          [
+            "ballroom",
+            "Бальные"
+          ],
+          [
+            "zumba",
+            "Зумба"
+          ],
+          [
+            "other",
+            "Другое"
+          ]
+        ]
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "aerial",
+    "name": "Воздушная гимнастика",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 3.5,
+      "mid": 5.0,
+      "high": 7.0
+    },
+    "zones": [
+      "arms",
+      "shoulders",
+      "back",
+      "abs",
+      "sides"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "пилон",
+      "полотна",
+      "кольцо",
+      "гамак",
+      "пол дэнс",
+      "pole dance",
+      "воздушка"
+    ],
+    "intensity_hint": {
+      "low": "Растяжка, базовые элементы, много отдыха",
+      "mid": "Отработка трюков и связок с паузами",
+      "high": "Силовые элементы, связки подряд, работа на выносливость"
+    },
+    "fields": [
+      {
+        "key": "apparatus",
+        "label": "Снаряд",
+        "type": "choice",
+        "options": [
+          [
+            "pole",
+            "Пилон"
+          ],
+          [
+            "silks",
+            "Полотна"
+          ],
+          [
+            "hoop",
+            "Кольцо"
+          ],
+          [
+            "hammock",
+            "Гамак"
+          ]
+        ]
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "yoga",
+    "name": "Йога",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 2.3,
+      "mid": 3.0,
+      "high": 4.0
+    },
+    "zones": [
+      "back",
+      "abs",
+      "legs",
+      "shoulders"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "йога",
+      "асаны",
+      "хатха",
+      "виньяса"
+    ],
+    "intensity_hint": {
+      "low": "Мягкая практика, инь-йога, долгие расслабленные позы",
+      "mid": "Хатха, умеренные удержания, лёгкое тепло",
+      "high": "Виньяса, аштанга, пауэр-йога — непрерывный поток, пот"
+    },
+    "fields": [
+      {
+        "key": "style",
+        "label": "Стиль",
+        "type": "choice",
+        "options": [
+          [
+            "hatha",
+            "Хатха"
+          ],
+          [
+            "vinyasa",
+            "Виньяса"
+          ],
+          [
+            "ashtanga",
+            "Аштанга"
+          ],
+          [
+            "yin",
+            "Инь"
+          ],
+          [
+            "iyengar",
+            "Айенгар"
+          ],
+          [
+            "kundalini",
+            "Кундалини"
+          ],
+          [
+            "other",
+            "Другое"
+          ]
+        ]
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "pilates",
+    "name": "Пилатес",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 2.8,
+      "mid": 3.0,
+      "high": 4.0
+    },
+    "zones": [
+      "abs",
+      "sides",
+      "back",
+      "glutes"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "пилатес",
+      "реформер"
+    ],
+    "intensity_hint": {
+      "low": "Базовые упражнения на коврике в спокойном темпе",
+      "mid": "Стандартное занятие, пресс ощутимо работает",
+      "high": "Реформер или продвинутая программа, мышцы «горят»"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "stretching",
+    "name": "Растяжка / стретчинг",
+    "group": "танцы и гимнастика",
+    "met": {
+      "low": 2.3,
+      "mid": 2.5,
+      "high": 3.0
+    },
+    "zones": [
+      "legs",
+      "back",
+      "shoulders",
+      "glutes"
+    ],
+    "load": "recovery",
+    "impact": "low",
+    "aliases": [
+      "стретчинг",
+      "растяжка",
+      "шпагат",
+      "гибкость"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкая растяжка, приятное натяжение",
+      "mid": "Полноценное занятие на гибкость",
+      "high": "Глубокая растяжка на шпагаты, активные удержания"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "tennis",
+    "name": "Теннис",
+    "group": "игры",
+    "met": {
+      "low": 4.5,
+      "mid": 7.3,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "shoulders",
+      "sides"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "большой теннис",
+      "корт",
+      "падел"
+    ],
+    "intensity_hint": {
+      "low": "Парная игра или спокойный обмен ударами",
+      "mid": "Тренировка, розыгрыши с беготнёй",
+      "high": "Одиночная игра на счёт, много рывков"
+    },
+    "setting": [
+      "outdoor",
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "badminton",
+    "name": "Бадминтон",
+    "group": "игры",
+    "met": {
+      "low": 4.5,
+      "mid": 5.5,
+      "high": 7.0
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "shoulders"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "воланчик",
+      "бадминтон"
+    ],
+    "intensity_hint": {
+      "low": "Во дворе, перекидывание без счёта",
+      "mid": "Игра в зале, активные розыгрыши",
+      "high": "Соревновательная игра, прыжки и рывки"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "table_tennis",
+    "name": "Настольный теннис",
+    "group": "игры",
+    "met": {
+      "low": 3.0,
+      "mid": 4.0,
+      "high": 5.0
+    },
+    "zones": [
+      "arms",
+      "legs"
+    ],
+    "load": "skill",
+    "impact": "low",
+    "aliases": [
+      "пинг-понг",
+      "настолка",
+      "теннис настольный"
+    ],
+    "intensity_hint": {
+      "low": "Спокойное перекидывание мяча",
+      "mid": "Игра на счёт в среднем темпе",
+      "high": "Быстрая соревновательная игра, постоянное движение"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "football",
+    "name": "Футбол",
+    "group": "игры",
+    "met": {
+      "low": 7.0,
+      "mid": 8.0,
+      "high": 10.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "cardio",
+    "impact": "high",
+    "aliases": [
+      "футбол",
+      "мини-футбол",
+      "футзал",
+      "мяч погонять"
+    ],
+    "intensity_hint": {
+      "low": "Попинать мяч, стоять на воротах",
+      "mid": "Любительская игра с пробежками",
+      "high": "Соревновательная игра, много рывков"
+    },
+    "setting": [
+      "outdoor",
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "volleyball",
+    "name": "Волейбол",
+    "group": "игры",
+    "met": {
+      "low": 3.0,
+      "mid": 4.0,
+      "high": 6.0
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "shoulders"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "волейбол",
+      "пляжный волейбол",
+      "кружок"
+    ],
+    "intensity_hint": {
+      "low": "Кружок, перекидывание без счёта",
+      "mid": "Любительская игра на счёт",
+      "high": "Соревновательная игра или пляжный волейбол"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "basketball",
+    "name": "Баскетбол",
+    "group": "игры",
+    "met": {
+      "low": 4.5,
+      "mid": 6.5,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "shoulders",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "high",
+    "aliases": [
+      "баскет",
+      "стритбол"
+    ],
+    "intensity_hint": {
+      "low": "Броски по кольцу, без игры",
+      "mid": "Любительская игра, стритбол",
+      "high": "Полноценная игра на всю площадку"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "squash",
+    "name": "Сквош",
+    "group": "игры",
+    "met": {
+      "low": 7.3,
+      "mid": 9.0,
+      "high": 12.0
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "shoulders",
+      "sides"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "сквош",
+      "squash"
+    ],
+    "intensity_hint": {
+      "low": "Спокойные удары, тренировка техники",
+      "mid": "Игра в среднем темпе",
+      "high": "Соревновательная игра, постоянные рывки"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "boxing",
+    "name": "Бокс / кикбоксинг",
+    "group": "единоборства",
+    "met": {
+      "low": 5.5,
+      "mid": 7.8,
+      "high": 12.8
+    },
+    "zones": [
+      "arms",
+      "shoulders",
+      "chest",
+      "abs",
+      "sides",
+      "legs"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "бокс",
+      "кикбоксинг",
+      "груша",
+      "муай тай",
+      "тайский бокс",
+      "спарринг"
+    ],
+    "intensity_hint": {
+      "low": "Техника с тренером, бой с тенью в спокойном темпе",
+      "mid": "Работа на мешке и лапах раундами",
+      "high": "Спарринг, интенсивные раунды без пауз"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "martial_arts",
+    "name": "Единоборства",
+    "group": "единоборства",
+    "met": {
+      "low": 5.3,
+      "mid": 7.3,
+      "high": 10.3
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "abs",
+      "sides",
+      "back"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "карате",
+      "дзюдо",
+      "самбо",
+      "борьба",
+      "айкидо",
+      "тхэквондо",
+      "джиу-джитсу",
+      "бжж"
+    ],
+    "intensity_hint": {
+      "low": "Отработка техники, ката, медленный темп",
+      "mid": "Обычная тренировка с упражнениями и отработкой",
+      "high": "Схватки, спарринги, соревновательный темп"
+    },
+    "fields": [
+      {
+        "key": "style",
+        "label": "Вид",
+        "type": "choice",
+        "options": [
+          [
+            "karate",
+            "Карате"
+          ],
+          [
+            "judo",
+            "Дзюдо"
+          ],
+          [
+            "sambo",
+            "Самбо"
+          ],
+          [
+            "wrestling",
+            "Борьба"
+          ],
+          [
+            "bjj",
+            "Джиу-джитсу"
+          ],
+          [
+            "taekwondo",
+            "Тхэквондо"
+          ],
+          [
+            "aikido",
+            "Айкидо"
+          ],
+          [
+            "other",
+            "Другое"
+          ]
+        ]
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "sauna",
+    "name": "Баня / сауна",
+    "group": "восстановление",
+    "met": {
+      "low": 1.3,
+      "mid": 1.5,
+      "high": 1.8
+    },
+    "zones": [],
+    "load": "recovery",
+    "impact": "low",
+    "aliases": [
+      "баня",
+      "сауна",
+      "парилка",
+      "хаммам",
+      "парился"
+    ],
+    "intensity_hint": {
+      "low": "Один-два мягких захода",
+      "mid": "Несколько заходов, контрастный душ",
+      "high": "Сильный жар, веник, много заходов — пейте воду"
+    },
+    "fields": [
+      {
+        "key": "kind",
+        "label": "Вид",
+        "type": "choice",
+        "options": [
+          [
+            "banya",
+            "Русская баня"
+          ],
+          [
+            "finnish",
+            "Финская сауна"
+          ],
+          [
+            "hammam",
+            "Хаммам"
+          ],
+          [
+            "infrared",
+            "Инфракрасная"
+          ]
+        ]
+      },
+      {
+        "key": "visits",
+        "label": "Сколько заходов",
+        "type": "text"
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "massage",
+    "name": "Массаж",
+    "group": "восстановление",
+    "met": {
+      "low": 1.0,
+      "mid": 1.0,
+      "high": 1.0
+    },
+    "zones": [],
+    "load": "recovery",
+    "impact": "low",
+    "aliases": [
+      "массаж",
+      "массажист",
+      "самомассаж",
+      "массажёр",
+      "массажный пистолет",
+      "мфр"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкий расслабляющий массаж, поглаживания",
+      "mid": "Классический массаж с проработкой мышц",
+      "high": "Глубокий лечебный или спортивный массаж"
+    },
+    "fields": [
+      {
+        "key": "kind",
+        "label": "Вид массажа",
+        "type": "choice",
+        "options": [
+          [
+            "wellness",
+            "Оздоровительный"
+          ],
+          [
+            "therapeutic",
+            "Лечебный"
+          ],
+          [
+            "sport",
+            "Спортивный"
+          ],
+          [
+            "relax",
+            "Расслабляющий"
+          ],
+          [
+            "lymph",
+            "Лимфодренажный"
+          ],
+          [
+            "anticellulite",
+            "Антицеллюлитный"
+          ],
+          [
+            "self",
+            "Самомассаж"
+          ],
+          [
+            "device",
+            "Массажёр / пистолет"
+          ]
+        ]
+      },
+      {
+        "key": "zones",
+        "label": "Зоны",
+        "type": "multi",
+        "options": [
+          [
+            "back",
+            "Спина"
+          ],
+          [
+            "neck",
+            "Шея и воротниковая зона"
+          ],
+          [
+            "lower_back",
+            "Поясница"
+          ],
+          [
+            "shoulders",
+            "Плечи"
+          ],
+          [
+            "arms",
+            "Руки"
+          ],
+          [
+            "legs",
+            "Ноги"
+          ],
+          [
+            "feet",
+            "Стопы"
+          ],
+          [
+            "abs",
+            "Живот"
+          ],
+          [
+            "glutes",
+            "Ягодицы"
+          ],
+          [
+            "face",
+            "Лицо"
+          ],
+          [
+            "full",
+            "Всё тело"
+          ]
+        ]
+      },
+      {
+        "key": "by",
+        "label": "Кто делал",
+        "type": "choice",
+        "options": [
+          [
+            "specialist",
+            "Массажист"
+          ],
+          [
+            "partner",
+            "Партнёр"
+          ],
+          [
+            "self",
+            "Сам(а)"
+          ],
+          [
+            "device",
+            "Прибор"
+          ]
+        ]
+      },
+      {
+        "key": "pain",
+        "label": "Болезненность",
+        "type": "scale",
+        "options": [
+          [
+            0,
+            "нет"
+          ],
+          [
+            1,
+            "слегка"
+          ],
+          [
+            2,
+            "ощутимо"
+          ],
+          [
+            3,
+            "сильно"
+          ]
+        ]
+      },
+      {
+        "key": "after",
+        "label": "После",
+        "type": "choice",
+        "options": [
+          [
+            "better",
+            "Стало лучше"
+          ],
+          [
+            "same",
+            "Без изменений"
+          ],
+          [
+            "worse",
+            "Хуже"
+          ]
+        ]
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "breathing",
+    "name": "Дыхательные практики / медитация",
+    "group": "восстановление",
+    "met": {
+      "low": 1.0,
+      "mid": 1.0,
+      "high": 1.3
+    },
+    "zones": [],
+    "load": "recovery",
+    "impact": "low",
+    "aliases": [
+      "медитация",
+      "дыхание",
+      "дыхательная гимнастика",
+      "пранаяма",
+      "релаксация"
+    ],
+    "intensity_hint": {
+      "low": "Спокойное сидение или лёжа, внимание на дыхании",
+      "mid": "Структурированная практика: счёт вдохов, удлинённый выдох",
+      "high": "Активные дыхательные техники — осторожно при давлении"
+    },
+    "fields": [
+      {
+        "key": "kind",
+        "label": "Вид",
+        "type": "choice",
+        "options": [
+          [
+            "meditation",
+            "Медитация"
+          ],
+          [
+            "breathing",
+            "Дыхательная практика"
+          ],
+          [
+            "body_scan",
+            "Сканирование тела"
+          ],
+          [
+            "other",
+            "Другое"
+          ]
+        ]
+      },
+      {
+        "key": "note",
+        "label": "Заметки",
+        "type": "text"
+      }
+    ],
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "gardening",
+    "name": "Сад и огород",
+    "group": "повседневное",
+    "met": {
+      "low": 3.5,
+      "mid": 4.0,
+      "high": 5.8
+    },
+    "zones": [
+      "back",
+      "legs",
+      "arms"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "дача",
+      "огород",
+      "сад",
+      "грядки",
+      "копал",
+      "копала"
+    ],
+    "intensity_hint": {
+      "low": "Полив, прополка, сбор урожая",
+      "mid": "Посадка, работа граблями, стрижка кустов",
+      "high": "Копка, перенос мешков и тачки, рубка дров"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "cleaning",
+    "name": "Уборка",
+    "group": "повседневное",
+    "met": {
+      "low": 2.3,
+      "mid": 3.3,
+      "high": 4.0
+    },
+    "zones": [
+      "arms",
+      "back",
+      "legs"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "уборка",
+      "убирался",
+      "убиралась",
+      "мыл полы",
+      "генеральная уборка"
+    ],
+    "intensity_hint": {
+      "low": "Протереть пыль, разложить вещи",
+      "mid": "Пылесос, мытьё полов",
+      "high": "Генеральная уборка, перестановка мебели"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "dog_walking",
+    "name": "Прогулка с собакой",
+    "group": "повседневное",
+    "met": {
+      "low": 3.0,
+      "mid": 3.5,
+      "high": 4.5
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "собака",
+      "выгул",
+      "гулял с собакой",
+      "гуляла с собакой"
+    ],
+    "intensity_hint": {
+      "low": "Неспешная прогулка с остановками",
+      "mid": "Обычная прогулка без долгих остановок",
+      "high": "Быстрый шаг, игры, пробежки с собакой"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": true,
+    "cardio": true
+  },
+  {
+    "id": "kids_play",
+    "name": "Игры с детьми",
+    "group": "повседневное",
+    "met": {
+      "low": 2.5,
+      "mid": 4.0,
+      "high": 5.8
+    },
+    "zones": [
+      "legs",
+      "arms",
+      "back"
+    ],
+    "load": "mixed",
+    "impact": "low",
+    "aliases": [
+      "дети",
+      "с ребёнком",
+      "с детьми",
+      "детская площадка"
+    ],
+    "intensity_hint": {
+      "low": "Сидя, настольные игры, прогулка с коляской",
+      "mid": "Игры на площадке, носить ребёнка на руках",
+      "high": "Догонялки, футбол, активные подвижные игры"
+    },
+    "setting": [
+      "outdoor",
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "stairs",
+    "name": "Подъём по лестнице",
+    "group": "повседневное",
+    "met": {
+      "low": 4.0,
+      "mid": 6.0,
+      "high": 8.8
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "лестница",
+      "ступеньки",
+      "без лифта",
+      "этажи",
+      "подъём по лестнице",
+      "подъем по лестнице"
+    ],
+    "intensity_hint": {
+      "low": "Медленно, с остановками на этажах",
+      "mid": "Ровный темп без остановок",
+      "high": "Быстро, через ступеньку или бегом"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "functional_training",
+    "name": "Функциональный тренинг / кроссфит",
+    "group": "прочее",
+    "met": {
+      "low": 4.3,
+      "mid": 6.0,
+      "high": 8.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "arms",
+      "shoulders",
+      "abs",
+      "back"
+    ],
+    "load": "mixed",
+    "impact": "mid",
+    "aliases": [
+      "кроссфит",
+      "функционалка",
+      "круговая",
+      "хиит",
+      "hiit",
+      "табата"
+    ],
+    "intensity_hint": {
+      "low": "Круговая тренировка с длинными паузами",
+      "mid": "Работа по кругу с короткими паузами",
+      "high": "WOD, табата, интервалы на максимум"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "climbing",
+    "name": "Скалолазание",
+    "group": "прочее",
+    "met": {
+      "low": 5.0,
+      "mid": 7.3,
+      "high": 8.0
+    },
+    "zones": [
+      "arms",
+      "back",
+      "shoulders",
+      "abs",
+      "legs"
+    ],
+    "load": "strength",
+    "impact": "low",
+    "aliases": [
+      "скалодром",
+      "боулдеринг",
+      "лазание",
+      "скалы"
+    ],
+    "intensity_hint": {
+      "low": "Простые трассы, много отдыха",
+      "mid": "Трассы своего уровня, пролазы подряд",
+      "high": "Сложные трассы, боулдеринг на пределе"
+    },
+    "setting": [
+      "indoor",
+      "outdoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "roller_skating",
+    "name": "Роликовые коньки",
+    "group": "прочее",
+    "met": {
+      "low": 5.5,
+      "mid": 7.5,
+      "high": 9.8
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "ролики",
+      "роллеры",
+      "катался на роликах"
+    ],
+    "intensity_hint": {
+      "low": "Неспешное катание с остановками",
+      "mid": "Непрерывное катание в среднем темпе",
+      "high": "Быстрое катание, фрискейт, подъёмы"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "scooter",
+    "name": "Самокат",
+    "group": "прочее",
+    "met": {
+      "low": 3.5,
+      "mid": 5.0,
+      "high": 6.5
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "самокат",
+      "кикскутер"
+    ],
+    "intensity_hint": {
+      "low": "Неспешно, часто накатом",
+      "mid": "Регулярно отталкиваетесь, ровный темп",
+      "high": "Быстро, в горку, постоянные толчки"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "trampoline",
+    "name": "Батут",
+    "group": "прочее",
+    "met": {
+      "low": 3.5,
+      "mid": 4.5,
+      "high": 7.0
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs"
+    ],
+    "load": "cardio",
+    "impact": "high",
+    "aliases": [
+      "батут",
+      "джампинг",
+      "фитнес на батутах"
+    ],
+    "intensity_hint": {
+      "low": "Лёгкие пружинящие прыжки",
+      "mid": "Джампинг-фитнес в среднем темпе",
+      "high": "Интенсивный джампинг, высокие прыжки"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "horse_riding",
+    "name": "Верховая езда",
+    "group": "прочее",
+    "met": {
+      "low": 3.5,
+      "mid": 5.5,
+      "high": 7.3
+    },
+    "zones": [
+      "legs",
+      "glutes",
+      "abs",
+      "back"
+    ],
+    "load": "skill",
+    "impact": "mid",
+    "aliases": [
+      "лошадь",
+      "конная прогулка",
+      "конный спорт"
+    ],
+    "intensity_hint": {
+      "low": "Езда шагом",
+      "mid": "Рысь",
+      "high": "Галоп, прыжки, конкур"
+    },
+    "setting": [
+      "outdoor"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": false
+  },
+  {
+    "id": "treadmill",
+    "name": "Беговая дорожка",
+    "group": "кардио",
+    "met": {
+      "low": 3.5,
+      "mid": 6.0,
+      "high": 9.8
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "mid",
+    "aliases": [
+      "беговая дорожка",
+      "дорожка",
+      "на дорожке",
+      "ходьба на дорожке",
+      "бег на дорожке",
+      "тредмил"
+    ],
+    "intensity_hint": {
+      "low": "Ходьба 4–5 км/ч без наклона, можно свободно говорить",
+      "mid": "Ходьба в гору 8–12 % или лёгкий бег, говорить фразами (зона 2)",
+      "high": "Бег быстрее 10 км/ч или интервалы, только отдельные слова"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "stepper",
+    "name": "Степпер",
+    "group": "кардио",
+    "met": {
+      "low": 4.0,
+      "mid": 6.0,
+      "high": 8.8
+    },
+    "zones": [
+      "legs",
+      "glutes"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "степпер",
+      "мини-степпер",
+      "лестничный тренажёр",
+      "лестничный тренажер",
+      "stairmaster"
+    ],
+    "intensity_hint": {
+      "low": "Медленные шаги, дыхание почти не сбито",
+      "mid": "Ровный темп, можно говорить фразами, лёгкая испарина (зона 2)",
+      "high": "Быстрый темп или интервалы, говорить трудно"
+    },
+    "setting": [
+      "indoor"
+    ],
+    "season": [
+      "all"
+    ],
+    "weather_sensitive": false,
+    "cold_ok": false,
+    "cardio": true
+  },
+  {
+    "id": "swimming_outdoor",
+    "name": "Плавание в открытой воде",
+    "group": "вода",
+    "met": {
+      "low": 6.0,
+      "mid": 8.3,
+      "high": 9.8
+    },
+    "zones": [
+      "back",
+      "shoulders",
+      "arms",
+      "chest",
+      "legs"
+    ],
+    "load": "cardio",
+    "impact": "low",
+    "aliases": [
+      "купался",
+      "купалась",
+      "плавал в море",
+      "плавала в море",
+      "озеро",
+      "море",
+      "река",
+      "открытая вода"
+    ],
+    "intensity_hint": {
+      "low": "Купание, спокойное плавание у берега",
+      "mid": "Непрерывное плавание в умеренном темпе",
+      "high": "Быстрый заплыв, волна или течение"
+    },
+    "setting": [
+      "water",
+      "outdoor"
+    ],
+    "season": [
+      "summer"
+    ],
+    "weather_sensitive": true,
+    "cold_ok": false,
+    "cardio": true
+  }
+]
