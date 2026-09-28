@@ -531,4 +531,4 @@ def get_shortcut(request: Request, u=Depends(current_user)):
     return Response(data, media_type="application/octet-stream", headers={
         "Content-Disposition": "attachment; filename=\"Trener-Zdorovye.shortcut\"; filename*=UTF-8''"
                                "%D0%A2%D1%80%D0%B5%D0%BD%D0%B5%D1%80%20%D0%97%D0%B4%D0%BE%D1%80%D0%BE%D0%B2%D1%8C%D0%B5.shortcut",
-        "Cache-Control": "no-store"})
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})

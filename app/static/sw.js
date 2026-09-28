@@ -45,7 +45,9 @@ self.addEventListener('fetch', function (e) {
   // иконки, манифест и сертификат запрашивает система, а не страница: подменённый ответ
   // оставил бы iPhone без значка на экране «Домой»
   if (url.pathname === '/manifest.json' || url.pathname.indexOf('/icon') === 0 ||
-      url.pathname.indexOf('/apple-touch-icon') === 0 || url.pathname.indexOf('/favicon') === 0 || url.pathname === '/ca.crt' || url.pathname === '/sw.js') return;
+      url.pathname.indexOf('/apple-touch-icon') === 0 || url.pathname.indexOf('/favicon') === 0 || url.pathname === '/ca.crt' || url.pathname === '/sw.js' ||
+      // файлы для скачивания - мимо воркера: иначе Safari на iOS теряет заголовки и сохраняет «…shortcut.html»
+      url.pathname === '/api/health/shortcut' || url.pathname.indexOf('/api/export') === 0) return;
 
   if (url.pathname.indexOf('/api/') === 0) {
     e.respondWith(fetch(e.request).catch(function () {
