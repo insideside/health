@@ -5,6 +5,7 @@ PWA не видит HealthKit, поэтому данные приносит ко
 и он не даёт доступа ни к чему, кроме импорта. Импорт идемпотентен по дате — команду можно
 запускать сколько угодно раз в день, записи перезапишутся, а не размножатся.
 """
+import json
 import re
 import secrets
 from datetime import date, datetime, timedelta
@@ -339,11 +340,24 @@ async def health_import(request: Request):
         body = body[0] if body else {}
     day = _date(body.get("date"))
     done: dict = {"date": day}
+    # последний присланный набор - для разбора проблем (перезаписывается, лежит только в data/ этого сервера)
+    try:
+        dbg = db.DATA_DIR / "health-last"
+        dbg.mkdir(exist_ok=True)
+        (dbg / f"{uid}.json").write_text(json.dumps({"at": db.now_ms(), "body": body}, ensure_ascii=False, indent=1), "utf-8")
+    except (OSError, TypeError, ValueError):
+        pass
     weight_now = userdata.latest_weight(uid)
 
     # шаги (и активные калории) → отметка пункта чек-листа «Шаги»
     steps = num(body.get("steps"), total=True, grouped=True)
     kcal = num(body.get("active_kcal"), total=True, grouped=None)
+    # если пришло несколько значений - покажем в уведомлении, из чего сложилось (разбор двойного счёта)
+    for key, label in (("steps", "шаги"), ("active_kcal", "ккал")):
+        raw = body.get(key)
+        parts = raw if isinstance(raw, list) else [x for x in re.split(r"[\r\n]+", raw) if x.strip()] if isinstance(raw, str) else []
+        if len(parts) > 1:
+            done.setdefault("parts", {})[label] = [str(x).strip() for x in parts][:6]
     item = next((r for r in db.list_kind(uid, "item") if r["data"].get("target_from") == "steps"), None)
     if item and (steps is not None or kcal is not None):
         lid = f"log:{uid}:{day}:{item['id']}"
@@ -467,7 +481,7 @@ def summary(done: dict) -> str:
     """Что записалось, одной строкой для уведомления на iPhone (без длинного тире)."""
     parts = []
     if "steps" in done:
-        parts.append(f"шаги {done['steps']}")
+        parts.append(f"шаги {done['steps']}" + (f" (сложено из: {' + '.join(done['parts']['шаги'])})" if done.get("parts", {}).get("шаги") else ""))
     if done.get("active_kcal"):
         parts.append(f"активные {done['active_kcal']} ккал")
     sl = done.get("sleep")
@@ -515,11 +529,15 @@ def import_url(request: Request) -> str:
 def get_shortcut(request: Request, u=Depends(current_user)):
     """Подписанная команда с адресом импорта и личным токеном. Подпись «для всех» делает только macOS."""
     url, tok = import_url(request), token_for(u["id"])
-    data = _signed.get((url, tok))
+    # ?parts=steps,kcal,rhr - только эти данные (у кого нет часов или весов, пустой тип остановил бы команду)
+    raw = request.query_params.get("parts")
+    parts = frozenset(p for p in (raw or "").split(",") if p in shortcut.PARTS) or frozenset(shortcut.PARTS)
+    key = (url, tok, parts)
+    data = _signed.get(key)
     if data is None:
         if not shortcut.available():
             raise HTTPException(501, NO_SIGN)
-        data = shortcut.sign(shortcut.build(url, tok))
+        data = shortcut.sign(shortcut.build(url, tok, set(parts)))
         if not data:
             err = shortcut.sign.last_error
             raise HTTPException(501, "Не удалось подписать команду" + (f" ({err[:200]})" if err else "")
@@ -527,7 +545,7 @@ def get_shortcut(request: Request, u=Depends(current_user)):
                                   "Профиль, раздел «Здоровье iPhone».")
         if len(_signed) > 32:
             _signed.clear()
-        _signed[(url, tok)] = data
+        _signed[key] = data
     return Response(data, media_type="application/octet-stream", headers={
         "Content-Disposition": "attachment; filename=\"Trener-Zdorovye.shortcut\"; filename*=UTF-8''"
                                "%D0%A2%D1%80%D0%B5%D0%BD%D0%B5%D1%80%20%D0%97%D0%B4%D0%BE%D1%80%D0%BE%D0%B2%D1%8C%D0%B5.shortcut",

@@ -38,6 +38,11 @@ document.addEventListener('toggle', e => {
 const step = (k, n, title, body) => `<details class="raised card hg-step" data-k="${k}" ${OPEN.has(k) ? 'open' : ''}><summary><span class="mono hg-n">${n}</span><b>${title}</b></summary><div class="hg-body">${body}</div></details>`;
 
 let shortcutState = null;   // null | 'loading' | {error}
+// какие данные включить в готовую команду (помним на устройстве)
+const PARTS = [['steps', 'шаги'], ['kcal', 'активные калории'], ['rhr', 'пульс в покое', 'нужны часы'], ['hrv', 'HRV', 'нужны часы'],
+  ['sleep', 'сон', 'часы ночью или трекер сна'], ['weight', 'вес', 'умные весы или вес в «Здоровье»']];
+let parts = (() => { try { const v = JSON.parse(localStorage.getItem('hg-parts') || 'null'); return Array.isArray(v) ? v : null; } catch (e) { return null; } })()
+  || ['steps', 'kcal', 'rhr', 'hrv', 'sleep', 'weight'];
 
 function view() {
   const url = `${location.origin}/api/health/import`;
@@ -65,7 +70,8 @@ function view() {
       <div class="raised card hg-quick">
         <b>Готовая команда - одним нажатием</b>
         <p class="small">Откройте эту страницу на своём iPhone в Safari и нажмите кнопку. Safari скачает команду «Тренер Здоровье» - ваш адрес и токен в ней уже вписаны. Откройте файл (или «Загрузки» → файл) → «Добавить быструю команду».</p>
-        <p class="small">Внутри: шаги и активные калории за сегодня, вес, пульс в покое, вариабельность пульса (HRV) и сон прошлой ночи. После отправки придёт уведомление, что именно записалось.</p>
+        <div class="field"><span class="smallcaps">Что включить</span><div class="chips">${PARTS.map(([k, l, hint]) => `<button type="button" class="chip ${parts.includes(k) ? 'on' : ''}" aria-pressed="${parts.includes(k)}" data-act="hg-part" data-v="${k}" ${hint ? `title="${esc(hint)}"` : ''}>${esc(l)}</button>`).join('')}</div>
+          <span class="note">Снимите то, чего нет в вашем «Здоровье» (нет часов - HRV, пульс в покое, сон; нет весов - вес): иначе команда покажет «Образцы не найдены» и остановит автоматизацию. После отправки придёт уведомление, что именно записалось.</span></div>
         ${/iPhone|iPad|iPod/.test(navigator.userAgent) ? '' : '<p class="note">Сейчас страница открыта не на iPhone: файл скачается сюда. Удобнее открыть «Здоровье iPhone» в Тренере на телефоне.</p>'}
         <div class="actions"><button class="btn solid" data-act="hg-shortcut" ${shortcutState === 'loading' ? 'disabled' : ''}>${shortcutState === 'loading' ? 'Готовлю…' : 'Добавить команду на iPhone'}</button></div>
         ${shortcutState?.error ? `<div class="notice">${esc(shortcutState.error)}</div>` : ''}
@@ -142,19 +148,27 @@ export const actions = {
     try {
       // первый запрос готовит и подписывает файл на компьютере (до 10 с) и проверяет ошибки;
       // затем переходим по прямой ссылке - так Safari на iPhone скачает команду и предложит открыть её в «Командах»
-      const r = await fetch('/api/health/shortcut', { credentials: 'same-origin' });
+      const q = `/api/health/shortcut?parts=${encodeURIComponent(parts.join(','))}`;
+      const r = await fetch(q, { credentials: 'same-origin' });
       if (!r.ok) {
         let msg = '';
         try { msg = (await r.json()).detail; } catch (e) { /* не JSON */ }
         throw new Error(r.status === 404 ? 'Готовая команда появится после обновления и перезапуска сервера - пока соберите её вручную.' : msg || `Сервер ответил ${r.status}`);
       }
       shortcutState = null; S.render();
-      location.href = '/api/health/shortcut';
+      location.href = q;
       toast('Откройте скачанный файл - «Команды» предложат добавить команду', 6000);
     } catch (e) {
       shortcutState = { error: e.message === 'Failed to fetch' || e.message === 'Load failed' ? 'Нет связи с сервером.' : e.message };
       S.render();
     }
+  },
+  'hg-part': el => {
+    const k = el.dataset.v;
+    parts = parts.includes(k) ? parts.filter(x => x !== k) : [...parts, k];
+    if (!parts.length) parts = ['steps'];
+    try { localStorage.setItem('hg-parts', JSON.stringify(parts)); } catch (e) { /* приватный режим */ }
+    S.render();
   },
   'hg-check': async () => {
     try { await store.sync(); } catch (e) { /* офлайн */ }

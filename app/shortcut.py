@@ -129,41 +129,57 @@ class _Builder:
             "WFContentItemPropertyName": prop, "WFInput": self.attach(input_ref)})
 
 
-def build(url: str, token: str) -> bytes:
+PARTS = ("steps", "kcal", "weight", "rhr", "hrv", "sleep")
+
+
+def build(url: str, token: str, parts: set[str] | None = None) -> bytes:
     """Неподписанный .shortcut (бинарный plist) с зашитыми адресом и токеном."""
     b = _Builder(f"{url}\n{token}")
     S = "Health Samples"
 
     today = b.format_date(CURRENT_DATE, "yyyy-MM-dd")
 
-    steps_q = b.find("Steps", "today", unit="count", group_day=True)
-    steps = b.detail(b.out(steps_q, S), "Value")
-
-    kcal_q = b.find("Active Calories", "today", unit="kcal", group_day=True)
-    kcal = b.detail(b.out(kcal_q, S), "Value")
-
-    weight_q = b.find("Weight", "last", days=30, unit="kg", latest=True)
-    weight = b.detail(b.out(weight_q, S), "Value")
-    weight_start = b.detail(b.out(weight_q, S), "Start Date")
-    weight_day = b.format_date(b.out(weight_start, "Start Date"), "yyyy-MM-dd")
-
-    rhr_q = b.find("Resting Heart Rate", "last", days=2, unit="count/min", latest=True)
-    rhr = b.detail(b.out(rhr_q, S), "Value")
-    hrv_q = b.find("Heart Rate Variability", "last", days=2, unit="ms", latest=True)
-    hrv = b.detail(b.out(hrv_q, S), "Value")
-
-    # сон: каждая фаза строкой «начало;конец;фаза», ночь выбирает сервер
-    sleep_q = b.find("Sleep", "last", days=2, oldest_first=True)
-    group = b.uid()
-    b.add("is.workflow.actions.repeat.each", {"GroupingIdentifier": group, "WFControlFlowMode": 0,
-                                              "WFInput": b.attach(b.out(sleep_q, S))})
-    fmt = "yyyy-MM-dd'T'HH:mm:ss"
-    s_start = b.format_date(b.out(b.detail(REPEAT_ITEM, "Start Date"), "Start Date"), fmt)
-    s_end = b.format_date(b.out(b.detail(REPEAT_ITEM, "End Date"), "End Date"), fmt)
-    b.add("is.workflow.actions.gettext", {"WFTextActionText": b.text(
-        b.out(s_start, "Formatted Date"), ";", b.out(s_end, "Formatted Date"), ";",
-        {**REPEAT_ITEM, "Aggrandizements": [{"Type": "WFPropertyVariableAggrandizement", "PropertyName": "Value"}]})})
-    sleep = b.add("is.workflow.actions.repeat.each", {"GroupingIdentifier": group, "WFControlFlowMode": 2})
+    # parts - какие данные включить: без часов нет HRV и сна, без весов нет веса - а пустой тип
+    # показывает окно «Образцы не найдены» и останавливает автоматизацию
+    parts = set(parts or PARTS)
+    fields = [("date", b.text(b.out(today, "Formatted Date")))]
+    if "steps" in parts:
+        steps_q = b.find("Steps", "today", unit="count", group_day=True)
+        steps = b.detail(b.out(steps_q, S), "Value")
+        fields.append(("steps", b.text(b.out(steps, "Value"))))
+    if "kcal" in parts:
+        kcal_q = b.find("Active Calories", "today", unit="kcal", group_day=True)
+        kcal = b.detail(b.out(kcal_q, S), "Value")
+        fields.append(("active_kcal", b.text(b.out(kcal, "Value"))))
+    if "weight" in parts:
+        weight_q = b.find("Weight", "last", days=30, unit="kg", latest=True)
+        weight = b.detail(b.out(weight_q, S), "Value")
+        weight_start = b.detail(b.out(weight_q, S), "Start Date")
+        weight_day = b.format_date(b.out(weight_start, "Start Date"), "yyyy-MM-dd")
+        fields += [("weight", b.text(b.out(weight, "Value"))), ("weight_date", b.text(b.out(weight_day, "Formatted Date")))]
+    if "rhr" in parts:
+        rhr_q = b.find("Resting Heart Rate", "last", days=2, unit="count/min", latest=True)
+        rhr = b.detail(b.out(rhr_q, S), "Value")
+        fields.append(("resting_hr", b.text(b.out(rhr, "Value"))))
+    if "hrv" in parts:
+        hrv_q = b.find("Heart Rate Variability", "last", days=2, unit="ms", latest=True)
+        hrv = b.detail(b.out(hrv_q, S), "Value")
+        fields.append(("hrv", b.text(b.out(hrv, "Value"))))
+    if "sleep" in parts:
+        # сон: каждая фаза строкой «начало;конец;фаза», ночь выбирает сервер
+        sleep_q = b.find("Sleep", "last", days=2, oldest_first=True)
+        group = b.uid()
+        b.add("is.workflow.actions.repeat.each", {"GroupingIdentifier": group, "WFControlFlowMode": 0,
+                                                  "WFInput": b.attach(b.out(sleep_q, S))})
+        fmt = "yyyy-MM-dd'T'HH:mm:ss"
+        s_start = b.format_date(b.out(b.detail(REPEAT_ITEM, "Start Date"), "Start Date"), fmt)
+        s_end = b.format_date(b.out(b.detail(REPEAT_ITEM, "End Date"), "End Date"), fmt)
+        b.add("is.workflow.actions.gettext", {"WFTextActionText": b.text(
+            b.out(s_start, "Formatted Date"), ";", b.out(s_end, "Formatted Date"), ";",
+            {**REPEAT_ITEM, "Aggrandizements": [{"Type": "WFPropertyVariableAggrandizement", "PropertyName": "Value"}]})})
+        sleep = b.add("is.workflow.actions.repeat.each", {"GroupingIdentifier": group, "WFControlFlowMode": 2})
+        fields.append(("sleep", b.text(b.out(sleep, "Repeat Results"))))
+    fields.append(("source", b.text("shortcut-1")))
 
     sep = "&" if "?" in url else "?"
     resp = b.add("is.workflow.actions.downloadurl", {
@@ -172,17 +188,7 @@ def build(url: str, token: str) -> bytes:
         "ShowHeaders": True,
         "WFHTTPHeaders": b.fields([("X-Trainer-Token", b.text(token))]),
         "WFHTTPBodyType": "JSON",
-        "WFJSONValues": b.fields([
-            ("date", b.text(b.out(today, "Formatted Date"))),
-            ("steps", b.text(b.out(steps, "Value"))),
-            ("active_kcal", b.text(b.out(kcal, "Value"))),
-            ("weight", b.text(b.out(weight, "Value"))),
-            ("weight_date", b.text(b.out(weight_day, "Formatted Date"))),
-            ("resting_hr", b.text(b.out(rhr, "Value"))),
-            ("hrv", b.text(b.out(hrv, "Value"))),
-            ("sleep", b.text(b.out(sleep, "Repeat Results"))),
-            ("source", b.text("shortcut-1")),
-        ]),
+        "WFJSONValues": b.fields(fields),
     })
     b.add("is.workflow.actions.notification", {
         "WFNotificationActionTitle": b.text("Тренер"),
