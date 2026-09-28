@@ -1,7 +1,7 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
 import * as P from '../plan.js';
-import { S, esc, num, fmt, dayTitle, profile, CHECK, toast, ring, field, fval, input, textarea, openModal, closeModal, techHtml, dateNav, isBackdated, afterChange, glyph, MOOD_GLYPH, nowHM } from '../ui.js';
+import { S, ctxAttrs, esc, num, fmt, dayTitle, profile, CHECK, toast, ring, field, fval, input, textarea, openModal, closeModal, techHtml, dateNav, isBackdated, afterChange, glyph, MOOD_GLYPH, nowHM } from '../ui.js';
 import { cheerNotice } from './together.js';
 import * as FX from './fit.js';
 import * as SPV from './supp.js';
@@ -504,8 +504,12 @@ async function makeRoutine(module, minutes, date) {
   const prev = store.get(routineId(date, module))?.data;
   const seed = `${date}:${module}:${minutes}:${(prev?.seed_n || 0) + 1}`;
   let exercises = null;
-  if (!prev && P.makeRoutine) {
-    try { await P.makeRoutine(module, date, minutes); if (store.get(routineId(date, module))) return; } catch (e) { warn(e); }
+  // и первая сборка, и пересборка - через генератор plan.js (лимит упражнений, исключения, закреплённые)
+  if (P.makeRoutine) {
+    try {
+      const r = await P.makeRoutine(module, date, minutes, { rebuild: prev ? (prev.seed_n || 0) + 1 : 0 });
+      if (r !== null && store.get(routineId(date, module))?.data.seed_n === (prev ? (prev.seed_n || 0) + 1 : 0)) return;
+    } catch (e) { warn(e); }
   }
   if (P.pickExercises) exercises = safe(() => P.pickExercises({ tags: m.tags, minutes, place: 'home', date, seed }), null);
   if (!exercises?.length) exercises = localPick(module, minutes, date, seed);
@@ -679,21 +683,32 @@ function moduleCard(k, date) {
   }
   const d = rec.data, exs = d.exercises || [];
   const done = exs.filter(x => x.done).length;
+  const today = date === C.today(), started = done > 0;
+  const pins = k === 'morning' ? pinnedOf() : [];
+  // управление на виду: время и «пересобрать» сверху, «заменить» у каждого упражнения;
+  // закрепить упражнение («каждый день») - внутри его описания, закреплённые помечены
   return `<div class="raised a-card a-module ${d.done ? 'is-done' : ''}" id="mod-${k}" data-dom="train">
     <div class="a-card-head"><b class="a-mtitle">${esc(m.title)}${d.minutes ? ` · ${d.minutes} мин` : ""}</b><span class="mono muted">${done}/${exs.length}</span></div>
     <div class="groove a-groove"><div class="fill" style="width:${exs.length ? done / exs.length * 100 : 0}%"></div></div>
+    ${today ? `<div class="a-modbar"><span class="smallcaps muted">Время</span>
+      ${m.mins.map(n => `<button class="chip ${n === d.minutes ? 'on' : ''}" aria-pressed="${n === d.minutes}" data-act="td-mod-make" data-m="${k}" data-min="${n}" data-date="${date}" aria-label="Пересобрать на ${n} минут">${n} мин</button>`).join('')}
+      <button class="btn quiet a-mini" data-act="td-mod-redo" data-m="${k}" data-date="${date}" title="Другие упражнения на то же время${pins.length ? '; закреплённые останутся' : ''}">${glyph('rise')} Пересобрать</button></div>
+      ${started ? '<p class="note a-tight">Пересборка начнёт комплекс заново - отметки сбросятся.</p>' : ''}
+      ${pins.length && pins.length * 0.75 > (d.minutes || 10) * 0.7 ? `<div class="notice a-tight">Закреплено ${pins.length} ${pins.length < 5 ? 'упражнения' : 'упражнений'} - они есть в разминке всегда, и на ${d.minutes} мин тренеру почти не остаётся места.
+        <div class="a-row-btns"><button class="btn quiet a-mini" data-act="td-unpin-all" data-date="${date}">Открепить все</button></div></div>` : ''}` : ''}
     ${modNote(k) ? `<p class="note a-tight">${esc(modNote(k))}</p>` : ''}
     <div class="a-exlist">${exs.map((x, i) => {
-      const e = S.exMap.get(x.id);
+      const e = S.exMap.get(x.id), pinned = pins.includes(x.id);
+      const ctx = { kind: 'routine', module: k, date, i };
       return `<div class="a-ex ${x.done ? 'done' : ''}">
         <button class="tick ${x.done ? 'on' : ''}" data-act="td-rt-tick" data-m="${k}" data-i="${i}" data-date="${date}" aria-label="Отметить: ${esc(e?.name || x.id)}">${CHECK}</button>
-        <details class="tech a-tech" data-key="${esc(`${date}|${k}|${i}|${x.id}`)}" ${openTech.has(`${date}|${k}|${i}|${x.id}`) ? 'open' : ''}><summary><span class="a-exname">${esc(e?.name || x.id)}</span> <span class="mono a-amount">${esc(x.amount || '')}${x.per_side ? ' на сторону' : ''}</span></summary>
+        <details class="tech a-tech" data-key="${esc(`${date}|${k}|${i}|${x.id}`)}" ${openTech.has(`${date}|${k}|${i}|${x.id}`) ? 'open' : ''}><summary><span class="a-exname">${esc(e?.name || x.id)}</span> <span class="mono a-amount">${esc(x.amount || '')}${x.per_side ? ' на сторону' : ''}</span>${pinned ? ' <span class="chip a-pinned" title="Закреплено: будет в разминке каждый день">каждый день</span>' : ''}</summary>
           ${e ? techHtml(e) : '<p class="empty">Описание не загружено</p>'}
-          ${date === C.today() && !x.done ? FX.exActions(x.id, { kind: 'routine', module: k, date, i }) : ''}</details>
-        ${k === 'morning' ? (() => { const on = pinnedOf().includes(x.id); return `<button class="btn quiet a-pin ${on ? 'on' : ''}" data-act="td-pin" data-ex="${esc(x.id)}" aria-pressed="${on}" title="${on ? 'Закреплено: будет в разминке каждый день' : 'Закрепить: делать каждый день'}" aria-label="${on ? 'Открепить' : 'Закрепить'}: ${esc(e?.name || x.id)}">${on ? 'моё' : '+ моё'}</button>`; })() : ''}</div>`;
-    }).join('')}</div>
-    <div class="a-row-btns"><button class="btn quiet a-mini" data-act="td-mod-redo" data-m="${k}" data-date="${date}">Другой набор</button>
-      ${m.mins.map(n => `<button class="btn quiet a-mini ${n === d.minutes ? 'on' : ''}" data-act="td-mod-make" data-m="${k}" data-min="${n}" data-date="${date}" aria-label="Пересобрать на ${n} минут">${n} мин</button>`).join('')}</div></div>`;
+          ${k === 'morning' ? `<div class="a-pinrow"><button class="btn quiet a-mini ${pinned ? 'on' : ''}" data-act="td-pin" data-ex="${esc(x.id)}" aria-pressed="${pinned}">${pinned ? 'Не закреплять' : 'Делать каждый день'}</button>
+            <span class="note">${pinned ? 'Сейчас это упражнение есть в разминке каждый день.' : 'Закреплённое упражнение будет в разминке каждый день, остальные тренер подбирает сам.'}</span></div>` : ''}
+          ${today && !x.done ? FX.exActions(x.id, ctx) : ''}</details>
+        ${today && !x.done ? `<button class="btn quiet a-mini a-swap" data-act="ex-swap-open" data-ex="${esc(x.id)}" ${ctxAttrs(ctx)} aria-label="Заменить: ${esc(e?.name || x.id)}">Заменить</button>` : '<span></span>'}</div>`;
+    }).join('')}</div></div>`;
 }
 
 // ── активности ──
@@ -1035,6 +1050,8 @@ export const actions = {
     setTimeout(() => document.getElementById(`mod-${m}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   },
   'td-mod-make': async el => {
+    // нажатие на уже выбранное время в собранном комплексе ничего не пересобирает
+    if (store.get(routineId(el.dataset.date, el.dataset.m))?.data.minutes === Number(el.dataset.min) && el.getAttribute('aria-pressed') === 'true') return;
     await makeRoutine(el.dataset.m, Number(el.dataset.min), el.dataset.date);
     S.render();
   },
@@ -1047,6 +1064,11 @@ export const actions = {
     if (!store.get(routineId(date, m))) await makeRoutine(m, Number(profile().modules?.[m]?.minutes || MODULES[m].def), date);
     S.render();
     setTimeout(() => document.getElementById(`mod-${m}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  },
+  'td-unpin-all': async el => {
+    await setPinned([]);
+    await makeRoutine('morning', Number(store.get(routineId(el.dataset.date, 'morning'))?.data.minutes || MODULES.morning.def), el.dataset.date);
+    toast('Открепили - разминку теперь подбирает тренер. Закрепить снова: «Делать каждый день» в описании упражнения', 4500);
   },
   'td-pin': async el => {
     const id = el.dataset.ex, cur = pinnedOf();

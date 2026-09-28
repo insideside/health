@@ -486,3 +486,17 @@ details.mp-pantry > summary { cursor: pointer; font: 700 12px var(--sans); lette
 .a-lact { margin-left: 6px; vertical-align: baseline; }
 .a-types-h { margin: 10px 0 6px; }
 .up-list { padding-left: 1.1em; margin: 6px 0; }
+
+/* карточка комплекса: время и «Пересобрать» сверху, «Заменить» у каждого упражнения */
+.a-ex { grid-template-columns: 30px minmax(0, 1fr) auto; }
+.a-ex > span:last-child:empty { display: none; }
+.a-ex .a-swap { padding: 4px 9px; font-size: 11px; align-self: start; }
+.a-modbar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 10px 0 4px; }
+.a-modbar .smallcaps { margin-right: 2px; }
+.a-modbar .btn { margin-left: auto; }
+.chip.a-pinned { font-size: 11px; padding: 1px 7px; min-height: 0; vertical-align: middle; }
+.a-pinrow { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 8px 0; }
+.a-pinrow .btn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: var(--accent-soft); }
+/* узкий экран: кнопки внутри описания упражнения переносятся, а не обрезаются */
+.a-tech .btn { white-space: normal; height: auto; min-height: 32px; max-width: 100%; text-align: center; line-height: 1.2; }
+.a-tech .fx-exacts, .a-tech .a-pinrow { flex-wrap: wrap; }

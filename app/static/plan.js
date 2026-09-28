@@ -209,15 +209,16 @@ export const MODULE_NOTES = {
 };
 
 // makeRoutine(module, date) или makeRoutine(module, minutes, date). Возвращает запись routine (готовую или новую).
-export async function makeRoutine(module, a, b) {
+export async function makeRoutine(module, a, b, opts = {}) {
   let date = C.today(), minutes = null;
   if (typeof a === 'number') { minutes = a; date = b || date; } else { date = a || date; if (typeof b === 'number') minutes = b; }
+  const rebuild = Number(opts.rebuild) || 0;       // пересборка: другой набор по тем же правилам
   const cfg = MODULES[module];
   if (!cfg) throw new Error(`Неизвестный модуль: ${module}`);
   const uid = store.uid();
   const id = `routine:${uid}:${date}:${module}`;
   const cur = store.get(id);
-  if (cur) return cur;
+  if (cur && !rebuild) return cur;
   minutes = Number(minutes || prof(uid).modules?.[module]?.minutes || cfg.minutes);
   const asked = minutes;
   let tags = cfg.tags;
@@ -230,7 +231,8 @@ export async function makeRoutine(module, a, b) {
   for (const d of [C.addDays(date, -1), C.addDays(date, -2)]) {
     for (const x of store.get(`routine:${uid}:${d}:${module}`)?.data.exercises || []) avoid.push(x.id);
   }
-  const seed = `${date}|${module}|${uid}`;
+  const seed = `${date}|${module}|${uid}${rebuild ? `|${rebuild}` : ''}`;
+  if (rebuild) for (const x of cur?.data.exercises || []) if (!x.pinned) avoid.push(x.id);   // не повторять только что показанное
   // закреплённые пользователем упражнения («моя зарядка») идут первыми, генератор добирает остальное время
   const skipIds = PF.excludedIds(uid);
   const pinned = module === 'morning' ? (prof(uid).modules?.morning?.pinned || []).filter(x => !skipIds.has(x) && catalog().some(e => e.id === x)) : [];
@@ -247,7 +249,7 @@ export async function makeRoutine(module, a, b) {
   const data = {
     module, minutes: total, title: `${cfg.title} · ${total} мин`,
     exercises: [...pinnedList, ...res.list].map(x => ({ id: x.id, amount: x.amount, per_side: x.per_side, done: false, ...(x.pinned ? { pinned: true } : {}) })),
-    done: false, seed, rounds: res.rounds,
+    done: false, seed, rounds: res.rounds, seed_n: rebuild,
   };
   if (MODULE_NOTES[module]) data.note = MODULE_NOTES[module];
   return store.put('routine', id, data, date);
