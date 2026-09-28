@@ -34,6 +34,9 @@ ACTIONS = {
     "is.workflow.actions.gettext",
     "is.workflow.actions.downloadurl",
     "is.workflow.actions.notification",
+    "is.workflow.actions.count",
+    "is.workflow.actions.conditional",
+    "is.workflow.actions.text.combine",
 }
 
 CURRENT_DATE = {"Type": "CurrentDate"}
@@ -123,6 +126,37 @@ class _Builder:
             p["WFContentItemLimitNumber"] = 1.0
         return self.add("is.workflow.actions.filter.health.quantity", p)
 
+    def count(self, ref: dict) -> str:
+        return self.add("is.workflow.actions.count", {"WFCountType": "Items", "Input": self.attach(ref), "WFInput": self.attach(ref)})
+
+    def if_any(self, count_uid: str) -> str:
+        """«Если количество > 0»: пустой тип не останавливает команду окном «Образцы не найдены»."""
+        g = self.uid()
+        self.add("is.workflow.actions.conditional", {"GroupingIdentifier": g, "WFControlFlowMode": 0, "WFCondition": 2,
+                                                     "WFNumberValue": "0",
+                                                     "WFInput": {"Type": "Variable", "Variable": self.attach(self.out(count_uid, "Count"))}})
+        return g
+
+    def end_if(self, g: str) -> None:
+        self.add("is.workflow.actions.conditional", {"GroupingIdentifier": g, "WFControlFlowMode": 2})
+
+    def combine(self, ref: dict) -> str:
+        return self.add("is.workflow.actions.text.combine", {"WFTextSeparator": "New Lines", "text": self.attach(ref)})
+
+    def iso(self, ref: dict) -> str:
+        return self.add("is.workflow.actions.format.date", {"WFDateFormatStyle": "ISO 8601", "WFISO8601IncludeTime": True,
+                                                           "WFDate": self.text(ref)})
+
+    def columns(self, q: str, props: list[str]) -> list[str]:
+        """Свойства сразу со всего списка замеров (без цикла - сотни замеров шагов не тормозят), по строке на замер."""
+        S = "Health Samples"
+        out = []
+        for prop in props:
+            d = self.detail(self.out(q, S), prop)
+            src, name = (self.iso(self.out(d, prop)), "Formatted Date") if prop.endswith("Date") else (d, prop)
+            out.append(self.combine(self.out(src, name)))
+        return out
+
     def detail(self, input_ref: dict, prop: str) -> str:
         """«Получить сведения об образцах Здоровья»: Значение / Дата начала / Дата окончания."""
         return self.add("is.workflow.actions.properties.health.quantity", {
@@ -143,31 +177,39 @@ def build(url: str, token: str, parts: set[str] | None = None) -> bytes:
     # показывает окно «Образцы не найдены» и останавливает автоматизацию
     parts = set(parts or PARTS)
     fields = [("date", b.text(b.out(today, "Formatted Date")))]
-    if "steps" in parts:
-        steps_q = b.find("Steps", "today", unit="count", group_day=True)
-        steps = b.detail(b.out(steps_q, S), "Value")
-        fields.append(("steps", b.text(b.out(steps, "Value"))))
-    if "kcal" in parts:
-        kcal_q = b.find("Active Calories", "today", unit="kcal", group_day=True)
-        kcal = b.detail(b.out(kcal_q, S), "Value")
-        fields.append(("active_kcal", b.text(b.out(kcal, "Value"))))
+    # шаги и активные калории - отдельными замерами «время / значение / источник»: сумма «по дню» в «Командах»
+    # складывает iPhone и часы (двойной счёт), а сервер убирает повторы по часам, как «Здоровье»
+    for key, typ, unit in (("steps", "Steps", "count"), ("kcal", "Active Calories", "kcal")):
+        if key not in parts:
+            continue
+        q = b.find(typ, "today", unit=unit)
+        g = b.if_any(b.count(b.out(q, S)))
+        c_start, c_val, c_src = b.columns(q, ["Start Date", "Value", "Source"])
+        b.end_if(g)
+        name = "steps" if key == "steps" else "kcal"
+        fields += [(f"{name}_start", b.text(b.out(c_start, "Combined Text"))),
+                   (f"{name}_value", b.text(b.out(c_val, "Combined Text"))),
+                   (f"{name}_source", b.text(b.out(c_src, "Combined Text")))]
     if "weight" in parts:
         weight_q = b.find("Weight", "last", days=30, unit="kg", latest=True)
+        g = b.if_any(b.count(b.out(weight_q, S)))
         weight = b.detail(b.out(weight_q, S), "Value")
         weight_start = b.detail(b.out(weight_q, S), "Start Date")
         weight_day = b.format_date(b.out(weight_start, "Start Date"), "yyyy-MM-dd")
+        b.end_if(g)
         fields += [("weight", b.text(b.out(weight, "Value"))), ("weight_date", b.text(b.out(weight_day, "Formatted Date")))]
-    if "rhr" in parts:
-        rhr_q = b.find("Resting Heart Rate", "last", days=2, unit="count/min", latest=True)
-        rhr = b.detail(b.out(rhr_q, S), "Value")
-        fields.append(("resting_hr", b.text(b.out(rhr, "Value"))))
-    if "hrv" in parts:
-        hrv_q = b.find("Heart Rate Variability", "last", days=2, unit="ms", latest=True)
-        hrv = b.detail(b.out(hrv_q, S), "Value")
-        fields.append(("hrv", b.text(b.out(hrv, "Value"))))
+    for key, typ, unit, field in (("rhr", "Resting Heart Rate", "count/min", "resting_hr"), ("hrv", "Heart Rate Variability", "ms", "hrv")):
+        if key not in parts:
+            continue
+        q = b.find(typ, "last", days=2, unit=unit, latest=True)
+        g = b.if_any(b.count(b.out(q, S)))
+        v = b.detail(b.out(q, S), "Value")
+        b.end_if(g)
+        fields.append((field, b.text(b.out(v, "Value"))))
     if "sleep" in parts:
         # сон: каждая фаза строкой «начало;конец;фаза», ночь выбирает сервер
         sleep_q = b.find("Sleep", "last", days=2, oldest_first=True)
+        gs = b.if_any(b.count(b.out(sleep_q, S)))
         group = b.uid()
         b.add("is.workflow.actions.repeat.each", {"GroupingIdentifier": group, "WFControlFlowMode": 0,
                                                   "WFInput": b.attach(b.out(sleep_q, S))})
@@ -178,6 +220,7 @@ def build(url: str, token: str, parts: set[str] | None = None) -> bytes:
             b.out(s_start, "Formatted Date"), ";", b.out(s_end, "Formatted Date"), ";",
             {**REPEAT_ITEM, "Aggrandizements": [{"Type": "WFPropertyVariableAggrandizement", "PropertyName": "Value"}]})})
         sleep = b.add("is.workflow.actions.repeat.each", {"GroupingIdentifier": group, "WFControlFlowMode": 2})
+        b.end_if(gs)
         fields.append(("sleep", b.text(b.out(sleep, "Repeat Results"))))
     fields.append(("source", b.text("shortcut-1")))
 

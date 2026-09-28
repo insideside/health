@@ -352,6 +352,17 @@ async def health_import(request: Request):
     # шаги (и активные калории) → отметка пункта чек-листа «Шаги»
     steps = num(body.get("steps"), total=True, grouped=True)
     kcal = num(body.get("active_kcal"), total=True, grouped=None)
+    # готовая команда присылает замеры по отдельности - убираем двойной счёт iPhone + часы
+    if body.get("steps_value") is not None:
+        v, per = dedup_hourly(body.get("steps_start"), body.get("steps_value"), body.get("steps_source"), day, True)
+        if v is not None:
+            steps = v
+            if len(per) > 1:
+                done["sources"] = {k: round(x) for k, x in per.items()}
+    if body.get("kcal_value") is not None:
+        v, _ = dedup_hourly(body.get("kcal_start"), body.get("kcal_value"), body.get("kcal_source"), day, None)
+        if v is not None:
+            kcal = v
     # если пришло несколько значений - покажем в уведомлении, из чего сложилось (разбор двойного счёта)
     for key, label in (("steps", "шаги"), ("active_kcal", "ккал")):
         raw = body.get(key)
@@ -477,11 +488,43 @@ async def health_import(request: Request):
     return {"ok": True, "imported": done}
 
 
+def _lines(v) -> list[str]:
+    if isinstance(v, list):
+        return [str(x).strip() for x in v]
+    return [x.strip() for x in re.split(r"[\r\n]+", str(v or "")) if x.strip()]
+
+
+def dedup_hourly(starts, values, sources, day: str, grouped) -> tuple[float | None, dict]:
+    """Замеры «время / значение / источник» → итог за день без двойного счёта iPhone и часов.
+
+    Как «Здоровье» приблизительно: в каждом часе берём источник с наибольшей суммой, часы складываем.
+    → (итог, {источник: сумма}) - по источникам для уведомления. None - если столбцы не сошлись."""
+    st, va, so = _lines(starts), _lines(values), _lines(sources)
+    if not va or len(st) != len(va):
+        return None, {}
+    so = so if len(so) == len(va) else ["?"] * len(va)
+    hours: dict[str, dict[str, float]] = {}
+    per_src: dict[str, float] = {}
+    for s, v, src in zip(st, va, so):
+        if not s.startswith(day):             # ISO со смещением - локальное время телефона; только этот день
+            continue
+        n = num(v, grouped=grouped)
+        if n is None:
+            continue
+        h = hours.setdefault(s[11:13], {})
+        h[src] = h.get(src, 0) + n
+        per_src[src] = per_src.get(src, 0) + n
+    if not hours:
+        return 0.0, per_src
+    return sum(max(d.values()) for d in hours.values()), per_src
+
+
 def summary(done: dict) -> str:
     """Что записалось, одной строкой для уведомления на iPhone (без длинного тире)."""
     parts = []
     if "steps" in done:
-        parts.append(f"шаги {done['steps']}" + (f" (сложено из: {' + '.join(done['parts']['шаги'])})" if done.get("parts", {}).get("шаги") else ""))
+        parts.append(f"шаги {done['steps']}" + (f" (сложено из: {' + '.join(done['parts']['шаги'])})" if done.get("parts", {}).get("шаги") else "")
+                     + (f" (без повторов: {', '.join(f'{k} {v}' for k, v in done['sources'].items())})" if done.get("sources") else ""))
     if done.get("active_kcal"):
         parts.append(f"активные {done['active_kcal']} ккал")
     sl = done.get("sleep")
