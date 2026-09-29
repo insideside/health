@@ -169,7 +169,7 @@ async def job_food(uid: str, inp: dict) -> dict:
     if rest:
         hints = sorted({k for chunk in rest
                         for k in difflib.get_close_matches(food.norm(food.parse_chunk(chunk)[0]),
-                                                           idx.keys.keys(), n=4, cutoff=0.5)})
+                                                           idx.fuzzy, n=4, cutoff=0.5)})
         user = "Съедено:\n" + "\n".join(f"- {c}" for c in rest)
         if hints:
             user += "\n\nПодсказки — названия из справочника:\n" + ", ".join(hints)
@@ -219,6 +219,7 @@ PRIORITY_LABEL = {1: "главная", 2: "важная", 3: "по возмож�
 WELLBEING_LABEL = {"great": "отлично", "good": "хорошо", "meh": "так себе", "broken": "разбит"}
 SORENESS_LABEL = {"none": "не болят мышцы", "light": "мышцы слегка болят", "strong": "мышцы сильно болят"}
 STRESS_LABEL = {"low": "стресс низкий", "mid": "стресс средний", "high": "стресс высокий"}
+SLEEPY_LABEL = {"none": "днём не клонит в сон", "some": "временами сонливость днём", "strong": "сильная сонливость днём"}
 DAYTYPE_LABEL = {"cheat": "читмил", "special": "особый день", "sick": "болеет", "rest": "день отдыха"}
 
 
@@ -494,7 +495,7 @@ def _program_days(out: dict, by_id: dict, weekdays: list[int], day_minutes: dict
 
 def _day_name(name: str | None, focus: str, i: int) -> str:
     """Модель любит называть дни «A», «B» — в календаре это ни о чём не говорит."""
-    name = (name or "").strip()
+    name = re.sub(r"\s*[—–]\s*", " - ", (name or "").strip())   # длинного тире в интерфейсе нет
     if len(name) <= 3:
         label = name or chr(ord("A") + i)
         return f"День {label}: {focus}" if focus else f"День {label}"
@@ -606,7 +607,7 @@ async def job_program(uid: str, inp: dict) -> dict:
     for i, wd in enumerate(weekdays):
         nxt = act_days.get((wd + 1) % 7, [])
         same = act_days.get(wd, [])
-        s = f"День {i + 1} — {WEEKDAYS[wd]}, до {day_minutes[wd]} мин"
+        s = f"День {i + 1} ({WEEKDAYS[wd]}), до {day_minutes[wd]} мин"
         slot = (sched.get(str(wd)) or sched.get(wd) or {}).get("slot") if isinstance(sched, dict) else None
         if slot:
             s += f", время: {SLOT_LABEL.get(slot, slot)}"
@@ -741,7 +742,9 @@ async def job_program(uid: str, inp: dict) -> dict:
             day = monday + timedelta(weeks=week, days=wd)
             if day < start or day >= start + timedelta(weeks=weeks) or day.isoformat() in keep_dates:
                 continue
-            tpl = days[i % len(days)]
+            # шаблон привязан к дню недели: «День 1» модель составляла под первый выбранный день
+            # (его минуты, активности накануне и после), поэтому и в календаре он всегда в этот день
+            tpl = days[weekdays.index(wd) % len(days)]
             i += 1
             wk = (day - monday).days // 7 + 1
             # плавный старт: первые 2 недели от начала занятий на подход меньше (исходное число — в sets_base)
@@ -825,7 +828,8 @@ def week_stats(uid: str, end: date) -> dict:
             "alarms": sl.get("alarms") if sl else None,
             "state": ", ".join(filter(None, (WELLBEING_LABEL.get((states.get(d) or {}).get("wellbeing")),
                                              SORENESS_LABEL.get((states.get(d) or {}).get("soreness")),
-                                             STRESS_LABEL.get((states.get(d) or {}).get("stress"))))) or None,
+                                             STRESS_LABEL.get((states.get(d) or {}).get("stress")),
+                                             SLEEPY_LABEL.get((states.get(d) or {}).get("sleepy"))))) or None,
             "water": logs.get((d, items.get("water"))),
             "steps": logs.get((d, items.get("steps"))),
             "cups": cups.get(d),

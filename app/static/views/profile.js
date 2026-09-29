@@ -100,6 +100,7 @@ function initForm() {
     cardio_places: [...(p.cardio?.places || (p.gym ? ['gym', 'home', 'outdoor'] : ['home', 'outdoor']))], location: p.location ? { ...p.location } : null,
     sched_irregular: !!p.schedule?.irregular, sched_days: days,
     activities: clone(p.activities || []),
+    mod_home_on: m.home_plan?.enabled !== false,
     mod_morning_on: m.morning?.enabled ?? true, mod_morning_min: m.morning?.minutes || 10,
     mod_neck_on: !!m.neck?.enabled, mod_neck_week: m.neck?.per_week || 3, mod_neck_min: m.neck?.minutes || 5,
     mod_posture_on: !!m.posture?.enabled, mod_posture_week: m.posture?.per_week || 3, mod_posture_min: m.posture?.minutes || 10,
@@ -196,7 +197,7 @@ function viewProfile() {
     sec('cardio', 'Кардио', cardioSummary(fm), cardioBody(fm)),
     sec('myex', 'Мои упражнения', myExSummary(), myExBody()),
     sec('activities', 'Активности', acts.length ? acts.map(a => esc(actName(a))).join(', ') : 'нет', activitiesBody(fm)),
-    sec('modules', 'Короткие комплексы', [fm.mod_morning_on ? `разминка ${fm.mod_morning_min} мин` : '', fm.mod_neck_on ? 'шея' : '', fm.mod_posture_on ? 'осанка' : ''].filter(Boolean).join(' · ') || 'выключены', modulesBody(fm)),
+    sec('modules', 'Короткие комплексы', [fm.mod_home_on ? 'под цели' : '', fm.mod_morning_on ? `разминка ${fm.mod_morning_min} мин` : '', fm.mod_neck_on ? 'шея' : '', fm.mod_posture_on ? 'осанка' : ''].filter(Boolean).join(' · ') || 'выключены', modulesBody(fm)),
     sec('food', 'Питание', fm.ew_on ? `окно ${esc(fm.ew_from)}–${esc(fm.ew_to)}` : `стакан ${fm.glass_ml} мл`, foodBody(fm)),
     sec('supps', 'Витамины и добавки', SPV.profileSummary(), SPV.profileBody()),
     sec('reminders', 'Напоминания', fm.reminders.filter(r => r.enabled).length ? fm.reminders.filter(r => r.enabled).map(r => esc(r.time)).join(', ') : 'нет', remindersBody(fm)),
@@ -524,7 +525,9 @@ function renderActSuggest(q) {
 }
 
 function modulesBody(fm) {
-  return `<div class="pf-mod"><div>${chk('mod_morning_on', '<b>Утренняя разминка</b>', fm.mod_morning_on)}
+  return `<div class="pf-mod"><div>${chk('mod_home_on', '<b>Домашние комплексы под цели</b>', fm.mod_home_on)}
+      <p class="note">Тренер ставит в дни без зала комплексы на зоны из ваших целей (например, руки или пресс) и добирает тренировки до нормы. Пропущенное переносит на другие дни недели.</p></div></div>
+    <div class="pf-mod"><div>${chk('mod_morning_on', '<b>Утренняя разминка</b>', fm.mod_morning_on)}
       <p class="note">Каждый день новая, из упражнений для дома, под выбранное время.</p></div>
       ${fm.mod_morning_on ? chips(F, 'mod_morning_min', fm.mod_morning_min, [5, 10, 15, 20].map(k => [k, `${k} мин`])) : ''}</div>
     <div class="pf-mod"><div>${chk('mod_neck_on', '<b>Шея и скулы</b>', fm.mod_neck_on)}
@@ -573,6 +576,8 @@ function latestTarget() {
   return store.list('target').sort((a, b) => (a.data.valid_from || '').localeCompare(b.data.valid_from || '') || a.updated_at - b.updated_at).pop() || null;
 }
 
+// цель «Вода» в «Целях» важнее расчётной нормы: в чек-листе стоит она (coach.itemTarget)
+const waterGoal = () => (goal()?.goals || []).find(g => g.type === 'metric' && g.metric === 'water_avg' && Number(g.to) > 0)?.to || null;
 function normsBody(tgRec) {
   const tg = tgRec?.data;
   const job = tgRec ? jobFor(tgRec.id) : null;
@@ -581,9 +586,9 @@ function normsBody(tgRec) {
   return `${tg ? `<p class="note" style="margin-top:0">Посчитаны ${esc(fmt(tg.valid_from || C.today(), { day: 'numeric', month: 'long' }))}${tg.weight ? ` при весе ${String(tg.weight).replace('.', ',')} кг` : ''}.</p>
       <div class="norms">
         <div><b>${num(tg.kcal)}</b><span>ккал в день</span></div>
-        <div><b>${tg.p} / ${tg.f} / ${tg.c}</b><span>белки / жиры / углеводы, г</span></div>
+        <div><b>${tg.p} / ${tg.f} / ${tg.c}</b><span>белки / жиры / углеводы, г${tg.macros_manual ? ' (свои)' : ''}</span></div>
         ${tg.fiber ? `<div><b>${tg.fiber}</b><span>клетчатка, г</span></div>` : ''}
-        <div><b>${tg.water_glasses ?? '-'}${tg.water_glasses_gym && tg.water_glasses_gym !== tg.water_glasses ? '–' + tg.water_glasses_gym : ''}</b><span>стаканов воды${tg.water_ml ? ` (${num(tg.water_ml)} мл)` : ''}</span></div>
+        <div><b>${tg.water_glasses ?? '-'}${tg.water_glasses_gym && tg.water_glasses_gym !== tg.water_glasses ? '–' + tg.water_glasses_gym : ''}</b><span>стаканов воды${tg.water_ml ? ` (${num(tg.water_ml)} мл)` : ''}${waterGoal() ? ` · в чек-листе ${waterGoal()} - ваша цель` : ''}</span></div>
         <div><b>${num(tg.steps_manual || tg.steps)}</b><span>шагов${tg.steps_manual ? ' (своя цель)' : ''}</span></div>
         ${tg.sleep_hours ? `<div><b>${String(tg.sleep_hours).replace('.', ',')}</b><span>часов сна</span></div>` : ''}
         ${tg.tdee ? `<div><b>${num(tg.tdee)}</b><span>расход, ккал</span></div>` : ''}
@@ -596,6 +601,11 @@ function normsBody(tgRec) {
       ${tg.source === 'local' ? `<p class="note">${esc(tg.note || 'Ориентировочно, рассчитано на этом устройстве - точнее с сервером.')}</p>` : ''}
       ${tg.explanation ? `<div class="coach inset info"><div class="who smallcaps">Комментарий тренера</div><p style="margin:0">${esc(tg.explanation)}</p>
         ${tg.tips?.length ? `<ul>${tg.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</div>` : ''}
+      <div class="pf-steps pf-macros"><span class="smallcaps muted">свои БЖУ, г</span>
+        ${[['p', 'белки'], ['f', 'жиры'], ['c', 'углеводы']].map(([k, l]) => `<label class="pf-inline"><span class="note">${l}</span>
+          <input class="control pf-num" type="number" inputmode="numeric" step="5" min="0" placeholder="${num(tg.formula?.[k] ?? tg[k])}" value="${esc(tg.macros_manual?.[k] ?? '')}" data-act="pf-macro" data-k="${k}" data-id="${tgRec.id}" aria-label="Своя норма: ${l}"></label>`).join('')}
+        <span class="note">${tg.macros_manual ? `по формуле было ${num(tg.formula?.kcal)} ккал, ${tg.formula?.p} / ${tg.formula?.f} / ${tg.formula?.c} г; пусто - вернуть расчёт` : 'пусто - по формуле; калории пересчитаются сами'}</span></div>
+      ${(tg.manual_warnings || []).map(w => `<div class="notice">${esc(w)}</div>`).join('')}
       <div class="pf-steps"><label class="pf-inline"><span class="smallcaps muted">своя цель шагов</span>
         <input class="control pf-num" type="number" inputmode="numeric" step="500" min="1000" placeholder="${num(tg.steps)}" value="${esc(tg.steps_manual || '')}" data-act="pf-steps" data-id="${tgRec.id}"></label>
         <span class="note">пусто - по формуле</span></div>`
@@ -724,6 +734,8 @@ function buildProfile(fm) {
     start_date: cur.start_date && cur.start_mode === (fm.start_mode || 'smooth') ? cur.start_date : C.today(),
     activities: fm.activities.map(a => ({ ...a, per_week: n(a.per_week) || 1, minutes: n(a.minutes) || 45, intensity: a.intensity || 'mid' })),
     modules: {
+      ...(cur.modules || {}),
+      home_plan: { ...(cur.modules?.home_plan || {}), enabled: !!fm.mod_home_on },
       // ...cur: закреплённые упражнения разминки (pinned) правятся не в форме — не теряем их при сохранении
       morning: { ...(cur.modules?.morning || {}), enabled: !!fm.mod_morning_on, minutes: n(fm.mod_morning_min) || 10 },
       neck: { ...(cur.modules?.neck || {}), enabled: !!fm.mod_neck_on, per_week: n(fm.mod_neck_week) || 3, minutes: n(fm.mod_neck_min) || 5 },
@@ -1019,6 +1031,20 @@ export const changes = {
   'pf-act': el => { const a = form().activities[Number(el.dataset.i)]; if (a) a[el.dataset.k] = el.dataset.k === 'intensity' ? el.value : Number(el.value) || ''; },
   'pf-sched': el => { form().sched_days[el.dataset.d][el.dataset.k] = el.value; },
   'pf-rem': el => { const r = form().reminders[Number(el.dataset.i)]; if (r) r[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; },
+  // свои БЖУ: правится последняя версия нормы (как своя цель шагов), калории пересчитываются от разницы
+  'pf-macro': async el => {
+    const rec = store.get(el.dataset.id);
+    if (!rec) return;
+    const v = n(el.value), k = el.dataset.k;
+    const manual = { ...(rec.data.macros_manual || {}) };
+    if (v > 0) manual[k] = Math.round(v); else delete manual[k];
+    const t = NL.applyManual(rec.data, manual);
+    const chk = NL.checkManual(t);
+    if (chk.why) { toast(chk.why, 4000); S.render(); return; }
+    await store.put('target', rec.id, { ...t, manual_warnings: chk.warn }, rec.date);
+    toast(Object.keys(manual).length ? `Нормы: ${num(t.kcal)} ккал, ${t.p} / ${t.f} / ${t.c} г` : 'БЖУ - снова по формуле');
+    await afterChange(C.today());
+  },
   'pf-steps': async el => {
     const v = n(el.value);
     await store.patch(el.dataset.id, { steps_manual: v && v >= 1000 ? Math.round(v) : null });

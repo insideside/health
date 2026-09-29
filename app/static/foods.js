@@ -32,7 +32,7 @@ function build() {
   for (const f of byId.values()) {
     const names = [f.name, ...(f.aliases || []), f.brand ? `${f.brand} ${f.name}` : ''].filter(Boolean).map(norm);
     const words = [...new Set(names.join(' ').split(' ').filter(Boolean))];
-    keyed.push({ f, names, words, stems: words.map(stem) });
+    keyed.push({ f, names, words, stems: words.map(stem), brandWords: f.brand ? norm(f.brand).split(' ').filter(Boolean) : null });
     for (const n of names) if (!byName.has(n)) byName.set(n, f);
   }
 }
@@ -41,7 +41,8 @@ function ensure() { if (!byId) { build(); usageCache = null; } }
 export function count() { ensure(); return byId.size; }
 export function get(id) { ensure(); return byId.get(id) || null; }
 export function findByName(name) { ensure(); return byName.get(norm(name)) || null; }
-export const isMine = f => !!f && f.created_by === store.uid() && f.source !== 'seed';
+export const isMine = f => !!f && f.created_by === store.uid() && f.source !== 'seed' && f.source !== 'off';
+export const isStore = f => f?.source === 'off';    // товар из магазина (Open Food Facts)
 
 // ── история: что человек ест, по его записям еды (работает без сети) ──
 let usageCache = null, usageKey = '';
@@ -101,6 +102,8 @@ export function search(query, { limit = 30 } = {}) {
     if (us) s += 40 + Math.min(us.count, 10) * 3;
     if (isMine(k.f)) s += 8;
     if (k.f.generic && broad) s += 12;
+    // товары из магазина - ниже обычных продуктов, но выше всех, если в запросе есть их бренд
+    if (k.f.source === 'off') s += k.brandWords?.some(b => qw.some(w => w.length >= 3 && b.startsWith(w))) ? 10 : -8;
     if (k.f.name.length > 40) s -= 3;
     out.push([s, k.f]);
   }

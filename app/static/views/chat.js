@@ -58,6 +58,7 @@ function viewChat() {
   const tone = profile().tone || 'coach';
   return `<div class="chat-v2">
     <div class="kicker smallcaps">Тренер · тон «${esc((C.TONE_NAMES?.[tone] || '').toLowerCase())}»</div><h1>Чат с тренером</h1>
+    <p class="note a-tight"><a class="link" href="#advice">Все рекомендации по вашим данным →</a></p>
     <div class="chat-list" id="chat-list">${listHtml()}</div>
     <div class="composer" id="chat-composer">
       <div class="chat-quick">${QUICK.map(([k, l]) => `<button type="button" class="chip" data-act="chat-quick" data-q="${k}">${esc(gx(l))}</button>`).join('')}</div>

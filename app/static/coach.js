@@ -109,11 +109,24 @@ function activeWorkout(date, uid) {
 export function logId(date, itemId, uid = store.uid()) { return `log:${uid}:${date}:${itemId}`; }
 export function logVal(date, itemId, uid = store.uid()) { return store.get(logId(date, itemId, uid))?.data.v; }
 
+// цель-показатель из «Целей» (например «Вода: до 6 стаканов») - выбор человека, он важнее расчётной нормы
+export function goalTo(metric, uid = store.uid()) {
+  const g = (store.get(`goal:${uid}`)?.data?.goals || []).find(x => x.type === 'metric' && x.metric === metric);
+  return Number(g?.to) > 0 ? Number(g.to) : null;
+}
 export function itemTarget(item, date, uid = store.uid()) {
   const t = target(uid);
   const d = item.data;
-  if (d.target_from === 'water' && t) return activeWorkout(date, uid) ? t.water_glasses_gym || t.water_glasses : t.water_glasses;
-  if (d.target_from === 'steps' && t) return t.steps_manual || t.steps;
+  if (d.target_from === 'water') {
+    const own = goalTo('water_avg', uid);
+    if (own) return Math.round(own);
+    if (t) return activeWorkout(date, uid) ? t.water_glasses_gym || t.water_glasses : t.water_glasses;
+  }
+  if (d.target_from === 'steps') {
+    const own = t?.steps_manual || goalTo('steps_avg', uid);
+    if (own) return Math.round(own);
+    if (t) return t.steps;
+  }
   return d.target || 1;
 }
 
@@ -192,6 +205,118 @@ export function progress(item, date, uid = store.uid()) {
   return { applies: true, frac: t ? Math.min(1, n / t) : 0, value: n, target: t };
 }
 
+// ── план недели: комплексы из профиля (шея, осанка) и активности (велосипед, бассейн…) ──
+// У задачи «n раз в неделю» есть удобные дни: выбранные в профиле, иначе дни без тренировок (длинные занятия - выходные).
+// План считается заново на каждую дату: сделанное раньше в эту неделю вычитается, остаток раскладывается
+// на эту дату…воскресенье - сначала на удобные дни, пропущенное переносится на свободные.
+// Для прошедшей даты - план, каким он был в тот день (отметки те же), поэтому процент дня не «переписывается».
+export const PLAN_MODULES = ['neck', 'posture'];
+export const WALK_TYPES = new Set(['walking', 'walk_fast']);        // ходьба засчитывается шагами
+const LONG_ACTIVITY_MIN = 90;
+const HOME_ZONE_MODULE = { abs: 'abs', sides: 'abs', arms: 'arms', shoulders: 'arms', legs: 'legs', glutes: 'legs', back: 'back', chest: 'back' };
+const HOME_MIN = { abs: 10, arms: 15, legs: 15, back: 15, workout: 20 };
+const ZONE_WORD = { abs: 'пресс', sides: 'бока', arms: 'руки', shoulders: 'плечи', legs: 'ноги', glutes: 'ягодицы', back: 'спина', chest: 'грудь' };
+function spreadDays(days, n) {
+  if (n >= days.length) return [...days];
+  return Array.from({ length: n }, (_, i) => days[Math.floor((i + 0.5) * days.length / n)]);
+}
+const activityTimes = a => Math.min(7, Math.max(1, Number(a.per_week) || a.weekdays?.length || 1));
+// удобные дни активности: выбранные в профиле, длинные - выходные, остальные - pick(n)
+function activityIdeal(a, pick) {
+  const wds = [...new Set((a.weekdays || []).map(Number))].sort(), n = activityTimes(a);
+  return wds.length ? wds : (Number(a.minutes) || 0) >= LONG_ACTIVITY_MIN && n <= 2 ? [5, 6].slice(0, n) : pick(n);
+}
+export function planTasks(uid = store.uid()) {
+  return memo(`pt|${uid}`, () => {
+    const p = prof(uid), gym = new Set(p.weekdays || []);      // дни тренировок программы
+    const all = [0, 1, 2, 3, 4, 5, 6], free = all.filter(d => !gym.has(d));
+    const pick = n => spreadDays(free.length >= n ? free : all, n);
+    const hasSteps = items(uid).some(i => i.data.target_from === 'steps');
+    const out = [];
+    for (const k of PLAN_MODULES) {
+      const m = p.modules?.[k];
+      if (!m?.enabled) continue;
+      const n = Math.min(7, Math.max(1, Number(m.per_week) || 3));
+      out.push({ key: `mod:${k}`, kind: 'module', module: k, n, minutes: Number(m.minutes) || null, ideal: pick(n) });
+    }
+    // домашние комплексы под цели: акценты из норм (руки ×1,4…) → комплекс на эту зону в дни без зала;
+    // если тренировок по программе меньше, чем в нормах, - добор короткими тренировками. Выключается в профиле.
+    if (p.modules?.home_plan?.enabled !== false) {
+      const zones = target(uid)?.intensity?.emphasis?.zones || {}, mult = {};
+      for (const [z, v] of Object.entries(zones)) {
+        const k = HOME_ZONE_MODULE[z];
+        if (k && Number(v) >= 1.1) mult[k] = Math.max(mult[k] || 0, Number(v));
+      }
+      const why = k => 'под цель: ' + Object.entries(zones).filter(([z, v]) => HOME_ZONE_MODULE[z] === k && Number(v) >= 1.1)
+        .map(([z, v]) => `${ZONE_WORD[z] || z} ×${String(v).replace('.', ',')}`).join(', ');
+      // не в дни длинных активностей (велосипед на полдня + силовая дома - перебор), если хватает других дней
+      const busy = new Set((p.activities || []).filter(a => a.type && Number(a.minutes) >= 60 && !(WALK_TYPES.has(a.type) && hasSteps)).flatMap(a => activityIdeal(a, pick)));
+      const calm = free.filter(d => !busy.has(d));
+      const pickHome = n => (calm.length >= n ? spreadDays(calm, n) : pick(n));
+      let room = Math.min(3, free.length);
+      for (const [k, v] of Object.entries(mult).sort((x, y) => y[1] - x[1])) {
+        const n = Math.min(room, v >= 1.3 ? 2 : 1);
+        if (n <= 0) break;
+        room -= n;
+        out.push({ key: `home:${k}`, kind: 'module', module: k, n, minutes: HOME_MIN[k], ideal: pickHome(n), why: why(k) });
+      }
+      const hasProgram = store.list('program', uid).some(r => r.data.active !== false);
+      const need = Number(target(uid)?.intensity?.weekly_sessions) || 0, have = hasProgram ? (p.weekdays || []).length : 0;
+      const add = Math.min(room, Math.max(0, need - have));
+      if (add > 0 && hasProgram) {
+        out.push({ key: 'home:workout', kind: 'module', module: 'workout', n: add, minutes: HOME_MIN.workout, ideal: pickHome(add),
+          why: `добор до нормы: ${need} ${need < 5 ? 'тренировки' : 'тренировок'} в неделю, по программе ${have}` });
+      }
+    }
+    for (const a of p.activities || []) {
+      if (!a.type || (WALK_TYPES.has(a.type) && hasSteps)) continue;
+      const n = activityTimes(a), min = Number(a.minutes) || 0, ideal = activityIdeal(a, pick);
+      out.push({ key: `act:${a.type}`, kind: 'activity', type: a.type, name: a.name || null, n, minutes: min || null, intensity: a.intensity || 'mid', ideal });
+    }
+    return out;
+  });
+}
+// сделано ли в этот день: комплекс - отмечена хотя бы половина упражнений, активность - есть запись этого вида
+export function planDone(task, date, uid = store.uid()) {
+  if (task.kind === 'module') {
+    const ex = store.get(`routine:${uid}:${date}:${task.module}`)?.data.exercises || [];
+    return ex.length ? ex.filter(x => x.done).length / ex.length : 0;
+  }
+  return recsOn('activity', date, uid).some(r => r.data.type === task.type) ? 1 : 0;
+}
+function planDayOpen(date, uid) {
+  const dt = dayType(date, uid);
+  if (dt === 'sick' || dt === 'rest' || dt === 'special') return false;
+  return prof(uid).schedule?.days?.[weekday(date)]?.slot !== 'none';
+}
+// → [{ ...задача, date, frac, due, moved, left }] на дату: запланированное на этот день и сделанное сверх плана
+export function weekPlan(date = today(), uid = store.uid()) {
+  return memo(`wp|${uid}|${date}`, () => {
+    const t = today(), from = date > t ? t : date;
+    const mon = mondayOf(date), sun = addDays(mon, 6);
+    if (from < mon) return [];
+    const out = [];
+    for (const task of planTasks(uid)) {
+      let doneBefore = 0;
+      for (let d = mon; d < from; d = addDays(d, 1)) if (planDone(task, d, uid) >= 0.5) doneBefore++;
+      const left = task.n - doneBefore;
+      let chosen = [];
+      if (left > 0) {
+        const cands = [];
+        for (let d = from; d <= sun; d = addDays(d, 1)) if (planDayOpen(d, uid)) cands.push(d);
+        const idealAhead = cands.filter(d => task.ideal.includes(weekday(d)));
+        chosen = idealAhead.slice(0, left);
+        if (chosen.length < left) chosen.push(...spreadDays(cands.filter(d => !chosen.includes(d)), left - chosen.length));
+      }
+      const frac = date <= t ? planDone(task, date, uid) : 0;
+      const due = chosen.includes(date);
+      if (!due && frac <= 0) continue;
+      out.push({ ...task, date, frac, due, moved: due && !task.ideal.includes(weekday(date)), left: Math.max(0, left) });
+    }
+    return out;
+  });
+}
+
 export function dayScore(date, uid = store.uid()) {
   return memo(`ds|${uid}|${date}`, () => {
     let sum = 0, total = 0, done = 0, xp = 0, workoutState = 'none';
@@ -202,6 +327,12 @@ export function dayScore(date, uid = store.uid()) {
       total++; sum += p.frac;
       if (p.frac >= 1) { done++; xp += it.data.type === 'workout' ? 50 : 10; }
       if (it.data.type === 'workout') workoutState = p.frac >= 1 ? 'done' : 'planned';
+    }
+    // план недели: шея, осанка, активности - как пункты чек-листа (сделанное сверх плана тоже засчитывается)
+    for (const e of weekPlan(date, uid)) {
+      if (!e.due && e.frac < 1) continue;
+      total++; sum += Math.min(1, e.frac);
+      if (e.frac >= 1) { done++; xp += 10; }
     }
     const pct = total ? Math.round(sum / total * 100) : 0;
     if (total && done === total) xp += 30;
@@ -576,6 +707,7 @@ function stateScore(s) {
   let x = { great: 100, good: 80, meh: 50, broken: 20 }[s.wellbeing] ?? 60;
   if (s.stress === 'high') x -= 10; else if (s.stress === 'mid') x -= 3;
   if (s.soreness === 'strong') x -= 5;
+  if (s.sleepy === 'strong') x -= 5; else if (s.sleepy === 'some') x -= 2;
   return clamp(x, 0, 100);
 }
 
@@ -761,12 +893,17 @@ export function weekActivity(date = today(), uid = store.uid()) {
       doneMin += am.program; activityMin += am.activity;
     }
     // плановые активности из профиля (велосипед, бассейн…)
+    // ходьба идёт шагами (отдельно её не записывают); к этой дате «должно быть» столько, сколько стояло
+    // в плане недели на прошедшие дни и сегодня (пропуски план переносит на следующие дни)
+    const planDue = {};
+    for (let i = 0; i <= idx; i++) for (const e of weekPlan(addDays(mon, i), uid)) if (e.due) planDue[e.key] = (planDue[e.key] || 0) + 1;
+    const hasSteps = items(uid).some(i => i.data.target_from === 'steps');
     for (const a of p.activities || []) {
-      if (isPassive(a.type)) continue;
+      if (isPassive(a.type) || (WALK_TYPES.has(a.type) && hasSteps)) continue;
       const m = (Number(a.minutes) || 0) * (IW[a.intensity] ?? 1);
       const n = Number(a.per_week) || (a.weekdays?.length || 0);
       plannedMin += m * n;
-      dueMin += a.weekdays?.length ? m * a.weekdays.filter(x => x <= idx).length : m * n * (idx + 1) / 7;
+      dueMin += m * Math.min(n, planDue[`act:${a.type}`] || 0);
     }
     const weekly = Number(target(uid)?.intensity?.weekly_minutes) || 0;
     if (!plannedMin && weekly) { plannedMin = weekly; dueMin = weekly * (idx + 1) / 7; }

@@ -574,6 +574,65 @@ class MissingData(ValueError):
     pass
 
 
+# ── свои цифры поверх расчёта (правка в профиле или по просьбе в чате) ──
+MACROS = ("kcal", "p", "f", "c")
+
+
+def apply_manual(data: dict, manual: dict | None) -> dict:
+    """Заданные БЖУ - как есть, калории меняются на разницу (4/9/4 ккал на грамм); заданные калории без углеводов -
+    углеводы добирают остаток. В formula - исходный расчёт, чтобы можно было вернуть и сравнить."""
+    manual = {k: float(v) for k, v in (manual or {}).items() if k in MACROS and v not in (None, "")}
+    base = data.get("formula") or {k: data[k] for k in MACROS}
+    out = {k: v for k, v in data.items() if k not in ("formula", "macros_manual")}
+    out.update(base)
+    if not manual:
+        return out
+    for k in ("p", "f", "c"):
+        if k in manual:
+            out[k] = round(manual[k])
+    if "kcal" in manual:
+        out["kcal"] = round(manual["kcal"])
+        if "c" not in manual:
+            out["c"] = max(0, round((out["kcal"] - 4 * out["p"] - 9 * out["f"]) / 4))
+    else:
+        out["kcal"] = round(base["kcal"] + 4 * (out["p"] - base["p"]) + 9 * (out["f"] - base["f"]) + 4 * (out["c"] - base["c"]))
+    return {**out, "formula": base, "macros_manual": {k: round(v) for k, v in manual.items()}}
+
+
+def check_manual(data: dict, sex: str | None, weight: float | None) -> tuple[str | None, list[str]]:
+    """→ (почему нельзя, предупреждения). Ниже минимума калорий не опускаем - это уже не похудение, а вред."""
+    floor = 1500 if sex == "m" else 1200
+    if data["kcal"] < floor:
+        return f"Получается {data['kcal']} ккал - ниже безопасного минимума {floor}. Лучше убрать меньше или добавить белка.", []
+    warn = []
+    if weight and data["p"] < 1.2 * weight:
+        warn.append(f"Белка {data['p']} г - меньше 1,2 г на кг веса: на дефиците мышцы будут уходить вместе с жиром.")
+    if data["c"] < 100:
+        warn.append("Углеводов меньше 100 г - на силовых может не хватать энергии.")
+    return None, warn
+
+
+def set_manual(uid: str, fields: dict) -> dict:
+    """Свои БЖУ: новая версия нормы с macros_manual (прежние ручные цифры, если их не меняли, остаются)."""
+    prev = userdata.latest_target(uid)
+    if not prev:
+        raise MissingData("Сначала посчитайте нормы")
+    cur = dict(prev["data"].get("macros_manual") or {})
+    for k in MACROS:
+        if k in fields:
+            if fields[k] in (None, "", 0):
+                cur.pop(k, None)
+            else:
+                cur[k] = fields[k]
+    data = apply_manual(prev["data"], cur)
+    why, warn = check_manual(data, userdata.profile(uid).get("sex"), data.get("weight") or userdata.latest_weight(uid))
+    if why:
+        raise ValueError(why)
+    data = {**data, "valid_from": date.today().isoformat(), "manual_warnings": warn}
+    db.server_put(uid, "target", uuid.uuid4().hex, data)
+    return data
+
+
 def recalc_for(uid: str, deadline: str | None = None, pace: str | None = None) -> tuple[str, dict]:
     """Пересчитать и записать новую версию норм (общая часть POST /api/norms и действия чата).
 
@@ -598,5 +657,7 @@ def recalc_for(uid: str, deadline: str | None = None, pace: str | None = None) -
     target_id = uuid.uuid4().hex
     data = {**res, "weight": float(weight), "valid_from": date.today().isoformat(), "source": "formula",
             "explanation": "", "tips": [], **({"steps_manual": manual} if manual else {})}
+    # свои БЖУ тоже переживают пересчёт: калории сдвигаются от нового расчёта на ту же разницу
+    data = apply_manual(data, (prev or {}).get("data", {}).get("macros_manual"))
     db.server_put(uid, "target", target_id, data)
     return target_id, data

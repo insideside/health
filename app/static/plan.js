@@ -191,7 +191,7 @@ export function pickExercises({ tags, zones, minutes = 10, place = 'home', date 
 }
 
 // ── короткие модули: утренняя зарядка, шея и скулы, осанка ──
-const MODULES = {
+export const MODULES = {
   morning: { title: 'Утренняя разминка', tags: ['morning', 'warmup', 'mobility'], fallback: ['recovery'], minutes: 10, sec: 30, reps: 10, perMin: 0.8, excludeTags: ['face'] },
   neck: { title: 'Шея и скулы', tags: ['neck', 'face'], fallback: ['posture'], zones: ['neck'], minutes: 5, sec: 30, reps: 10, perMin: 1.2 },
   posture: { title: 'Осанка', tags: ['posture'], fallback: ['mobility'], zones: ['back', 'shoulders', 'neck'], minutes: 10, sec: 30, reps: 10, perMin: 0.9 },
@@ -533,6 +533,8 @@ export function readiness(date = C.today(), uid = store.uid()) {
     else if (st.wellbeing === 'meh') reasons.push('самочувствие так себе');
     if (st.soreness === 'strong') reasons.push('сильная мышечная боль');
     if (st.stress === 'high') reasons.push('высокий стресс');
+    score += { some: -3, strong: -8 }[st.sleepy] || 0;
+    if (st.sleepy === 'strong') reasons.push('сильная сонливость');
   }
   // вчерашняя нагрузка
   const y = C.addDays(date, -1);

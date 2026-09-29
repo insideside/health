@@ -245,6 +245,7 @@ FOOD_COLS = {  # новые колонки (миграция для старых
     "state": "TEXT", "generic": "INTEGER NOT NULL DEFAULT 0", "note": "TEXT", "cooked_ratio": "REAL",
     "brand": "TEXT", "created_by": "TEXT", "created_at": "INTEGER", "updated": "INTEGER NOT NULL DEFAULT 0",
     "verified": "INTEGER NOT NULL DEFAULT 0", "deleted": "INTEGER NOT NULL DEFAULT 0",
+    "code": "TEXT",                                  # штрихкод (товары из Open Food Facts)
 }
 _foods_migrated = False
 
@@ -282,30 +283,43 @@ def guess_state(name: str, group: str | None = None) -> str | None:
     return None
 
 
+FOOD_ROW_COLS = ("name", "aliases", "grp", "kcal", "p", "f", "c", "portions", "state", "generic", "note", "cooked_ratio", "brand", "code")
+
+
 def _food_row(it: dict) -> tuple:
     return (it["name"], json.dumps(it.get("aliases", []), ensure_ascii=False), it.get("group"),
             float(it["kcal"]), float(it["p"]), float(it["f"]), float(it["c"]),
             json.dumps(it.get("portions", {}), ensure_ascii=False),
             it.get("state") or guess_state(it["name"], it.get("group")), 1 if it.get("generic") else 0,
-            it.get("note"), it.get("cooked_ratio"))
+            it.get("note"), it.get("cooked_ratio"), it.get("brand"), it.get("code"))
+
+
+# Файлы справочника: базовые продукты (seed) и товары из магазинов по Open Food Facts (off, ODbL,
+# собирается scripts/build_store_foods.py). Товары грузятся вторыми: при совпадении имени базовый продукт важнее.
+SEED_FILES = (("foods.json", "seed", "foods_seed"), ("foods_store.json", "off", "foods_store_seed"))
 
 
 def seed_foods() -> None:
-    """Загрузить seed/foods.json, если файл изменился. id сохраняются (на них ссылаются записи еды);
-    продукты людей (source != seed) не трогаем; исчезнувшие из файла seed-строки помечаются deleted."""
     migrate_foods()
-    path = SEED_DIR / "foods.json"
+    for fname, source, key in SEED_FILES:
+        _seed_file(SEED_DIR / fname, source, key)
+
+
+def _seed_file(path: Path, source: str, meta_key: str) -> None:
+    """Загрузить файл справочника, если он изменился. id сохраняются (на них ссылаются записи еды);
+    продукты людей (manual, web, ai) не трогаем; исчезнувшие из файла строки этого источника помечаются deleted."""
     if not path.exists():
         return
     raw = path.read_bytes()
     digest = hashlib.sha1(raw).hexdigest()
-    if q("SELECT 1 FROM meta WHERE key = 'foods_seed' AND value = ?", (digest,)):
+    if q("SELECT 1 FROM meta WHERE key = ? AND value = ?", (meta_key, digest)):
         return
     try:
         items = json.loads(raw)
     except ValueError:
         return                                   # файл в процессе записи — загрузим при следующем старте
     ts = now_ms()
+    cols = ", ".join(FOOD_ROW_COLS)
     with tx() as c:
         cur = {r["name"].lower(): r for r in c.execute("SELECT * FROM foods")}
         seen = set()
@@ -319,20 +333,17 @@ def seed_foods() -> None:
             row = _food_row(it)
             old = cur.get(key)
             if old is None:
-                c.execute("INSERT INTO foods (name, aliases, grp, kcal, p, f, c, portions, state, generic, note, cooked_ratio,"
-                          " source, verified, created_at, updated, deleted) VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'seed', 1, ?, ?, 0)",
-                          (*row, ts, ts))
-            elif old["source"] == "seed":
-                same = (old["name"], old["aliases"], old["grp"], old["kcal"], old["p"], old["f"], old["c"], old["portions"],
-                        old["state"], old["generic"], old["note"], old["cooked_ratio"]) == row and not old["deleted"]
-                if not same:
-                    c.execute("UPDATE foods SET name=?, aliases=?, grp=?, kcal=?, p=?, f=?, c=?, portions=?, state=?, generic=?,"
-                              " note=?, cooked_ratio=?, verified=1, deleted=0, updated=? WHERE id=?", (*row, ts, old["id"]))
-            # имя занято продуктом человека — его версия важнее
+                c.execute(f"INSERT INTO foods ({cols}, source, verified, created_at, updated, deleted)"
+                          f" VALUES ({', '.join('?' * len(FOOD_ROW_COLS))}, ?, 1, ?, ?, 0)", (*row, source, ts, ts))
+            elif old["source"] == source:
+                if tuple(old[k] for k in FOOD_ROW_COLS) != row or old["deleted"]:
+                    c.execute(f"UPDATE foods SET {', '.join(k + '=?' for k in FOOD_ROW_COLS)}, verified=1, deleted=0, updated=? WHERE id=?",
+                              (*row, ts, old["id"]))
+            # имя занято продуктом другого источника (базовым или человека) — его версия важнее
         for key, old in cur.items():
-            if old["source"] == "seed" and key not in seen and not old["deleted"]:
+            if old["source"] == source and key not in seen and not old["deleted"]:
                 c.execute("UPDATE foods SET deleted = 1, updated = ? WHERE id = ?", (ts, old["id"]))
-        c.execute("INSERT OR REPLACE INTO meta VALUES ('foods_seed', ?)", (digest,))
+        c.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (meta_key, digest))
 
 
 def food_json(r: sqlite3.Row) -> dict:
@@ -340,7 +351,7 @@ def food_json(r: sqlite3.Row) -> dict:
             "state": r["state"], "generic": bool(r["generic"]), "note": r["note"],
             "kcal": r["kcal"], "p": r["p"], "f": r["f"], "c": r["c"],
             "portions": json.loads(r["portions"] or "{}"), "cooked_ratio": r["cooked_ratio"],
-            "source": r["source"], "brand": r["brand"], "created_by": r["created_by"],
+            "source": r["source"], "brand": r["brand"], "code": r["code"], "created_by": r["created_by"],
             "verified": bool(r["verified"]), "updated": r["updated"], "deleted": bool(r["deleted"])}
 
 

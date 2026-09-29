@@ -1,7 +1,7 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
 import * as P from '../plan.js';
-import { S, ctxAttrs, esc, num, fmt, dayTitle, profile, CHECK, toast, ring, field, fval, input, textarea, openModal, closeModal, techHtml, dateNav, isBackdated, afterChange, glyph, MOOD_GLYPH, nowHM } from '../ui.js';
+import { S, ctxAttrs, plural, WD, esc, num, fmt, dayTitle, profile, CHECK, toast, ring, field, fval, input, textarea, openModal, closeModal, techHtml, dateNav, isBackdated, afterChange, glyph, MOOD_GLYPH, nowHM } from '../ui.js';
 import { cheerNotice } from './together.js';
 import * as FX from './fit.js';
 import * as SPV from './supp.js';
@@ -36,6 +36,8 @@ export const STATE_Q = [
   ['wellbeing', 'Общее', [['great', 'отлично'], ['good', 'хорошо'], ['meh', 'так себе'], ['broken', 'разбит']]],
   ['soreness', 'Мышцы болят', [['none', 'нет'], ['light', 'слегка'], ['strong', 'сильно']]],
   ['stress', 'Стресс', [['low', 'спокойно'], ['mid', 'умеренный'], ['high', 'сильный']]],
+  // для анализа: связь со сном, кофе, едой; отмечается за весь день (можно вечером)
+  ['sleepy', 'Сонливость днём', [['none', 'нет'], ['some', 'временами'], ['strong', 'сильная']]],
 ];
 // самочувствие — линейные значки вместо эмодзи (ui.MOOD_GLYPH)
 export const STATE_EMOJI = MOOD_GLYPH;
@@ -307,7 +309,7 @@ function viewDay(date) {
   // утренняя разминка — не строка-ссылка, а сама карточка прямо в блоке «Утро» (без дубля ниже)
   const rows = gr => its.filter(i => (i.data.group || 'day') === gr).map(i => i.data.type === 'routine'
     ? (date > C.today() ? `<p class="note a-tight">${esc(i.data.title)} соберётся в этот день.</p>` : moduleCard(i.data.module || 'morning', date))
-    : itemRow(i, date)).join('');
+    : itemRow(i, date)).join('') + (gr === 'day' ? planRows(date) : '');
   const future = date > C.today();
   return `
     <div class="head-row">
@@ -325,6 +327,7 @@ function viewDay(date) {
         <p class="note" style="margin:8px 0 0">${s.pct >= streakMin ? 'День засчитан в серию.' : `Для серии нужно ${streakMin} % чек-листа.`}
           <a class="link" href="#calendar/day/${date}">дневник дня</a></p></div>
     </div>
+    ${future ? '' : macrosCard(date)}
     ${future ? '' : `<div class="a-two">${sleepCard(date)}${stateCard(date)}</div>`}
     ${future ? '' : variantBlock(date)}
     ${isToday ? outdoorRow(date) : ''}
@@ -338,6 +341,26 @@ function viewDay(date) {
     ${future ? '' : safe(() => SPV.todayCard(date), '')}
     ${future ? '' : activitiesBlock(date)}
     ${partnersBlock(date)}`;
+}
+
+// БЖУ дня против норм: сколько съедено и сколько ещё добрать (подробно - на «Питании»)
+function macrosCard(date) {
+  const tg = C.target();
+  if (!tg?.kcal) return '';
+  const tot = { kcal: 0, p: 0, f: 0, c: 0 };
+  for (const e of store.byDate('food', date)) for (const k in tot) tot[k] += Number(e.data.totals?.[k]) || 0;
+  const cheat = C.dayType(date) === 'cheat';
+  const DOM = { kcal: 'food', p: 'prot', f: 'fat', c: 'carb' };
+  const cell = (label, k, unit) => {
+    const g = Number(tg[k]) || 0, v = tot[k], left = Math.round(g - v);
+    const over = g && v > g * 1.05 && !cheat;
+    return `<div class="macro" data-dom="${DOM[k]}"><div class="top"><span class="smallcaps muted">${label}</span><span class="mono">${num(v)} / ${num(g)}${unit}</span></div>
+      <div class="groove ${over ? 'over' : ''}"><div class="fill" style="width:${g ? Math.min(100, v / g * 100) : 0}%"></div></div>
+      <div class="note a-tight">${over ? `перебор ${num(-left)}${unit}` : left > 0 ? `осталось <span class="mono">${num(left)}</span>${unit}` : 'норма набрана'}</div></div>`;
+  };
+  return `<div class="section" data-dom="food"><div class="section-title"><span class="smallcaps">Питание</span>
+      <a class="link note" href="#food/${date}">${cheat ? 'читмил - без подсчётов' : 'записать еду →'}</a></div>
+    <div class="macros ${cheat ? 'a-muted' : ''}">${cell('Ккал', 'kcal', '')}${cell('Белки', 'p', ' г')}${cell('Жиры', 'f', ' г')}${cell('Углеводы', 'c', ' г')}</div></div>`;
 }
 
 // погода и кардио на сегодня + сигнал «упражнение не заходит» (views/fit.js)
@@ -373,14 +396,15 @@ function coachCard(date, g) {
   const who = C.TONE_NAMES[prof.tone || 'coach'];
   if (date === C.today()) {
     const ls = safe(() => C.lines(), []);
-    if (!ls.length) return '';
+    if (!ls.length) return `<p class="note"><a class="link" href="#advice">Рекомендации тренера →</a></p>`;
     const [main, ...rest] = ls;
     // честная пометка: совет посчитан по статистике на устройстве (одна на карточку)
     const note = [main, ...rest.slice(0, 3)].find(l => l.note)?.note;
     // реплика может нести действие (например, «добавить комплекс в день») - кнопкой рядом с текстом
     const btn = l => (l.act ? ` <button class="btn quiet a-mini a-lact" data-act="${esc(l.act.act)}" ${Object.entries(l.act.data || {}).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ')}>${esc(l.act.label)}</button>` : '');
     return `<div class="coach inset ${main.mood || 'info'}"><div class="who smallcaps">${who}</div>
-      <q>${esc(main.text)}</q>${btn(main)}${rest.length ? `<ul>${rest.slice(0, 3).map(l => `<li class="${l.mood || ''}">${esc(l.text)}${btn(l)}</li>`).join('')}</ul>` : ''}${note ? `<p class="note">${esc(note)}</p>` : ''}</div>`;
+      <q>${esc(main.text)}</q>${btn(main)}${rest.length ? `<ul>${rest.slice(0, 3).map(l => `<li class="${l.mood || ''}">${esc(l.text)}${btn(l)}</li>`).join('')}</ul>` : ''}${note ? `<p class="note">${esc(note)}</p>` : ''}
+      <p class="note a-tight"><a class="link" href="#advice">Все рекомендации тренера →</a></p></div>`;
   }
   if (date > C.today()) return `<div class="coach inset info"><div class="who smallcaps">${who}</div><q>${esc(byTone({
     soft: 'Этот день ещё впереди. Загляни сюда, когда он наступит.', coach: 'День ещё не наступил. План - на вкладке «Спорт».', sergeant: 'Будущее не отмечаем. Сначала переживи сегодня.' }))}</q></div>`;
@@ -642,7 +666,8 @@ export function suggestModule(now = new Date(), uid = store.uid()) {
   const low = r && (r.level === 'low' || r.level === 'rest');
   const wa = safe(() => C.weekActivity(date, uid), null);
   const round5 = n => Math.max(10, Math.min(30, Math.round(n / 5) * 5));
-  if (!hasWorkout && dt !== 'rest' && wa && wa.behindMin >= 15) {
+  const planned = safe(() => C.weekPlan(date, uid), []).some(e => e.key.startsWith('home:') && e.due);
+  if (!hasWorkout && !planned && dt !== 'rest' && wa && wa.behindMin >= 15) {
     if (low) return { k: 'stretch', min: 10, why: `За неделю недобрано около ${wa.behindMin} мин, но готовность сегодня низкая. Лучше растяжка 10 минут, объём доберём, когда восстановишься.` };
     const min = round5(wa.behindMin / Math.max(1, wa.daysLeft + 1));
     return { k: 'workout', min, why: `За неделю недобрано около ${wa.behindMin} мин движения. Короткая тренировка на ${min} минут дома закроет часть.` };
@@ -663,15 +688,7 @@ export function suggestModule(now = new Date(), uid = store.uid()) {
       if (d) return { k, min: 15, why: `${d.title}: ${d.note}` };
     }
   }
-  const mods = profile().modules || {};
-  for (const k of ['posture', 'neck']) {
-    if (!mods[k]?.enabled) continue;
-    const mon = C.mondayOf ? C.mondayOf(date) : C.addDays(date, -((new Date(date).getDay() + 6) % 7));
-    let n = 0;
-    for (let d = mon; d <= date; d = C.addDays(d, 1)) if (store.get(routineId(d, k))?.data.exercises?.some(x => x.done)) n++;
-    const per = Number(mods[k].per_week) || 3;
-    if (n < per) return { k, min: Number(mods[k].minutes) || MODULES[k].def, why: `${MODULES[k].title}: на этой неделе ${n} из ${per}. Займёт ${Number(mods[k].minutes) || MODULES[k].def} минут.` };
-  }
+  // осанка и шея из профиля стоят в чек-листе по плану недели (C.weekPlan) - отдельно не предлагаем
   return null;
 }
 C.extend('lines', now => {
@@ -737,6 +754,36 @@ function moduleCard(k, date) {
           ${today && !x.done ? FX.exActions(x.id, ctx) : ''}</details>
         ${today && !x.done ? `<button class="btn quiet a-mini a-swap" data-act="ex-swap-open" data-ex="${esc(x.id)}" ${ctxAttrs(ctx)} aria-label="Заменить: ${esc(e?.name || x.id)}">Заменить</button>` : '<span></span>'}</div>`;
     }).join('')}</div></div>`;
+}
+
+// ── план недели в чек-листе: шея, осанка, активности из профиля (C.weekPlan) ──
+function planRows(date) {
+  const list = safe(() => C.weekPlan(date), []);
+  if (!list.length) return '';
+  const future = date > C.today();
+  return list.map(e => {
+    const done = e.frac >= 1, cls = done ? 'on' : e.frac > 0 ? 'part' : '';
+    const why = [e.why || '', !e.due ? 'сверх плана недели'
+      : e.moved ? `перенесено: на неделе осталось ${e.left} из ${e.n}`
+      : e.n >= 7 ? 'каждый день' : `${e.n} ${plural(e.n, 'раз', 'раза', 'раз')} в неделю · ${e.ideal.map(d => WD[d]).join(', ')}`].filter(Boolean).join(' · ');
+    if (e.kind === 'module') {
+      const m = modDef(e.module), rec = store.get(routineId(date, e.module));
+      const min = rec?.data.minutes || e.minutes || m?.def;
+      const go = future ? '' : `data-act="td-goto-mod" data-m="${e.module}" data-date="${date}"`;
+      return `<div class="row ${done ? 'done' : ''}" data-dom="train">${future ? '<span></span>'
+        : `<button class="tick ${cls}" ${go} aria-label="Открыть: ${esc(m?.title || e.module)}">${CHECK}</button>`}
+        <div><div class="title">${esc(m?.title || e.module)}${min ? ` · ${min} мин` : ''}</div><div class="hint">${esc(why)}</div></div>
+        ${future ? '<span></span>' : `<button class="go" ${go}>${rec ? 'открыть' : 'собрать'} →</button>`}</div>`;
+    }
+    const name = e.name || activityName(e.type);
+    const rec = store.byDate('activity', date).find(r => r.data.type === e.type);
+    const open = future ? '' : rec ? `data-act="td-ac-edit" data-id="${rec.id}"`
+      : `data-act="td-ac-open" data-date="${date}" data-type="${esc(e.type)}" data-min="${e.minutes || ''}" data-int="${esc(e.intensity || 'mid')}"`;
+    return `<div class="row ${done ? 'done' : ''}" data-dom="move">${future ? '<span></span>'
+      : `<button class="tick ${cls}" ${open} aria-label="${rec ? 'Изменить' : 'Записать'}: ${esc(name)}">${CHECK}</button>`}
+      <div><div class="title">${esc(name)}${e.minutes ? ` · ${e.minutes} мин` : ''}</div><div class="hint">${esc(why)}</div></div>
+      ${future ? '<span></span>' : `<button class="go" ${open}>${rec ? 'изменить' : 'записать'} →</button>`}</div>`;
+  }).join('');
 }
 
 // ── активности ──

@@ -18,17 +18,18 @@ import * as install from './views/install.js';
 import * as connect from './views/connect.js';
 import * as fit from './views/fit.js';
 import * as supp from './views/supp.js';
+import * as advice from './views/advice.js';
 
 const BUILD = document.querySelector('meta[name=build]').content;
 const $app = document.getElementById('app');
-const VIEWS = [today, calendar, food, workout, chat, progress, profile, together, health, connect, about, install, fit, supp];
+const VIEWS = [today, calendar, food, workout, chat, progress, profile, together, health, connect, about, install, fit, supp, advice];
 
 const NAV = [['today', 'Сегодня'], ['calendar', 'Календарь'], ['food', 'Питание'], ['workout', 'Спорт'],
   ['chat', 'Тренер'], ['progress', 'Прогресс'], ['profile', 'Профиль']];
 // какой пункт меню подсвечивать для вложенных экранов
 // цвет значка активного пункта — по смыслу раздела (accents.css)
 const NAV_DOM = { today: 'coach', calendar: 'goal', food: 'food', workout: 'train', chat: 'coach', progress: 'goal' };
-const NAV_OF = { install: 'profile', about: 'profile', together: 'progress', health: 'profile', connect: 'profile', day: 'today', program: 'workout', generator: 'workout', week: 'progress', body: 'progress', sleep: 'today' };
+const NAV_OF = { advice: 'chat', install: 'profile', about: 'profile', together: 'progress', health: 'profile', connect: 'profile', day: 'today', program: 'workout', generator: 'workout', week: 'progress', body: 'progress', sleep: 'today' };
 
 const routes = Object.assign({}, ...VIEWS.map(v => v.routes || {}));
 const actions = Object.assign({}, ...VIEWS.map(v => v.actions || {}));
@@ -113,7 +114,7 @@ const KIND_NAME = { profile: 'Профиль', goal: 'Цели', target: 'Нор
   daytype: 'Тип дня', activity: 'Активность', injury: 'Травма', routine: 'Разминка', favfood: 'Избранное блюдо', chat: 'Сообщение', drink: 'Чашка чая или кофе', supp: 'Приём добавки',
   dsum: 'Итог дня', wsum: 'Итог недели', ach: 'Достижение', coach: 'Разбор тренера' };
 const FIELD_NAME = { v: 'значение', bed: 'лёг', wake: 'встал', weight: 'вес', text: 'текст', meal: 'приём пищи', time: 'время',
-  wellbeing: 'самочувствие', soreness: 'мышцы', stress: 'стресс', note: 'заметка', type: 'тип', minutes: 'минуты',
+  wellbeing: 'самочувствие', soreness: 'мышцы', stress: 'стресс', sleepy: 'сонливость', note: 'заметка', type: 'тип', minutes: 'минуты',
   intensity: 'интенсивность', title: 'название', done: 'выполнено', reps: 'повторы', name: 'имя', height: 'рост' };
 
 function fieldLabel(path) {

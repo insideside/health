@@ -148,3 +148,21 @@
 .a-picked .note { margin: 0; }
 /* профиль: своя цель шагов — число целиком, без многоточия */
 .pf-steps .pf-num { width: 110px; }
+
+/* запись еды: строку можно убрать (крестик справа), продукт - дописать из справочника */
+.fi { grid-template-columns: minmax(0, 1fr) auto auto; }
+.fi .fi-del { padding: 4px 6px; min-height: 0; line-height: 1; color: var(--ink-3); }
+.fi .fi-del:hover { color: var(--err, var(--accent)); }
+.fi .fi-note { grid-column: 1 / -1; }
+.fi-add { margin-top: 8px; align-items: center; }
+
+/* рекомендации тренера (#advice) */
+.adv-top ol { margin: 8px 0 0; padding-left: 20px; }
+.adv-top li { margin: 4px 0; }
+.adv-it { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--rule); }
+.adv-it:first-of-type { border-top: 0; }
+.adv-it .note { margin: 2px 0 0; }
+.adv-mark { width: 20px; height: 20px; margin-top: 2px; color: var(--ink-3); }
+.adv-mark svg { width: 20px; height: 20px; }
+.adv-good .adv-mark { color: var(--good, #4c7a4c); }
+.adv-warn .adv-mark { color: var(--accent); }

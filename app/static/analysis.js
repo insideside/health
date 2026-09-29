@@ -85,11 +85,13 @@ function days(uid, n = WEEKS * 7) {
     if (suppOn && SP.caffeineLate(d, uid) > 0) coffeeLate = 1;
     const supps = suppOn ? SP.takenKeys(d, uid) : null;
     const si = sl ? C.sleepInfo(sl, uid) : null;
+    const sleepy = C.stateOf(d, uid)?.sleepy;
     out.push({
       date: d, sleep: si?.hours ?? null, sleepScore: si?.score ?? null, coffeeLate, coffeeMany, alcohol, grade, supps,
       protein: fd?.calculated ? fd.p : null, kcal: fd?.calculated ? fd.kcal : null, late: fd ? fd.late.length : null,
       steps: st > 0 ? st : null, workout: wo && wo.data.variant !== 'moved' ? (wo.data.done ? 1 : 0) : 0,
       cheat: C.dayType(d, uid) === 'cheat' ? 1 : 0,
+      sleepy: sleepy ? { none: 0, some: 1, strong: 2 }[sleepy] ?? null : null,
       act: store.byDate('activity', d, uid).reduce((a, r) => a + (Number(r.data.minutes) || 0), 0),
     });
   }
@@ -150,6 +152,28 @@ function sleepVsGrade(ds) {
   return { title, n, strength: strengthOf(r, n, MIN_DAYS),
     text: `По вашим данным за ${daysWord(n)}: после сна от 7 часов оценка дня в среднем ${num(c.hi)}, после короткого - ${num(c.lo)}`
       + ` (${c.nHi} и ${c.nLo} ночей). ${Math.abs(diff) < 4 ? 'Разница небольшая.' : diff > 0 ? 'Выспавшись, вы проводите день лучше.' : 'Любопытно: после короткого сна дни у вас не хуже.'}` };
+}
+
+// сон прошедшей ночи (записан на день пробуждения) → сонливость в этот же день: доля дней «клонит в сон»
+function sleepVsSleepy(ds) {
+  const title = 'Сон и сонливость днём';
+  const pairs = ds.filter(d => d.sleep != null && d.sleepy != null).map(d => [d.sleep, d.sleepy]);
+  const n = pairs.length;
+  if (!ds.some(d => d.sleepy != null)) return null;               // пункт ещё не отмечали - молчим
+  if (n < MIN_DAYS) return { title, n, strength: 'few', text: `Мало данных: дней, где отмечены и сон, и сонливость, - ${n}. Нужно ещё ${MIN_DAYS - n}.` };
+  const share = xs => Math.round(xs.filter(v => v >= 1).length / xs.length * 100);
+  const hi = pairs.filter(p => p[0] >= 7).map(p => p[1]), lo = pairs.filter(p => p[0] < 7).map(p => p[1]);
+  if (hi.length < 3 || lo.length < 3) {
+    const all = share(pairs.map(p => p[1]));
+    return { title, n, strength: 'few', text: `Сонливость днём - ${all} % дней из ${n}. Сравнить короткие и длинные ночи пока не с чем: почти все ночи ${hi.length < 3 ? 'короче' : 'не короче'} 7 часов.`
+      + (hi.length >= 3 && all >= 50 ? ' Сна хватает, а в сон клонит часто - посмотрите на качество сна, кофе после обеда и тяжёлый обед; если так неделями, стоит обсудить с врачом.' : '') };
+  }
+  const a = share(hi), b = share(lo), d = b - a;
+  return { title, n, strength: d >= 30 ? 'moderate' : d >= 15 ? 'weak' : 'none',
+    text: `После ночей от 7 часов в сон днём клонило в ${a} % дней, после коротких - в ${b} % (${hi.length} и ${lo.length} дней). `
+      + (d >= 15 ? 'Дневная сонливость у вас идёт от недосыпа - лучшее средство ложиться раньше, а не ещё кофе.'
+        : a >= 50 ? 'Сонливость бывает и после нормального сна - дело может быть в качестве сна, еде или кофеине; если так неделями, стоит обсудить с врачом.'
+        : 'Заметной связи с длиной сна нет.') };
 }
 
 function lateVsSleep(ds) {
@@ -247,7 +271,7 @@ function cheatVsGrade(ws) {
 // → [{ title, text, strength: strong|moderate|weak|none|few, n }], сначала самые заметные
 export function insights(uid = store.uid()) {
   const ds = days(uid), ws = weeks(uid);
-  const list = [sleepVsGrade(ds), lateVsSleep(ds),
+  const list = [sleepVsGrade(ds), sleepVsSleepy(ds), lateVsSleep(ds),
     substanceVsSleep(ds, 'coffeeLate', 'Кофе и чай после обеда и сон', 'с кофе или чаем после 14:00',
       { bad: 'Похоже, дневной кофеин мешает вам спать - попробуйте последнюю чашку до 14:00.', ok: 'На сон это у вас заметно не влияет.' }),
     substanceVsSleep(ds, 'coffeeMany', 'Сколько кофе и сон', 'с 3 и более чашками кофе',

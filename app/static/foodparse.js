@@ -35,9 +35,11 @@ export function unitCode(u) {
   return null;
 }
 
+// точка после количества или слова - конец продукта: «хлеб 25 гр. форель 50 г», «кофе. молоко» (но не «1 ст. л.»)
+const QTY_DOT_RE = /(\d\s*(?:г|гр|грамм\p{L}*|кг|мл|л|шт|штук\p{L}*)?|\p{L}{3,})\.\s+(?=[\p{L}\d])/giu;
 export function split(text) {
   // запятая внутри числа («молоко 1,5%») — не разделитель
-  return String(text || '').split(/(?<!\d),|,(?!\d)|[;\n+]|\s+и\s+(?=\d)/).map(p => (p || '').trim()).filter(Boolean);
+  return String(text || '').replace(QTY_DOT_RE, '$1, ').split(/(?<!\d),|,(?!\d)|[;\n+]|\s+и\s+(?=\d)/).map(p => (p || '').trim()).filter(Boolean);
 }
 
 // → [название, количество | null, единица | null]

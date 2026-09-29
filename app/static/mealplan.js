@@ -161,6 +161,8 @@ function candidates(ctx) {
   }
   for (const f of byId.values()) {
     if (f.deleted || !f.name || !(f.kcal >= 0)) continue;
+    // товары из магазина - только те, что человек уже ест или держит дома (иначе рацион из случайных брендов)
+    if (foods.isStore(f) && !usage.has(f.id) && !pantryIds.has(String(f.id))) continue;
     const role = roleOf(f);
     if (!role || unhealthy(f) || !dietOk(f, ctx.diet, ctx.allergy) || exIds.has(String(f.id))) continue;
     if (ctx.habits.has('less_flour') && (role === 'bread' || f.group === 'макароны')) continue;

@@ -7,10 +7,12 @@ PUT/DELETE /api/foods/{id}   — править и удалять только �
 Поиск БЖУ с ИИ — задача `foodlookup` (ai/jobs.py): результат не сохраняется сам, клиент показывает его
 для подтверждения и сохраняет через POST /api/foods.
 """
+import gzip
+import json
 import math
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from . import brain, db, food
 from .userdata import current_user
@@ -18,7 +20,7 @@ from .userdata import current_user
 router = APIRouter()
 
 FIELDS = ("id", "name", "aliases", "group", "state", "generic", "note", "kcal", "p", "f", "c", "portions",
-          "cooked_ratio", "source", "brand", "created_by", "verified", "updated")
+          "cooked_ratio", "source", "brand", "code", "created_by", "verified", "updated")
 SOURCES = ("manual", "web", "ai")
 
 
@@ -28,15 +30,23 @@ def compact(f: dict) -> dict:
     return {k: v for k, v in out.items() if v not in (None, [], {}, False) or k in ("kcal", "p", "f", "c", "id", "name")}
 
 
+def _json_gz(request: Request, data: dict) -> Response:
+    """Справочник с товарами из магазинов - несколько МБ; сжимаем, если клиент умеет (все браузеры умеют)."""
+    body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
+    if len(body) > 20000 and "gzip" in request.headers.get("accept-encoding", ""):
+        return Response(gzip.compress(body, 6), media_type="application/json", headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+    return Response(body, media_type="application/json")
+
+
 @router.get("/api/foods/all")
-def foods_all(since: int = 0, u=Depends(current_user)):
+def foods_all(request: Request, since: int = 0, u=Depends(current_user)):
     db.migrate_foods()
     now = db.now_ms()
     if since > 0:
         rows = db.foods_since(since)
-        return {"foods": [compact(f) for f in rows if not f["deleted"]],
-                "deleted": [f["id"] for f in rows if f["deleted"]], "now": now, "full": False}
-    return {"foods": [compact(f) for f in db.all_foods()], "deleted": [], "now": now, "full": True}
+        return _json_gz(request, {"foods": [compact(f) for f in rows if not f["deleted"]],
+                                  "deleted": [f["id"] for f in rows if f["deleted"]], "now": now, "full": False})
+    return _json_gz(request, {"foods": [compact(f) for f in db.all_foods()], "deleted": [], "now": now, "full": True})
 
 
 @router.get("/api/foods/recent")
@@ -103,7 +113,7 @@ def _own(fid: int, uid: str) -> dict:
     f = db.food_by_id(fid)
     if not f or f["deleted"]:
         raise HTTPException(404, "Продукт не найден")
-    if f["created_by"] != uid or f["source"] == "seed":
+    if f["created_by"] != uid or f["source"] in ("seed", "off"):
         raise HTTPException(403, "Менять можно только свои продукты")
     return f
 

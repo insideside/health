@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from . import db, food, norms, userdata
 from .ai import jobs
-from .ai.jobs import (DAYTYPE_LABEL, SORENESS_LABEL, STRESS_LABEL, WEEKDAYS, WELLBEING_LABEL, goals_text,
+from .ai.jobs import (DAYTYPE_LABEL, SLEEPY_LABEL, SORENESS_LABEL, STRESS_LABEL, WEEKDAYS, WELLBEING_LABEL, goals_text,
                       person_text, sleep_hours_of, snooze_min, system_for)
 from .ai.ollama import AIError, ask_json
 from .health import match_activity
@@ -21,7 +21,7 @@ from .health import match_activity
 router = APIRouter()
 
 HISTORY = 12
-ACTION_KINDS = ("skip_today", "move_workout", "lighten_today", "swap_exercise", "recalc_norms", "rebuild_program",
+ACTION_KINDS = ("skip_today", "move_workout", "lighten_today", "swap_exercise", "recalc_norms", "set_macros", "rebuild_program",
                 "set_daytype", "add_injury", "set_pace", "log_food", "log_activity")
 DAYTYPES = ("cheat", "special", "sick", "rest")
 INJURY_ZONES = ("chest", "shoulders", "arms", "back", "abs", "sides", "glutes", "legs", "neck",
@@ -40,7 +40,8 @@ CHAT_SCHEMA = {
                 "date": {"type": "string"}, "from": {"type": "string"}, "to": {"type": "string"},
                 "type": {"type": "string"}, "zone": {"type": "string"}, "note": {"type": "string"},
                 "pace": {"type": "string"}, "text": {"type": "string"}, "meal": {"type": "string"},
-                "minutes": {"type": "number"}, "intensity": {"type": "string"}}},
+                "minutes": {"type": "number"}, "intensity": {"type": "string"},
+                "kcal": {"type": "number"}, "p": {"type": "number"}, "f": {"type": "number"}, "c": {"type": "number"}}},
         }, "required": ["kind", "label", "params"]}},
     },
     "required": ["reply", "actions"],
@@ -61,7 +62,10 @@ ACTIONS_HELP = """actions — кнопки, которые клиент може
 - move_workout {from, to} — перенести тренировку с даты на дату;
 - lighten_today {date} — облегчить тренировку дня (меньше подходов, дольше отдых);
 - swap_exercise {date, from, to} — заменить упражнение (from, to — id; to — только из списка «можно на замену»);
-- recalc_norms {} — пересчитать нормы; rebuild_program {} — пересобрать будущий план тренировок;
+- recalc_norms {} — пересчитать нормы ЗАНОВО ПО ФОРМУЛАМ (цифры не меняет по просьбе, только после изменений в профиле);
+- set_macros {kcal?, p?, f?, c?} — поставить свои цифры, о которых договорились («углеводы до 200» → {c: 200});
+  указывай только то, что меняем; калории пересчитаются сами (минус 4 ккал на каждый убранный грамм углеводов);
+- rebuild_program {} — пересобрать будущий план тренировок;
 - set_daytype {date, type} — тип дня: cheat (читмил), special (особый), sick (болею), rest (отдых);
 - add_injury {zone, note} — записать, что болит; zone: chest, shoulders, arms, back, abs, sides, glutes, legs, neck,
   knees, lower_back, wrists, ankles, hips;
@@ -105,7 +109,8 @@ def _context(uid: str) -> str:
             s = state[d]
             parts.append("самочувствие: " + ", ".join(filter(None, (WELLBEING_LABEL.get(s.get("wellbeing")),
                                                                SORENESS_LABEL.get(s.get("soreness")),
-                                                               STRESS_LABEL.get(s.get("stress"))))))
+                                                               STRESS_LABEL.get(s.get("stress")),
+                                                               SLEEPY_LABEL.get(s.get("sleepy"))))))
         if d in wos:
             w = wos[d]
             parts.append(f"тренировка «{w.get('title')}» {'сделана' if w.get('done') else 'не отмечена'}"
@@ -399,6 +404,16 @@ async def execute(uid: str, kind: str, p: dict) -> dict:
         return {"text": f"Заменили на «{new['name']}»"}
     if kind == "recalc_norms":
         return {"text": _recalc(uid)}
+    if kind == "set_macros":
+        fields = {k: p[k] for k in ("kcal", "p", "f", "c") if isinstance(p.get(k), (int, float)) and p[k] > 0}
+        if not fields:
+            raise HTTPException(400, "Не указано, какие цифры поставить")
+        try:
+            t = norms.set_manual(uid, fields)
+        except (norms.MissingData, ValueError) as e:
+            raise HTTPException(400, str(e))
+        warn = " " + " ".join(t.get("manual_warnings") or []) if t.get("manual_warnings") else ""
+        return {"text": f"Нормы: {t['kcal']} ккал, белки {t['p']} г, жиры {t['f']} г, углеводы {t['c']} г{warn}"}
     if kind == "rebuild_program":
         if not _has_program(uid):
             raise HTTPException(400, "Нет активной программы")

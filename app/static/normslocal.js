@@ -73,10 +73,40 @@ export function estimate(uid = store.uid()) {
   };
 }
 
-// записать ориентировочные нормы как новую версию target
+// ── свои цифры поверх расчёта (как norms.apply_manual на сервере) ──
+// заданные БЖУ - как есть, калории сдвигаются на разницу (4/9/4 ккал на грамм); в formula - исходный расчёт
+const MACROS = ['kcal', 'p', 'f', 'c'];
+export function applyManual(data, manual) {
+  const m = Object.fromEntries(Object.entries(manual || {}).filter(([k, v]) => MACROS.includes(k) && Number(v) > 0).map(([k, v]) => [k, Number(v)]));
+  const base = data.formula || Object.fromEntries(MACROS.map(k => [k, data[k]]));
+  const { formula, macros_manual, ...rest } = data;
+  const out = { ...rest, ...base };
+  if (!Object.keys(m).length) return out;
+  for (const k of ['p', 'f', 'c']) if (k in m) out[k] = Math.round(m[k]);
+  if ('kcal' in m) {
+    out.kcal = Math.round(m.kcal);
+    if (!('c' in m)) out.c = Math.max(0, Math.round((out.kcal - 4 * out.p - 9 * out.f) / 4));
+  } else out.kcal = Math.round(base.kcal + 4 * (out.p - base.p) + 9 * (out.f - base.f) + 4 * (out.c - base.c));
+  return { ...out, formula: base, macros_manual: Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.round(v)])) };
+}
+// → { why: причина отказа | null, warn: [] }: ниже минимума калорий не опускаем
+export function checkManual(t, uid = store.uid()) {
+  const p = store.get(`profile:${uid}`)?.data || {};
+  const floor = p.sex === 'm' ? 1500 : 1200;
+  if (t.kcal < floor) return { why: `Получается ${t.kcal} ккал - ниже безопасного минимума ${floor}.`, warn: [] };
+  const warn = [];
+  if (t.weight && t.p < 1.2 * t.weight) warn.push(`Белка ${t.p} г - меньше 1,2 г на кг веса: на дефиците мышцы будут уходить вместе с жиром.`);
+  if (t.c < 100) warn.push('Углеводов меньше 100 г - на силовых может не хватать энергии.');
+  return { why: null, warn };
+}
+
+// записать ориентировочные нормы как новую версию target (свои шаги и БЖУ из прежней версии сохраняются)
 export async function saveEstimate(uid = store.uid()) {
-  const t = estimate(uid);
+  let t = estimate(uid);
   if (t.missing) return t;
+  const prev = C.target(uid);
+  if (prev?.steps_manual) t.steps_manual = prev.steps_manual;
+  if (prev?.macros_manual) t = applyManual(t, prev.macros_manual);
   await store.put('target', store.newId(), t, null);
   return t;
 }

@@ -305,12 +305,13 @@ document.addEventListener('keydown', e => {
 
 // ── справочник продуктов: выбор из списка, свои продукты, поиск БЖУ с ИИ ──
 // Состояние окна живёт в памяти модуля: корзина не теряется, если окно случайно закрыли.
-const P = { date: null, meal: 'snack', time: '', items: [], q: '', sel: null, grams: '', view: 'search', custom: {}, ai: {}, warn: null };
+const P = { date: null, meal: 'snack', time: '', items: [], q: '', sel: null, grams: '', view: 'search', custom: {}, ai: {}, warn: null, into: null };
 const stBadge = st => st && foods.STATE_SHORT[st] ? `<span class="fp-st" title="${esc(foods.STATE_HINT[st])}">${foods.STATE_SHORT[st]}</span>` : '';
 const mac = m => `${num(m.kcal)} ккал · Б ${dec(m.p)} · Ж ${dec(m.f)} · У ${dec(m.c)}`;
 const r1 = x => Math.round((Number(x) || 0) * 10) / 10;
 const CONF = { high: ['высокая', 'good'], mid: ['средняя', 'ok'], low: ['низкая', 'bad'] };
 
+const commitLabel = () => (P.into ? 'Добавить в запись' : 'Записать');
 function sumItems(items) {
   const t = { kcal: 0, p: 0, f: 0, c: 0 };
   items.forEach(i => { for (const k in t) t[k] += Number(i[k]) || 0; });
@@ -320,7 +321,7 @@ function sumItems(items) {
 function resultRow(f) {
   const on = P.sel === f.id;
   return `<div class="fp-item ${on ? 'on' : ''}"><button type="button" class="fp-row" data-act="fp-sel" data-id="${esc(f.id)}" aria-expanded="${on}">
-      <span class="fp-nm"><span class="fp-name">${esc(f.name)}</span>${stBadge(f.state)}${f.generic ? '<span class="fp-gen">≈ в среднем</span>' : ''}${f.brand && !f.name.toLowerCase().includes(f.brand.toLowerCase()) ? `<span class="fp-brand">${esc(f.brand)}</span>` : ''}${foods.isMine(f) ? '<span class="fp-mine">моё</span>' : f.source !== 'seed' && f.source ? '<span class="fp-mine">общее</span>' : ''}</span>
+      <span class="fp-nm"><span class="fp-name">${esc(f.name)}</span>${stBadge(f.state)}${f.generic ? '<span class="fp-gen">≈ в среднем</span>' : ''}${f.brand && !f.name.toLowerCase().includes(f.brand.toLowerCase()) ? `<span class="fp-brand">${esc(f.brand)}</span>` : ''}${foods.isMine(f) ? '<span class="fp-mine">моё</span>' : foods.isStore(f) ? '<span class="fp-mine" title="Товар из магазина, данные Open Food Facts">магазин</span>' : f.source !== 'seed' && f.source ? '<span class="fp-mine">общее</span>' : ''}</span>
       <span class="fp-k mono">${num(f.kcal)}<small> ккал</small></span>
       ${f.note ? `<span class="fp-note">${esc(f.note)}</span>` : ''}</button>
     ${on ? selEditor(f) : ''}</div>`;
@@ -417,17 +418,18 @@ function basketHtml() {
 
 function pickerHtml() {
   const tabs = [['search', 'Поиск'], ['custom', 'Свой продукт'], ['ai', 'Найти с ИИ']];
-  return `<div class="modal-head"><div class="kicker smallcaps">Справочник продуктов</div><h2>Добавить продукты</h2></div>
+  const into = P.into ? store.get(P.into) : null;
+  return `<div class="modal-head"><div class="kicker smallcaps">Справочник продуктов</div><h2>${into ? `Добавить в «${esc(MEAL_NAME[into.data.meal || 'snack'] || 'запись')}»` : 'Добавить продукты'}</h2></div>
     <div class="modal-body fp">
-      <div class="fp-meal">${MEALS.map(([k, l]) => `<button type="button" class="chip ${P.meal === k ? 'on' : ''}" data-act="fp-meal" data-meal="${k}">${l}</button>`).join('')}
-        <input class="control mono a-time" type="time" id="fp-time" value="${esc(P.time)}" aria-label="Время"></div>
+      ${into ? `<p class="note a-tight">Продукты допишутся к записи: ${esc((into.data.text || '').slice(0, 80))}${(into.data.text || '').length > 80 ? '…' : ''}</p>` : `<div class="fp-meal">${MEALS.map(([k, l]) => `<button type="button" class="chip ${P.meal === k ? 'on' : ''}" data-act="fp-meal" data-meal="${k}">${l}</button>`).join('')}
+        <input class="control mono a-time" type="time" id="fp-time" value="${esc(P.time)}" aria-label="Время"></div>`}
       ${basketHtml()}
       <div class="fp-tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${P.view === k}" class="${P.view === k ? 'on' : ''}" data-act="fp-view" data-view="${k}">${l}</button>`).join('')}</div>
       ${P.view === 'search' ? `<input class="control fp-q" id="fp-q" type="search" value="${esc(P.q)}" placeholder="гречка, творог 5%, банан…" autocomplete="off" aria-label="Поиск продукта">
         <div id="fp-res" class="fp-res">${searchResults()}</div>` : P.view === 'custom' ? customView() : aiView()}
     </div>
     <div class="modal-foot"><button type="button" class="btn quiet" data-act="close">Закрыть</button>
-      <button type="button" class="btn solid" data-act="fp-commit" ${P.items.length ? '' : 'disabled'}>Записать${P.items.length ? ` · ${num(sumItems(P.items).kcal)} ккал` : ''}</button></div>`;
+      <button type="button" class="btn solid" data-act="fp-commit" ${P.items.length ? '' : 'disabled'}>${commitLabel()}${P.items.length ? ` · ${num(sumItems(P.items).kcal)} ккал` : ''}</button></div>`;
 }
 
 function isPickerOpen() { return !!document.querySelector('#modal .fp'); }
@@ -447,7 +449,9 @@ function paint(focusId) {
 }
 
 function openPicker(date, opts = {}) {
-  if (P.date !== date) { P.items = []; P.sel = null; }
+  // into - id записи еды, в которую дописываем продукты (кнопка «+ продукт» у записи)
+  if (P.date !== date || (opts.into || null) !== P.into) { P.items = []; P.sel = null; }
+  P.into = opts.into || null;
   if (!opts.keepSel) { P.sel = null; P.q = ''; }
   P.date = date;
   P.meal = fval('food', 'meal', document.querySelector('[data-form=food][data-key=meal]')?.value || P.meal || 'snack');
@@ -510,7 +514,7 @@ document.addEventListener('input', e => {
     const bk = el.closest('.fp-bi')?.querySelector('.fp-bk');
     if (bk) bk.textContent = num(it.kcal);
     const commit = document.querySelector('#modal [data-act=fp-commit]');
-    if (commit) commit.textContent = `Записать · ${num(t.kcal)} ккал`;
+    if (commit) commit.textContent = `${commitLabel()} · ${num(t.kcal)} ккал`;
   }
 });
 document.addEventListener('keydown', e => {
@@ -667,6 +671,16 @@ const pickerActions = {
   },
   'fp-commit': async () => {
     if (!P.items.length) return;
+    const into = P.into ? store.get(P.into) : null;
+    if (into) {
+      const items = [...(into.data.items || []), ...P.items.map(it => ({ ...it }))];
+      await store.patch(into.id, { items, totals: sumItems(items), edited: true });
+      const added = sumItems(P.items).kcal;
+      P.items = []; P.sel = null; P.q = ''; P.into = null;
+      closeModal();
+      await afterChange(into.date);
+      return toast(`Добавлено в запись: ${num(added)} ккал`);
+    }
     const items = P.items.map(it => ({ ...it }));
     const totals = sumItems(items);
     const text = items.map(it => `${it.name} ${num(it.grams)} г`).join(', ');
@@ -806,7 +820,7 @@ function viewFood(date) {
     <div class="macros ${cheat ? 'a-muted' : ''}">${macro('Ккал', 'kcal', '')}${macro('Белки', 'p', 'г')}${macro('Жиры', 'f', 'г')}${macro('Углеводы', 'c', 'г')}</div>
     ${windowBar(date, win)}
     ${!cheat && (sc.score !== null || sc.lines.length) ? `<div class="raised a-card a-fscore">
-      <div class="a-fs-num"><b class="mono ${sc.score === null ? '' : `g-${sc.score >= 75 ? 'good' : sc.score >= 50 ? 'ok' : 'bad'}-t`}">${sc.score ?? '-'}</b><span class="smallcaps muted">${date === C.today() && new Date().getHours() < 20 ? 'оценка пока' : 'оценка дня'}</span></div>
+      <div class="a-fs-num"><b class="mono ${sc.score === null ? '' : `g-${sc.score >= 75 ? 'good' : sc.score >= 50 ? 'ok' : 'bad'}-t`}">${sc.score ?? '-'}</b><span class="smallcaps muted">оценка</span></div>
       <ul class="a-flines">${sc.lines.slice(0, 5).map(([cls, t]) => `<li class="${cls}">${esc(t)}</li>`).join('')}</ul></div>` : ''}
     <div class="inset food-add">
       <textarea class="control" data-form="food" data-key="text" placeholder="гречка 200 г, 2 яйца, кофе с молоком" aria-label="Что съели" data-enter="food-add">${esc(fval('food', 'text'))}</textarea>
@@ -856,6 +870,7 @@ function foodEntry(e, win) {
   }
   const items = (d.items || []).map((it, i) => { const is = itemState(it); return `<div class="fi"><div class="ell nm">${esc(it.name)}${stBadge(is.st)}${it.source === 'ai' ? '<span class="src-ai" title="Оценка ИИ: продукта нет в справочнике">≈ИИ</span>' : it.source === 'brain' ? '<span class="src-brain" title="Так эту фразу раньше разобрала ИИ - теперь считается без неё">память</span>' : ''}</div>
     <label class="g"><input class="control g-in" type="number" inputmode="numeric" value="${it.grams}" data-act="food-grams" data-id="${e.id}" data-i="${i}" aria-label="граммы: ${esc(it.name)}"> г</label>
+    <button class="btn quiet a-mini fi-del" data-act="food-item-del" data-id="${e.id}" data-i="${i}" aria-label="Убрать из записи: ${esc(it.name)}" title="Убрать эту строку">${glyph('cross')}</button>
     <div class="mac">${num(it.kcal)} ккал · Б ${dec(it.p)} · Ж ${dec(it.f)} · У ${dec(it.c)}</div>${is.note ? `<div class="fi-note">${esc(is.note)}</div>` : ''}</div>`; }).join('');
   const t = timeOf(e);
   const out = win && t && !inWindow(t, win);
@@ -865,6 +880,7 @@ function foodEntry(e, win) {
       <div class="a-entry-btns"><button class="btn quiet a-star ${fav ? 'on' : ''}" data-act="fd-fav" data-id="${e.id}" aria-label="${fav ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${!!fav}" title="${fav ? 'В избранном' : 'В избранное'}">${glyph('star', { fill: !!fav })}</button>
         <button class="btn quiet" data-act="food-edit" data-id="${e.id}">Изменить</button><button class="btn danger" data-act="food-del" data-id="${e.id}">Удалить</button></div></div>
     ${items ? `<div class='fis'>${items}</div>` : ''}
+    ${d.status === 'calculated' && d.calc !== 'supp' ? `<div class="a-row-btns fi-add"><button class="btn quiet a-mini" data-act="food-item-add" data-id="${e.id}">+ продукт в эту запись</button>${d.edited ? '<span class="note">изменено вручную</span>' : ''}</div>` : ''}
     ${d.totals ? `<div class="tot"><span>итого ${num(d.totals.kcal)} ккал</span><span>Б ${dec(d.totals.p)} · Ж ${dec(d.totals.f)} · У ${dec(d.totals.c)}</span>${calcLabel(d)}</div>` : ''}
     ${status}</div>`;
 }
@@ -1034,6 +1050,25 @@ export const actions = {
       if (kind === 'recipe') S.forms.fd = { ...(S.forms.fd || {}), recipeAsk: false, recipeText: '' };
       await addJob(res.job_id, kind, kind === 'recipe' ? 'recipe' : 'mealplan:' + date);
     } catch (e) { toast(aiErr(e), 6000); }
+  },
+  // правка записи по строкам: убрать лишнее (ИИ посчитал яйца дважды), дописать забытое из справочника
+  'food-item-del': async el => {
+    const r = store.get(el.dataset.id);
+    if (!r) return;
+    const i = Number(el.dataset.i), items = (r.data.items || []).filter((_, j) => j !== i);
+    const gone = r.data.items?.[i];
+    if (!items.length) {
+      await store.remove(r.id);
+      toast('Это была последняя строка - запись удалена');
+    } else {
+      await store.patch(r.id, { items, totals: sumItems(items), edited: true });
+      if (gone) toast(`Убрал «${gone.name}» из записи`);
+    }
+    await afterChange(r.date);
+  },
+  'food-item-add': el => {
+    const r = store.get(el.dataset.id);
+    if (r) openPicker(r.date, { into: r.id });
   },
 };
 

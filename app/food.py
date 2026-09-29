@@ -40,8 +40,13 @@ def unit_code(u: str | None) -> str | None:
     return None
 
 
+# точка после количества или слова - конец продукта: «хлеб 25 гр. форель 50 г», «кофе. молоко» (но не «1 ст. л.»)
+QTY_DOT_RE = re.compile(r"(\d\s*(?:г|гр|грамм\w*|кг|мл|л|шт|штук\w*)?|[^\W\d_]{3,})\.\s+(?=[^\W_])", re.I)
+
+
 def split(text: str) -> list[str]:
     # запятая внутри числа («молоко 1,5%») — не разделитель
+    text = QTY_DOT_RE.sub(r"\1, ", text or "")
     parts = re.split(r"(?<!\d),|,(?!\d)|[;\n+]|\s+и\s+(?=\d)", text)
     return [p.strip() for p in parts if p and p.strip()]
 
@@ -96,9 +101,13 @@ class Index:
         self.keys: dict[str, dict] = {}
         self.stems: dict[str, dict] = {}
         self.bases: dict[str, list[dict]] = {}
+        self.fuzzy: list[str] = []          # нечёткое сравнение - без товаров из магазина (их 15 тыс., бренды не угадываем)
         for f in self.foods:
-            for k in [f["name"], *f["aliases"]]:
-                self.keys.setdefault(norm(k), f)
+            for k in [f["name"], *f["aliases"], *([f"{f['brand']} {f['name']}"] if f.get("brand") else [])]:
+                nk = norm(k)
+                if nk not in self.keys and f.get("source") != "off":
+                    self.fuzzy.append(nk)
+                self.keys.setdefault(nk, f)
                 self.stems.setdefault(stem(k), f)
             self.bases.setdefault(base_name(f["name"]), []).append(f)
         self.usage = usage(uid, self) if uid else {}
@@ -108,7 +117,7 @@ class Index:
             return self.keys[name]
         if stem(name) in self.stems:
             return self.stems[stem(name)]
-        close = difflib.get_close_matches(name, self.keys.keys(), n=1, cutoff=0.86)
+        close = difflib.get_close_matches(name, self.fuzzy, n=1, cutoff=0.86)
         return self.keys[close[0]] if close else None
 
     def match(self, name: str) -> dict | None:

@@ -28,8 +28,12 @@ export const nameOf = s => s.name || cat(s.sid)?.name || s.sid || 'Добавк�
 export const catalog = () => [...S.supps.items.values()];
 
 // ── план ──
+// по времени приёма: раньше - выше, без времени - в конце; при одинаковом времени - порядок добавления
 export function plan(uid = store.uid()) {
-  return (prof(uid).supplements || []).filter(s => s.active !== false).map(s => ({ ...s, key: keyOf(s), item: cat(s.sid), name: nameOf(s) }));
+  const first = s => (s.times?.length ? [...s.times].sort()[0] : '99:99');
+  return (prof(uid).supplements || []).filter(s => s.active !== false)
+    .map(s => ({ ...s, ...(s.times?.length ? { times: [...s.times].sort() } : {}), key: keyOf(s), item: cat(s.sid), name: nameOf(s) }))
+    .sort((a, b) => first(a).localeCompare(first(b)));
 }
 export const enabled = (uid = store.uid()) => plan(uid).length > 0;
 export function servingOf(s) {
