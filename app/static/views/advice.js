@@ -132,7 +132,8 @@ function body(uid) {
   for (const g of safe(() => GL.metricGoals(uid), [])) {
     const pr = safe(() => GL.progress(g, uid));
     const m = GL.metric(g.metric);
-    if (!pr || !m || pr.status === 'nodata' || pr.status === 'early') continue;
+    // привычки (вода, шаги, сон, белок) разобраны в своих разделах - здесь только тело и результаты
+    if (!pr || !m || m.group === 'habit' || pr.status === 'nodata' || pr.status === 'early') continue;
     if (pr.status === 'behind') out.push(R('warn', `${m.label}: ${pr.label}.`, m.hint?.[g.to > g.from ? 'up' : 'down'] || ''));
     else if (pr.status === 'done') out.push(R('good', `${m.label}: цель достигнута.`, 'Поставьте следующую ступень в «Целях».'));
   }
