@@ -550,7 +550,9 @@ async function migrateMorning() {
   const order = Math.min(0, ...its.map(i => i.data.order ?? 0)) - 1;
   await store.put('item', store.newId(), { title: 'Утренняя разминка', type: 'routine', module: 'morning', group: 'morning', order, active: true });
   if (old.length) {
-    await setPinned([...new Set([...pinnedOf(), ...old.map(i => i.data.exercise_id)])]);
+    // отмеченные «не предлагать в разминке» не закрепляем - иначе они вернулись бы в разминку
+    const keep = old.map(i => i.data.exercise_id).filter(id => !PF.isExcluded(id, undefined, { place: 'home', module: 'morning' }));
+    await setPinned([...new Set([...pinnedOf(), ...keep])]);
     for (const i of old) await store.patch(i.id, { active: false, migrated: 'routine' });
   }
 }
@@ -599,9 +601,11 @@ async function ensureTodayRoutine() {
 
 let bgBusy = false;
 export async function background() {
-  if (bgBusy || !store.me() || !profile().setup_done) return;
+  if (bgBusy || !store.me() || !store.get(`profile:${store.uid()}`)) return;
   bgBusy = true;
-  try { await migrateMorning(); await ensureCups(); await ensureTodayRoutine(); } catch (e) { warn(e); } finally { bgBusy = false; }
+  // разминка не зависит от заполненного профиля: без перевода старые пункты-упражнения
+  // остаются в чек-листе, и «Не предлагать» / «Заменить» на них не действуют
+  try { await migrateMorning(); await ensureTodayRoutine(); if (profile().setup_done) await ensureCups(); } catch (e) { warn(e); } finally { bgBusy = false; }
 }
 
 function modulesBlock(date) {
