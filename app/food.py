@@ -79,27 +79,82 @@ def _macro_from(nums: list[float]) -> dict:
     return {"kcal": round(kcal), "p": round(p, 1), "f": round(f, 1), "c": round(c, 1)}
 
 
-def split_macro_segment(seg: str) -> list[tuple[str, dict]] | None:
-    """Кусок текста (между ;/переносами строк) с одним или несколькими КБЖУ → [(кусок без этих чисел, КБЖУ), …],
-    по одной паре на каждое вхождение — так «курица кбжу А, В кбжу Б» не сливает два блюда в одно. Между двумя
-    вхождениями режем по первой запятой: то, что до неё, — хвост (обычно вес) текущего блюда, после — начало
-    следующего. Нет чисел вовсе — None (кусок обрабатывается как обычно, по справочнику)."""
+# запятая-разделитель списка (не десятичная: «12,5»)
+WEAK_COMMA_RE = re.compile(r"(?<!\d),|,(?!\d)")
+# кусок - только количество: «200г», «- 30 гр.», «1 шт» (хвост к блюду с КБЖУ, а не отдельное блюдо)
+BARE_QTY_RE = re.compile(r"^[\s\-–(]*\d+(?:[.,]\d+)?\s*(?:г|гр|грамм\w*|кг|мл|л|шт|штук\w*)?\.?[\s)]*$", re.I)
+PH_RE = re.compile(r"\x00(\d+)\x00")
+
+
+def _has_qty(piece: str) -> bool:
+    return bool(QTY_RE.search(piece) or BARE_UNIT_RE.search(piece))
+
+
+def split_macro_segment(seg: str) -> list[tuple[str, dict | None]] | None:
+    """Кусок текста (между ;/переносами строк) с явными КБЖУ → [(название блюда, КБЖУ | None), …].
+    К блюду с КБЖУ относится: кусок списка, где стоят числа, соседние куски перед ним БЕЗ своего количества
+    (части составного блюда: «рис с креветками, яйцом и луком фри кбжу …») и куски после него, где только
+    количество («…кбжу 250/30/5/10, 200г»). Куски со своим количеством («слива 72 гр.») - отдельные продукты:
+    они возвращаются с КБЖУ None и дальше разбираются по справочнику. Нет чисел вовсе - None."""
     whole = MACRO_WHOLE_RE.match(seg)
     if whole:
         return [("", _macro_from([float(x.replace(",", ".")) for x in whole.groups() if x]))]
     ms = list(MACRO_SLASH_RE.finditer(seg))
     if not ms:
         return None
-    out, prev_end = [], 0
+    macros = [_macro_from([float(x.replace(",", ".")) for x in m.groups() if x]) for m in ms]
+    # числа КБЖУ сами бывают через «, » - прячем их, прежде чем делить список по запятым
+    ph, last = "", 0
     for i, m in enumerate(ms):
-        next_start = ms[i + 1].start() if i + 1 < len(ms) else len(seg)
-        between = seg[m.end():next_start]
-        cut = between.find(",") if i + 1 < len(ms) else -1
-        tail = between if cut < 0 else between[:cut]
-        macro = _macro_from([float(x.replace(",", ".")) for x in m.groups() if x])
-        name = MACRO_LABEL_RE.sub(" ", seg[prev_end:m.start()] + " " + tail)
-        out.append((re.sub(r"\s+", " ", name).strip(), macro))
-        prev_end = m.end() + len(tail) + (1 if cut >= 0 else 0)
+        ph += seg[last:m.start()] + f"\x00{i}\x00"
+        last = m.end()
+    ph += seg[last:]
+    pieces = [p for p in WEAK_COMMA_RE.split(ph)]
+    clean = lambda t: re.sub(r"\s+", " ", MACRO_LABEL_RE.sub(" ", t)).strip(" ,")
+    out: list[tuple[str, dict | None]] = []
+    pending: list[str] = []
+    k = 0
+    while k < len(pieces):
+        piece = pieces[k]
+        marks = list(PH_RE.finditer(piece))
+        if not marks:
+            pending.append(piece)
+            k += 1
+            continue
+        # части составного блюда перед числами - куски без своего количества
+        take: list[str] = []
+        while pending and pending[-1].strip() and not _has_qty(pending[-1]):
+            take.insert(0, pending.pop())
+        # в куске только «кбжу …» без названия: блюдо - предыдущий кусок («курица 200г, кбжу 250/30/5/10»)
+        if not clean(PH_RE.sub(" ", piece)) and not take and pending:
+            take = [pending.pop()]
+        rest = ", ".join(x for x in pending if x.strip())
+        if rest:
+            out.append((rest.strip(), None))
+        pending = []
+        # хвост: следующие куски, где только количество
+        tail: list[str] = []
+        j = k + 1
+        while j < len(pieces) and not PH_RE.search(pieces[j]) and BARE_QTY_RE.match(pieces[j]):
+            tail.append(pieces[j])
+            j += 1
+        # несколько КБЖУ в одном куске без запятой между ними: текст между числами - начало следующего блюда
+        cuts = [0] + [m.end() for m in marks]
+        for n, m in enumerate(marks):
+            head = piece[cuts[n]:m.start()]
+            after = piece[m.end():marks[n + 1].start()] if n + 1 < len(marks) else piece[m.end():]
+            parts = (take if n == 0 else []) + [head + " " + after] + ([] if n + 1 < len(marks) else tail)
+            if n + 1 < len(marks):
+                # между двумя КБЖУ без запятой: вес сразу после чисел - этому блюду, остальное - следующему
+                q = re.match(r"^[\s\-–)]*\d+(?:[.,]\d+)?\s*(?:г|гр|грамм\w*|кг|мл|л|шт)?\.?", after, re.I)
+                parts = (take if n == 0 else []) + [head + " " + (q.group(0) if q else "")]
+                if q:
+                    cuts[n + 1] = m.end() + len(q.group(0))
+            out.append((clean(", ".join(x for x in parts if x.strip())), macros[int(m.group(1))]))
+        k = j
+    rest = ", ".join(x for x in pending if x.strip())
+    if rest:
+        out.append((rest.strip(), None))
     return out
 
 

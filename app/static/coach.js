@@ -716,7 +716,7 @@ export function sleepHint(rec, uid = store.uid()) {
   if (!mins) return { warn: true, text: 'Время отхода ко сну и подъёма совпадает - поправьте одно из них.' };
   if (mins > 16 * 60) return { warn: true, text: `Получается ${dec(mins / 60)} ч сна подряд - похоже, перепутаны «${lay.toLowerCase()}» и «${got}». В статистику не пойдёт, пока не поправите.` };
   const sn = snoozeOf(d, b, w, mins);
-  if (d.alarm && !sn) return { warn: true, text: `Первый будильник в ${d.alarm} не попадает между «${lay.toLowerCase()}» и «${got}» - поправьте время.` };
+  if (d.alarm && sn === null) return { warn: true, text: `Первый будильник в ${d.alarm} не попадает между «${lay.toLowerCase()}» и «${got}» - поправьте время.` };
   if (sn) {
     const n = Math.max(1, Number(d.alarms) || 1);
     const tip = sn >= 45 || n >= 3 ? ' Дрёма между будильниками - рваный лёгкий сон: лучше один будильник на реальное время подъёма.' : '';
@@ -766,12 +766,13 @@ export function sleepInfo(rec, uid = store.uid()) {
   return out;
 }
 const h2 = h => String(Math.round(h * 100) / 100).replace('.', ',');     // часы как в карточке сна: 9,25
-// минуты между первым будильником и подъёмом; null, если будильник не указан или не внутри сна (до 4 ч)
+// минуты между первым будильником и подъёмом (0 - встал по первому же будильнику);
+// null, если будильник не указан или не внутри сна (до 4 ч)
 function snoozeOf(d, b, w, mins) {
   const a = toMin(d.alarm);
   if (a === null) return null;
   const toAlarm = ((a - b) % 1440 + 1440) % 1440, s = mins - toAlarm;
-  return toAlarm > 0 && s > 0 && s <= 240 ? s : null;
+  return toAlarm > 0 && s >= 0 && s <= 240 ? s : null;
 }
 
 // Статистика сна за `days` дней по `end` включительно.
@@ -2113,7 +2114,8 @@ export function lines(now = new Date()) {
   }
   if (pl.lifts) add('plateau_lifts', {}, trendNote);
 
-  for (const pa of store.partners()) {
+  // «ты отстаёшь / ты впереди» - только при соревновании со счётом у обоих: без него пара просто видит прогресс
+  for (const pa of competeSettings(uid).score ? store.partners().filter(x => partnerCompete(x.id).score) : []) {
     const pp = pctOf(t, pa.id);
     if (pp >= s.pct + 20 && !easy) add('partner_ahead', { partner: pa.name, pct: pp });
     else if (s.pct >= pp + 30 && hour >= 15) add('partner_behind', { partner: pa.name });
@@ -2369,7 +2371,8 @@ function stableJson(v) {
 export function competeSettings(uid = store.uid()) {
   const c = prof(uid).compete;
   const show = Array.isArray(c?.show) ? CKEYS.filter(k => c.show.includes(k)) : [...CKEYS];
-  return { enabled: !!c?.enabled, show, touched: !!c };
+  // enabled - делиться прогрессом; score - соревнование со счётом очков (отдельная галка, по умолчанию выкл.)
+  return { enabled: !!c?.enabled, score: !!c?.enabled && c?.score === true, show, touched: !!c };
 }
 
 function stepsOn(date, uid) {
@@ -2380,7 +2383,7 @@ function stepsOn(date, uid) {
 function dsumCompete(date, uid) {
   const cp = competeSettings(uid);
   if (!cp.enabled) return cp.touched ? { compete: false } : {};
-  const sh = new Set(cp.show), out = { compete: true, share: cp.show };
+  const sh = new Set(cp.show), out = { compete: true, share: cp.show, duel: cp.score };
   if (sh.has('steps')) { const v = stepsOn(date, uid); if (v) out.steps = v; }
   if (sh.has('activity')) { const m = activityMinutes(date, uid).total; if (m) out.activity_min = m; }
   if (sh.has('sleep')) { const si = sleepInfo(sleep(date, uid), uid); if (si && !si.nap) out.sleep_h = Math.round(si.hours * 10) / 10; }
@@ -2412,7 +2415,7 @@ function ownWeek(monday, uid) {
 function wsumCompete(monday, uid) {
   const cp = competeSettings(uid);
   if (!cp.enabled) return cp.touched ? { compete: false } : {};
-  const w = ownWeek(monday, uid), sh = new Set(cp.show), out = { compete: true, share: cp.show };
+  const w = ownWeek(monday, uid), sh = new Set(cp.show), out = { compete: true, share: cp.show, duel: cp.score };
   if (sh.has('steps')) out.steps_total = w.steps;
   if (sh.has('activity')) out.activity_min = w.activity;
   if (sh.has('workouts')) out.workouts_done = w.workouts;
@@ -2437,14 +2440,14 @@ export function partner() { return store.partners()[0] || null; }
 // включено ли соревнование у партнёра: по самой свежей его публичной сводке с полем compete
 export function partnerCompete(pid = partner()?.id) {
   return memo(`pc|${pid}`, () => {
-    if (!pid) return { enabled: false, share: [], known: false };
+    if (!pid) return { enabled: false, score: false, share: [], known: false };
     let best = null;
     for (const kind of ['dsum', 'wsum']) {
       for (const r of store.list(kind, pid)) if (r.data && 'compete' in r.data && (!best || r.updated_at > best.updated_at)) best = r;
     }
-    if (!best) return { enabled: false, share: [], known: false };
+    if (!best) return { enabled: false, score: false, share: [], known: false };
     const share = Array.isArray(best.data.share) ? CKEYS.filter(k => best.data.share.includes(k)) : [...CKEYS];
-    return { enabled: best.data.compete === true, share, known: true };
+    return { enabled: best.data.compete === true, score: best.data.compete === true && best.data.duel === true, share, known: true };
   });
 }
 
@@ -2512,7 +2515,10 @@ export function duel(monday = mondayOf()) {
         me: { grade: mg.grade, score: mg.score, sleep: !!sleep(d, uid), pct: future ? 0 : dayScore(d, uid).pct },
         them: { grade: pg.grade, score: pg.score, sleep: !!pds?.sleep_h, pct: pds?.pct || 0 } });
     }
-    const base = { state, partner: p, monday, current, daysLeft: current ? 6 - weekday(t) : 0, days, cats: [], score: { me: 0, them: 0 }, shared: [] };
+    // счёт очков - только если соревнование включили оба; иначе просто прогресс друг друга, без победителей
+    const scoring = me.score && pc.score;
+    const base = { state, partner: p, monday, current, daysLeft: current ? 6 - weekday(t) : 0, days, cats: [], score: { me: 0, them: 0 }, shared: [], scoring,
+      myScore: me.score, theirScore: pc.score };
     if (state !== 'ok') return base;
     const shared = me.show.filter(k => pc.share.includes(k));
     const a = weekVals(monday, uid), b = weekVals(monday, p.id);
@@ -2525,6 +2531,7 @@ export function duel(monday = mondayOf()) {
         const xv = x ?? 0, yv = y ?? 0;
         win = !xv && !yv ? null : xv === yv ? 'tie' : xv > yv ? 'me' : 'them';     // 0 и 0 — не игра
       }
+      if (!scoring) win = null;
       if (win === 'me') score.me++;
       if (win === 'them') score.them++;
       return { ...c, me: c.key === 'sleep' ? a.sleep : a[c.key], them: c.key === 'sleep' ? b.sleep : b[c.key], win };
@@ -2585,7 +2592,7 @@ function leftPhrase(n) {
 
 // реплика тренера о дуэли выбранным тоном
 export function duelLine(d = duel()) {
-  if (d.state !== 'ok') return '';
+  if (d.state !== 'ok' || !d.scoring) return '';
   const tone = prof().tone || 'coach';
   const { me: a, them: b } = d.score;
   const played = d.cats.some(c => c.win !== null);
@@ -2601,6 +2608,10 @@ export function duelLine(d = duel()) {
 // короткая строка счёта для экрана «Сегодня»
 export function duelScoreLine(d = duel()) {
   if (d.state !== 'ok') return '';
+  if (!d.scoring) {
+    const td = d.days.find(x => x.today);
+    return td ? `Сегодня: ты ${td.me.pct} %, ${d.partner.name} ${td.them.pct} %` : '';
+  }
   const { me: a, them: b } = d.score;
   if (!d.cats.some(c => c.win !== null)) return 'Счёт недели 0:0 - всё впереди';
   if (a > b) return `Счёт недели ${a}:${b} в твою пользу`;

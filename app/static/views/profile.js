@@ -104,7 +104,7 @@ function initForm() {
     sched_irregular: !!p.schedule?.irregular, sched_days: days,
     activities: clone(p.activities || []),
     mod_home_on: m.home_plan?.enabled !== false,
-    mod_morning_on: m.morning?.enabled ?? true, mod_morning_shared: !!m.morning?.shared, mod_morning_min: m.morning?.minutes || 10,
+    mod_morning_on: m.morning?.enabled ?? true, mod_morning_min: m.morning?.minutes || 10,
     mod_neck_on: !!m.neck?.enabled, mod_neck_week: m.neck?.per_week || 3, mod_neck_min: m.neck?.minutes || 5,
     mod_posture_on: !!m.posture?.enabled, mod_posture_week: m.posture?.per_week || 3, mod_posture_min: m.posture?.minutes || 10,
     ew_on: !!p.eating_window?.enabled, ew_from: p.eating_window?.from || '10:00', ew_to: p.eating_window?.to || '20:00',
@@ -208,7 +208,7 @@ function viewProfile() {
     `<div class="pgroup smallcaps">Тренер и приложение</div>`,
     sec('tone', 'Тон тренера', C.TONE_NAMES[fm.tone] || '', toneBody(fm)),
     sec('ai', 'ИИ-тренер', fm.ai === 'off' ? 'выключена' : 'включена', aiBody(fm)),
-    sec('compete', 'Соревнование с партнёром', competeSummary(), competeBody()),
+    sec('compete', 'Прогресс вместе', competeSummary(), competeBody()),
     sec('group', 'Группа', groupSummary(fm), groupBody(fm)),
     sec('privacy', 'Данные и приватность', BR.privacySummary(), BR.privacyBody()),
     sec('norms', 'Нормы', tg ? `${num(tg.kcal)} ккал · белок ${tg.p} г · ${num(tg.steps_manual || tg.steps)} шагов` : 'ещё не считались', normsBody(tgRec)),
@@ -542,8 +542,7 @@ function modulesBody(fm) {
       <p class="note">Тренер ставит в дни без зала комплексы на зоны из ваших целей (например, руки или пресс) и добирает тренировки до нормы. Пропущенное переносит на другие дни недели.</p></div></div>
     <div class="pf-mod"><div>${chk('mod_morning_on', '<b>Утренняя разминка</b>', fm.mod_morning_on)}
       <p class="note">Каждый день новая, из упражнений для дома, под выбранное время.</p>
-      ${fm.mod_morning_on && store.partners().length ? `${chk('mod_morning_shared', `Общая с ${esc(C.nameForms(store.partners()[0].id).ins || store.partners()[0].name)}`, fm.mod_morning_shared)}
-        <p class="note">Если включено у обоих - по утрам одна и та же разминка: кто собрал первым, тот и задаёт набор. Упражнения из вашего «не предлагать» заменятся похожими.</p>` : ''}</div>
+      ${fm.mod_morning_on && store.partners().length ? `<p class="note">Делать разминку и другие комплексы вместе с ${esc(C.nameForms(store.partners()[0].id).ins || store.partners()[0].name)} - в разделе «Прогресс вместе» → «Общие комплексы».</p>` : ''}</div>
       ${fm.mod_morning_on ? chips(F, 'mod_morning_min', fm.mod_morning_min, [5, 10, 15, 20].map(k => [k, `${k} мин`])) : ''}</div>
     <div class="pf-mod"><div>${chk('mod_neck_on', '<b>Шея и скулы</b>', fm.mod_neck_on)}
       <p class="note">Тонус шеи и осанка. Честно: второй подбородок уходит только вместе с общим жиром.</p></div>
@@ -667,7 +666,7 @@ function groupBody(fm) {
   const mine = `${gs.length ? `<div class="chips">${gs.map(g => `<span class="chip">${esc(g.name)} · ${g.members.map(m => esc(m.name)).join(', ')}</span>`).join('')}</div>`
     : '<p class="note" style="margin-top:0">Вы не состоите ни в одной группе - её создаёт админ.</p>'}
     ${gs.length ? `<div class="field" style="margin-top:12px"><span class="smallcaps">Делиться активностью в группе</span>
-      <p class="note" style="margin:2px 0 6px">Другие в группе видят только общие вехи (тренировка, велосипед и т. п.) - время и минуты, без подробностей, что именно вы делали или ели.</p>
+      <p class="note" style="margin:2px 0 6px">Другие в группе видят только общие вехи (тренировка, велосипед и т. п.) - время и минуты, без подробностей, что именно вы делали или ели. Никогда не уходят: питание, вес и замеры, самочувствие, цикл, курение и алкоголь, добавки, а также личное - массаж, баня, медитация, занятия с детьми.</p>
       <label class="chk"><input type="checkbox" data-form="${F}" data-key="share_activity" ${fm.share_activity !== false ? 'checked' : ''}> делиться</label></div>` : ''}`;
   if (!store.isAdmin()) return mine;
   if (!adminGroups.users && !adminGroups.loading) loadAdminGroups();
@@ -794,7 +793,7 @@ function buildProfile(fm) {
       ...(cur.modules || {}),
       home_plan: { ...(cur.modules?.home_plan || {}), enabled: !!fm.mod_home_on },
       // ...cur: закреплённые упражнения разминки (pinned) правятся не в форме — не теряем их при сохранении
-      morning: { ...(cur.modules?.morning || {}), enabled: !!fm.mod_morning_on, minutes: n(fm.mod_morning_min) || 10, shared: !!fm.mod_morning_shared },
+      morning: { ...(cur.modules?.morning || {}), enabled: !!fm.mod_morning_on, minutes: n(fm.mod_morning_min) || 10 },
       neck: { ...(cur.modules?.neck || {}), enabled: !!fm.mod_neck_on, per_week: n(fm.mod_neck_week) || 3, minutes: n(fm.mod_neck_min) || 5 },
       posture: { ...(cur.modules?.posture || {}), enabled: !!fm.mod_posture_on, per_week: n(fm.mod_posture_week) || 3, minutes: n(fm.mod_posture_min) || 10 },
     },

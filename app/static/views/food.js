@@ -11,9 +11,6 @@ import * as MPL from '../mealplan.js';
 
 const MEALS = [['breakfast', 'Завтрак'], ['lunch', 'Обед'], ['dinner', 'Ужин'], ['snack', 'Перекус']];
 const MEAL_NAME = Object.fromEntries(MEALS);
-// БЖУ по строкам питания редактируют либо как употреблено (по умолчанию), либо на 100 г продукта - тогда
-// употреблённое пересчитывается на лету по граммовке; сам сохранённый item.kcal/p/f/c всегда «употреблено»
-let macMode = 'consumed';
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 const hm = t => /^\d{1,2}:\d{2}$/.test(t || '') ? t.padStart(5, '0') : null;
 const timeOf = e => hm(e.data.time) || (e.data.created ? new Date(e.data.created).toTimeString().slice(0, 5) : '');
@@ -56,8 +53,24 @@ const HABITS = {
   less_coffee: { re: /кофе|капучино|латте|эспрессо|американо|раф\b/i, bad: n => n > 2 ? `Кофе: ${n} ${n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'чашки' : 'чашек'} - многовато, особенно после обеда.` : null, good: null, limit: 2 },
   less_alcohol: { re: /пиво|вино|водк|коньяк|виски|сидр|шампан|ликёр|ликер|джин|ром\b|коктейл/i, bad: () => 'Был алкоголь - он бьёт по сну и восстановлению.', good: 'Без алкоголя - сон скажет спасибо.' },
   less_fastfood: { re: /бургер|шаурм|фри|наггетс|хот-?дог|чипс|фастфуд|kfc|макдон/i, bad: () => 'Был фастфуд. Один раз - не беда, главное не привычка.', good: null },
-  more_veg: { re: /овощ|салат|огур|помидор|томат|капуст|брокколи|морков|перец|кабач|шпинат|свекл|фрукт|яблок|банан|ягод/i, want: true, bad: () => 'Овощей и фруктов сегодня не видно - добавь хотя бы салат.', good: 'Овощи и фрукты в рационе - отлично.' },
+  more_veg: { grams: true },
 };
+// овощи и фрукты за день в граммах (картофель и батат не в счёт - это крахмальный гарнир): по группе продукта из
+// справочника, для своих и посчитанных ИИ - по названию. Ориентир ВОЗ - 400 г в день, из них овощей хотя бы половина.
+const VEG_RE = /овощ|салат|огур|помидор|томат|капуст|брокколи|морков|перец|кабач|шпинат|свекл|баклаж|лук|чеснок|редис|сельдер|спарж|фасоль стручк|горош|тыкв|зелен|укроп|петруш|руккол|цукини|грибы?(?![а-яё])|шампиньон/i;
+const FRUIT_RE = /фрукт|яблок|банан|груш|апельсин|мандарин|грейпфрут|киви|ягод|клубник|малин|черник|смородин|вишн|черешн|виноград|слив|персик|абрикос|нектарин|ананас|манго|хурм|гранат|арбуз|дын/i;
+const VF_NORM = 400;
+function vegFruit(entries) {
+  let veg = 0, fruit = 0;
+  for (const e of entries) for (const it of e.data.items || []) {
+    const g = Number(it.grams) || 0, name = String(it.name || '');
+    if (!g || /картоф|батат|пюре|чипс|фри(?![а-яё])|варень|джем|сок(?![а-яё])|сухофрукт|изюм|курага|финик/i.test(name)) continue;
+    const grp = it.food_id != null ? foods.get(it.food_id)?.group : null;
+    if (grp === 'овощи' || (!grp && VEG_RE.test(name))) veg += g;
+    else if (grp === 'фрукты и ягоды' || (!grp && FRUIT_RE.test(name))) fruit += g;
+  }
+  return { veg: Math.round(veg), fruit: Math.round(fruit), total: Math.round(veg + fruit) };
+}
 function foodScore(date, entries, tg) {
   const tot = { kcal: 0, p: 0, f: 0, c: 0, fiber: 0 };
   entries.forEach(e => { const t = e.data.totals; if (t) for (const k in tot) tot[k] += Number(t[k]) || 0; });
@@ -94,8 +107,19 @@ function foodScore(date, entries, tg) {
     const def = HABITS[h];
     if (!def) continue;
     hN++;
+    if (def.grams) {
+      const vf = vegFruit(entries), split = `овощи ${num(vf.veg)} г, фрукты ${num(vf.fruit)} г`;
+      const fewVeg = vf.veg < VF_NORM / 2 && vf.fruit > vf.veg;
+      if (vf.total >= VF_NORM) lines.push(fewVeg ? ['warn', `Овощей и фруктов ${num(vf.total)} г (${split}) - норма набрана, но в основном фрукты: овощей нужно хотя бы 200 г.`]
+        : ['good', `Овощи и фрукты: ${num(vf.total)} г (${split}) - норма ВОЗ ${VF_NORM} г есть.`]);
+      else if (unfinished) lines.push(['info', vf.total ? `Овощей и фруктов пока ${num(vf.total)} г из ${VF_NORM} (${split}) - добавь салат или овощной гарнир, примерно ${num(VF_NORM - vf.total)} г.` : `Овощей и фруктов пока нет - цель ${VF_NORM} г в день: салат к обеду и овощи на гарнир.`]);
+      else {
+        hScore -= Math.round(20 * (1 - vf.total / VF_NORM));
+        lines.push(['warn', vf.total ? `Овощей и фруктов ${num(vf.total)} г из ${VF_NORM} (${split}) - маловато: не хватило около ${num(VF_NORM - vf.total)} г.` : `Овощей и фруктов сегодня не было - нужно около ${VF_NORM} г в день.`]);
+      }
+      continue;
+    }
     const n = entries.filter(e => def.re.test(e.data.text || '')).length;
-    if (def.want) { if (n) lines.push(['good', def.good]); else { hScore -= 20; lines.push(['warn', def.bad()]); } continue; }
     if (n > (def.limit || 0)) { hScore -= 20; const t = def.bad(n); if (t) lines.push(['warn', t]); }
     else if (def.good && text) lines.push(['good', def.good]);
   }
@@ -763,7 +787,9 @@ function openHist(src, date) {
   const calc = src.status === 'calculated' && src.items?.length;
   const h = new Date().getHours();
   const meal = document.querySelector('[data-form=food][data-key=meal]')?.value || src.meal || (h < 11 ? 'breakfast' : h < 16 ? 'lunch' : h < 21 ? 'dinner' : 'snack');
-  const time = date === C.today() ? nowHM() : (src.time || '');
+  // время, уже выбранное в форме, важнее «сейчас» - как и приём пищи
+  const formTime = hm(fval('food', 'time', document.querySelector('[data-form=food][data-key=time]')?.value || ''));
+  const time = formTime || (date === C.today() ? nowHM() : (src.time || ''));
   openModal(`<div class="modal-head"><h2>Записать снова</h2></div><div class="modal-body">
     ${calc ? `<p class="note" style="margin-top:0">Поправьте граммы, если порция другая. Лишнее - уберите.</p>
       <div class="fh-items">${src.items.map((x, i) => `<div class="fh-item" data-i="${i}">
@@ -840,9 +866,7 @@ function viewFood(date) {
       ${yMeals.length ? `<div class="a-quick"><span class="smallcaps muted">Как вчера</span><div class="chips">${yMeals.map(([k, l]) => `<button class="chip" data-act="fd-yesterday" data-meal="${k}" data-date="${date}">${l}</button>`).join('')}</div></div>` : ''}
       <p class="note" style="margin:8px 0 0">Пишите как есть: «тарелка борща», «2 куска пиццы» - или выберите продукты из справочника и укажите граммы. Знакомое посчитается сразу, остальное - локальной ИИ по кнопке.</p>
     </div>
-    ${entries.some(e => e.data.items?.length) ? `<div class="chips a-mac-toggle">
-      <button class="chip ${macMode === 'consumed' ? 'on' : ''}" data-act="mac-mode" data-mode="consumed">Употреблено</button>
-      <button class="chip ${macMode === 'per100' ? 'on' : ''}" data-act="mac-mode" data-mode="per100">На 100 г</button></div>` : ''}
+
     ${(() => {
       // блоки по времени: завтрак, обед, ужин - по одному, каждый перекус отдельно (C.mealBlocks)
       const bl = C.mealBlocks(date, undefined, { all: true }), sn = bl.filter(b => b.meal === 'snack').length;
@@ -884,13 +908,11 @@ function foodEntry(e, win) {
       data-act="${act}" data-k="${k}" data-id="${e.id}" data-i="${i}" aria-label="${label === 'ккал' ? 'Калории' : label}: ${esc(name)}"></label>`;
   const per100 = it => { const k = it.grams ? 100 / it.grams : 0; return { kcal: it.kcal * k, p: it.p * k, f: it.f * k, c: it.c * k }; };
   const items = (d.items || []).map((it, i) => { const is = itemState(it); const p100 = per100(it);
-    const macRow = macMode === 'per100'
-      ? `<div class="mac mac-edit">${macF('ккал', 'kcal', Math.round(p100.kcal), it.name, i, 'food-macro100')}${macF('Б', 'p', Math.round(p100.p * 10) / 10, it.name, i, 'food-macro100')}${macF('Ж', 'f', Math.round(p100.f * 10) / 10, it.name, i, 'food-macro100')}${macF('У', 'c', Math.round(p100.c * 10) / 10, it.name, i, 'food-macro100')}</div>
-        <div class="mac-calc note">употреблено (${num(it.grams)} г): ${num(it.kcal)} ккал · Б ${dec(it.p)} · Ж ${dec(it.f)} · У ${dec(it.c)}</div>`
-      : `<div class="mac mac-edit">${macF('ккал', 'kcal', it.kcal, it.name, i, 'food-macro')}${macF('Б', 'p', it.p, it.name, i, 'food-macro')}${macF('Ж', 'f', it.f, it.name, i, 'food-macro')}${macF('У', 'c', it.c, it.name, i, 'food-macro')}</div>
+    const macRow = `<div class="mac mac-edit">${macF('ккал', 'kcal', it.kcal, it.name, i, 'food-macro')}${macF('Б', 'p', it.p, it.name, i, 'food-macro')}${macF('Ж', 'f', it.f, it.name, i, 'food-macro')}${macF('У', 'c', it.c, it.name, i, 'food-macro')}</div>
         ${it.grams ? `<div class="mac-calc note">на 100 г: ${num(Math.round(p100.kcal))} ккал · Б ${dec(p100.p)} · Ж ${dec(p100.f)} · У ${dec(p100.c)}</div>` : ''}`;
     return `<div class="fi"><div class="ell nm">${esc(it.name)}${stBadge(is.st)}${it.source === 'ai' ? '<span class="src-ai" title="Оценка ИИ: продукта нет в справочнике">≈ИИ</span>' : it.source === 'brain' ? '<span class="src-brain" title="Так эту фразу раньше разобрала ИИ - теперь считается без неё">память</span>' : it.source === 'manual' ? '<span class="src-brain" title="БЖУ заданы вручную">своё</span>' : ''}</div>
     <label class="g"><input class="control g-in" type="number" inputmode="numeric" value="${it.grams}" data-act="food-grams" data-id="${e.id}" data-i="${i}" aria-label="граммы: ${esc(it.name)}"> г</label>
+    <button class="btn quiet a-mini fi-edit" data-act="fi-open" data-id="${e.id}" data-i="${i}" aria-label="Править продукт: ${esc(it.name)}" title="Править: название, вес, КБЖУ на 100 г">${glyph('pencil')}</button>
     <button class="btn quiet a-mini fi-del" data-act="food-item-del" data-id="${e.id}" data-i="${i}" aria-label="Убрать из записи: ${esc(it.name)}" title="Убрать эту строку">${glyph('cross')}</button>
     ${macRow}
     ${is.note ? `<div class="fi-note">${esc(is.note)}</div>` : ''}</div>`; }).join('');
@@ -936,10 +958,42 @@ async function addEntry(date, data) {
 const aiErr = e => e.status === 404 || e.status === 400 ? 'Эта функция появится после обновления сервера'
   : e.status === 0 ? 'Нет связи с сервером' : e.message;
 
+// ── правка одного продукта в записи: название, вес, КБЖУ на 100 г и съеденное (одно пересчитывает другое) ──
+const MK = [['kcal', 'ккал'], ['p', 'белки'], ['f', 'жиры'], ['c', 'углеводы']];
+const rnd = (k, v) => k === 'kcal' ? Math.round(v) : Math.round(v * 10) / 10;
+function fiModal(r, i) {
+  const it = r.data.items[i], g = Number(it.grams) || 0;
+  const p100 = k => g ? rnd(k, (it[k] || 0) * 100 / g) : 0;
+  const cell = (col, k, v) => `<input class="control mono" type="number" inputmode="decimal" min="0" step="${k === 'kcal' ? 1 : 0.1}"
+    id="fi-${col}-${k}" value="${esc(String(v ?? 0))}" aria-label="${MK.find(x => x[0] === k)[1]}, ${col === 'h' ? 'на 100 г' : 'съедено'}">`;
+  openModal(`<div class="modal-head"><div class="kicker smallcaps">Продукт в записи</div><h2 class="ell">${esc(it.name)}</h2></div>
+    <div class="modal-body fi-modal" data-id="${r.id}" data-i="${i}">
+      <div class="grid2">${field('Название', `<input class="control" id="fi-name" value="${esc(it.name)}" autocomplete="off">`)}
+        ${field('Съедено, г', `<input class="control mono" type="number" inputmode="decimal" min="0" id="fi-g" value="${esc(String(g))}">`)}</div>
+      <table class="fi-tbl"><thead><tr><th></th><th>на 100 г</th><th>съедено</th></tr></thead><tbody>
+        ${MK.map(([k, l]) => `<tr><th scope="row">${l}</th><td>${cell('h', k, p100(k))}</td><td>${cell('e', k, it[k])}</td></tr>`).join('')}
+      </tbody></table>
+      <p class="note">Поменяйте цифры в любой колонке - вторая пересчитается по весу. КБЖУ с упаковки обычно указано на 100 г.</p>
+      <label class="chk"><input type="checkbox" id="fi-learn"> Запомнить в справочнике: в следующий раз посчитается с этими цифрами на 100 г</label>
+    </div>
+    <div class="modal-foot"><button class="btn danger" data-act="fi-remove" data-id="${r.id}" data-i="${i}">Убрать из записи</button>
+      <button class="btn quiet" data-act="close">Отмена</button><button class="btn solid" data-act="fi-save" data-id="${r.id}" data-i="${i}">Сохранить</button></div>`);
+}
+// живой пересчёт в окне: правка «на 100 г» или веса → «съедено», правка «съедено» → «на 100 г»
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (!t.closest?.('.fi-modal') || !/^fi-(h|e)-|^fi-g$/.test(t.id)) return;
+  const $ = id => document.getElementById(id), g = Number($('fi-g').value) || 0;
+  const val = id => Math.max(0, Number($(id).value) || 0);
+  for (const [k] of MK) {
+    if (t.id === 'fi-g' || t.id === `fi-h-${k}`) $(`fi-e-${k}`).value = rnd(k, val(`fi-h-${k}`) * g / 100);
+    else if (t.id === `fi-e-${k}` && g) $(`fi-h-${k}`).value = rnd(k, val(`fi-e-${k}`) * 100 / g);
+  }
+});
+
 export const actions = {
   ...pickerActions,
   ...mpActions,
-  'mac-mode': el => { macMode = el.dataset.mode; S.render(); },
   'food-add': async el => {
     const text = (fval('food', 'text') || '').trim();
     if (!text) return toast('Напишите, что съели');
@@ -980,7 +1034,9 @@ export const actions = {
     const win = eatingWindow();
     const out_of_window = !!(win && time && !inWindow(time, win));
     closeModal();
-    if (text === r.data.text) { await store.patch(r.id, { meal, time, out_of_window }); return; }
+    // тот же текст: запись, посчитанная справочником на устройстве и не правленная руками, разбираем заново -
+    // так чинятся записи, разобранные старыми правилами (результат ИИ и ручные правки не трогаем)
+    if (text === r.data.text && (r.data.calc !== 'local' || r.data.edited)) { await store.patch(r.id, { meal, time, out_of_window }); return; }
     const rec = await store.put('food', r.id, { ...r.data, text, meal, time, out_of_window, status: 'raw', items: [], totals: null, unresolved: null, calc_error: null, calc: null, partial: null, ...FP.localCalc(text) }, r.date);
     if (store.state.online && rec.data.status !== 'calculated') calcFood(rec, false);
   },
@@ -1090,6 +1146,29 @@ export const actions = {
     }
     await afterChange(r.date);
   },
+  'fi-open': el => { const r = store.get(el.dataset.id); if (r?.data.items?.[Number(el.dataset.i)]) fiModal(r, Number(el.dataset.i)); },
+  'fi-remove': async el => { closeModal(); await actions['food-item-del'](el); },
+  'fi-save': async el => {
+    const r = store.get(el.dataset.id);
+    if (!r) return closeModal();
+    const i = Number(el.dataset.i), items = structuredClone(r.data.items), it = items[i], prev = { ...it };
+    const $ = id => document.getElementById(id), num0 = id => Math.max(0, Number($(id).value) || 0);
+    const name = $('fi-name').value.trim() || it.name, g = num0('fi-g'), learn = $('fi-learn').checked;
+    const per = Object.fromEntries(MK.map(([k]) => [k, num0(`fi-h-${k}`)]));
+    it.name = name;
+    it.grams = g;
+    for (const [k] of MK) it[k] = rnd(k, num0(`fi-e-${k}`));
+    const same = name === prev.name && MK.every(([k]) => it[k] === prev[k]);
+    if (!same) { it.source = 'manual'; delete it.food_id; delete it.state; }
+    closeModal();
+    await store.patch(r.id, { items, totals: itemsTotals(items), edited: true });
+    if (g !== prev.grams && same) BR.gramsEdited(items, i);
+    if (learn && per.kcal) {
+      foods.save({ name, kcal: per.kcal, p: per.p, f: per.f, c: per.c, source: 'manual' }, { force: true })
+        .then(() => toast(`«${name}» теперь в справочнике`)).catch(e => toast(e.message));
+    } else toast('Сохранено');
+    await afterChange(r.date);
+  },
   'food-item-add': el => {
     const r = store.get(el.dataset.id);
     if (r) openPicker(r.date, { into: r.id });
@@ -1126,18 +1205,6 @@ export const changes = {
     const r = store.get(el.dataset.id);
     const items = structuredClone(r.data.items), it = items[Number(el.dataset.i)];
     const k = el.dataset.k, v = Math.max(0, Number(el.value) || 0);
-    it[k] = k === 'kcal' ? Math.round(v) : Math.round(v * 10) / 10;
-    it.source = 'manual';
-    delete it.food_id;
-    delete it.state;
-    await store.patch(r.id, { items, totals: itemsTotals(items) });
-  },
-  // тот же ввод, но число - на 100 г продукта (переключатель «На 100 г»): в item хранится только употреблённое,
-  // пересчитываем его по граммовке строки и патчим как обычно
-  'food-macro100': async el => {
-    const r = store.get(el.dataset.id);
-    const items = structuredClone(r.data.items), it = items[Number(el.dataset.i)];
-    const k = el.dataset.k, per100 = Math.max(0, Number(el.value) || 0), v = per100 * (it.grams || 0) / 100;
     it[k] = k === 'kcal' ? Math.round(v) : Math.round(v * 10) / 10;
     it.source = 'manual';
     delete it.food_id;

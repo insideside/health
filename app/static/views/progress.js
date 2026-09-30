@@ -3,7 +3,7 @@ import * as C from '../coach.js';
 import * as P from '../plan.js';
 import * as GL from '../goals.js';
 import * as AN from '../analysis.js';
-import { S, esc, num, fmt, WD, profile, goal, toast, ring, field, fval, input, jobFor, addJob, afterChange, MOOD_GLYPH, gradeGlyph, aiOff, aiOffHint } from '../ui.js';
+import { S, esc, num, fmt, WD, profile, goal, toast, ring, field, fval, input, jobFor, addJob, afterChange, MOOD_GLYPH, gradeGlyph, aiOff, aiOffHint, todayMark } from '../ui.js';
 
 // Прогресс: путь к цели (вехи + уровень), вес со сглаживанием, сон, достижения;
 // #week/{понедельник} — недельный отчёт; #body/{дата} — дневник замеров.
@@ -126,8 +126,10 @@ function viewProgress() {
 function togetherLink() {
   const d = safe(() => C.duel?.());
   if (!d || d.state === 'no_partner') return '';
-  const b = d.state === 'ok' ? `${d.score.me}:${d.score.them}` : '-';
-  const note = d.state === 'ok' ? `вы и ${esc(d.partner.name)}` : d.state === 'me_off' ? 'соревнование выключено' : `${esc(d.partner.name)} пока не в игре`;
+  const td = d.days.find(x => x.today);
+  const b = d.state !== 'ok' ? '-' : d.scoring ? `${d.score.me}:${d.score.them}` : td ? `${td.me.pct}:${td.them.pct} %` : '-';
+  const note = d.state === 'ok' ? (d.scoring ? `счёт недели: вы и ${esc(d.partner.name)}` : `сегодня: вы и ${esc(d.partner.name)}`)
+    : d.state === 'me_off' ? 'обмен прогрессом выключен' : `${esc(d.partner.name)} пока не делится прогрессом`;
   return `<a class="raised pg-link" href="#together"><span class="smallcaps muted">Вместе</span><b class="mono">${b}</b><span class="note ell">${note} →</span></a>`;
 }
 
@@ -372,8 +374,8 @@ function viewWeek(arg) {
   return `<div class="head-row"><div><div class="kicker smallcaps">Неделя · ${esc(short(mon))} - ${esc(short(sun))}</div>
       <h1>${ws?.grade ? `${gradeGlyph(ws.grade)} Оценка ${esc(ws.grade)}` : ws?.started ? 'Неделя только началась' : 'Недельный отчёт'}</h1></div>
     <div class="datenav"><a class="btn quiet" href="#week/${prev}" aria-label="Прошлая неделя">←</a>
-      ${!isCur ? `<a class="btn" href="#week/${mondayOf(C.today())}">Эта неделя</a>` : ''}
-      ${!isCur ? `<a class="btn quiet" href="#week/${next}" aria-label="Следующая неделя">→</a>` : ''}</div></div>
+      ${!isCur ? `<a class="btn" href="#week/${mondayOf(C.today())}">Эта неделя</a>` : todayMark('Эта неделя')}
+      ${!isCur ? `<a class="btn quiet" href="#week/${next}" aria-label="Следующая неделя">→</a>` : '<span class="btn quiet is-off" aria-disabled="true">→</span>'}</div></div>
     ${isCur ? '<p class="lede">Неделя ещё идёт - оценка обновляется каждый день.</p>' : ''}
 
     ${ws ? `<div class="summary"><div class="pg-score g-${LETTER_G[ws.grade] || 'none'}"><b class="mono">${score}</b><span class="smallcaps muted">из 100</span></div><div class="pg-cmp">

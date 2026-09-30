@@ -60,4 +60,6 @@ def changes_for(uid: str, since: int) -> tuple[list[dict], int, bool]:
             f" ORDER BY rev LIMIT ?", (since, top, uid, *partners, *db.PUBLIC_KINDS, SYNC_LIMIT)).fetchall()
     more = len(rows) == SYNC_LIMIT
     cursor = rows[-1]["rev"] if more else top
-    return [db.row_to_rec(r) for r in rows], cursor, more
+    recs = [db.row_to_rec(r) for r in rows]
+    out = [r if r["user_id"] == uid else db.public_view(r) for r in recs]
+    return [r for r in out if r is not None], cursor, more

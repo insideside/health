@@ -66,6 +66,28 @@ CREATE TABLE IF NOT EXISTS device_tokens (
 # Партнёр видит только эти виды записей: выполнение дня, достижения и сводку недели.
 # видно партнёру: итоги дня/недели, достижения и общая утренняя разминка (только список упражнений, у кого она включена)
 PUBLIC_KINDS = ("dsum", "ach", "wsum", "pairwarm", "highlight")
+# Что из публичных сводок видят другие: только проценты, оценки, опыт и поля соревнования, которые человек
+# сам включил. Оценки питания/самочувствия (wsum.parts) и всё, что появится в сводках потом, - только себе.
+PUBLIC_FIELDS = {
+    "dsum": {"pct", "done", "total", "xp", "workout", "grade", "score", "min", "cheer",
+             "compete", "share", "duel", "steps", "activity_min", "sleep_h"},
+    "wsum": {"score", "grade", "emoji", "xp", "compete", "share", "duel", "steps_total", "activity_min",
+             "workouts_done", "sleep_avg", "sleep_n", "streak"},
+}
+
+
+# достижения, по которым видно вес и замеры тела, - только себе
+PRIVATE_ACH = ("weight_", "measure_")
+
+
+def public_view(rec: dict) -> dict | None:
+    """Чужая публичная запись в том виде, в каком её можно отдать другому; None - не отдавать совсем."""
+    if rec["kind"] == "ach" and str((rec.get("data") or {}).get("code") or "").startswith(PRIVATE_ACH):
+        return None
+    keep = PUBLIC_FIELDS.get(rec["kind"])
+    if keep is None:
+        return rec
+    return {**rec, "data": {k: v for k, v in (rec.get("data") or {}).items() if k in keep}}
 
 _lock = threading.RLock()
 _conn: sqlite3.Connection | None = None

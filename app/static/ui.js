@@ -72,6 +72,7 @@ const GLYPH = {
   star: '<path d="M12 4.2l2.3 4.8 5.2.7-3.8 3.6.9 5.2L12 16l-4.6 2.5.9-5.2-3.8-3.6 5.2-.7z"/>',
   check: '<path d="M6 12.5l4 4 8-9"/>',
   cross: '<path d="M7 7l10 10M17 7L7 17"/>',
+  pencil: '<path d="M5 19l.9-3.8L15.8 5.3a1.6 1.6 0 0 1 2.3 0l.6.6a1.6 1.6 0 0 1 0 2.3L8.8 18.1zM14 7.1l2.9 2.9"/>',
   sun: '<circle cx="12" cy="12" r="3.6"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M6 18l1.4-1.4M16.6 7.4L18 6"/>',
   night: '<path d="M18 14.2A6.8 6.8 0 0 1 9.8 6a6.8 6.8 0 1 0 8.2 8.2z"/>',
   // погода: та же линия, что у остальных значков
@@ -219,9 +220,11 @@ export function jobNote(job, text) {
   return job ? `<div class="notice"><span class="spinner"></span> ${esc(text)}${job.ahead ? ` · в очереди ${job.ahead}` : ''}…</div>` : '';
 }
 
+// кнопка «Сегодня» на сегодняшнем дне не пропадает (иначе стрелки прыгают), а стоит неактивной и подсвеченной
+export const todayMark = (label = 'Сегодня') => `<span class="btn is-today" aria-disabled="true" aria-current="date" title="Уже открыто">${label}</span>`;
 export function dateNav(view, date) {
   return `<div class="datenav"><a class="btn quiet" href="#${view}/${C.addDays(date, -1)}" aria-label="Назад">←</a>
-    ${date !== C.today() ? `<a class="btn" href="#${view}/${C.today()}">Сегодня</a>` : ''}
+    ${date !== C.today() ? `<a class="btn" href="#${view}/${C.today()}">Сегодня</a>` : todayMark()}
     <a class="btn quiet" href="#${view}/${C.addDays(date, 1)}" aria-label="Вперёд">→</a></div>`;
 }
 

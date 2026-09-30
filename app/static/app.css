@@ -274,13 +274,21 @@ button.sync:hover { background: var(--hl); border-color: var(--rule); color: var
 .sync.conflict { color: var(--accent); }
 .sync.conflict::before { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .conflict-card { margin-top: 12px; }
-.conflict-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; table-layout: fixed; }
-.conflict-table th { text-align: left; font: 700 11px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding: 4px 6px; }
-.conflict-table td { padding: 6px; border-top: 1px solid var(--rule); vertical-align: top; overflow-wrap: anywhere; }
-.conflict-table td:first-child { color: var(--ink-3); font-style: italic; width: 30%; }
+.conflict-rows { display: grid; gap: 8px; margin-top: 8px; }
+.conflict-row { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: stretch; }
+.conflict-field { color: var(--ink-3); font-style: italic; font-size: 14px; align-self: center; overflow-wrap: anywhere; }
+.conflict-opt { display: grid; gap: 2px; text-align: left; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--sheet); color: var(--ink); font: inherit; cursor: pointer; min-width: 0; }
+.conflict-opt .conflict-val { font-size: 14px; overflow-wrap: anywhere; }
+.conflict-opt.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.conflict-opt.on .smallcaps { color: var(--accent); }
+@media (max-width: 420px) {
+  .conflict-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .conflict-field { grid-column: 1 / -1; }
+}
 .conflict-actions { margin-top: 10px; }
 .modal-foot .btn { min-width: 0; }
-.conflict-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.conflict-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .conflict-actions .btn { justify-content: center; padding-inline: 8px; }
 @media (max-width: 480px) {
   .conflict-actions { grid-template-columns: minmax(0, 1fr); }
@@ -413,3 +421,7 @@ button.sync.ai-sleep::before { background: var(--ink-3, var(--muted)); }
   .report-tbl th, .report-tbl td { border-color: #999; }
   a { color: inherit; text-decoration: none; }
 }
+/* «Сегодня» на сегодняшнем дне: на месте, но неактивна и подсвечена акцентом */
+.btn.is-today { pointer-events: none; cursor: default; color: var(--accent); background: var(--accent-soft);
+  border-color: transparent; box-shadow: none; font-weight: 600; }
+.btn.is-off { pointer-events: none; cursor: default; opacity: .35; }

@@ -106,28 +106,61 @@ function macroFrom(ns) {
   if (ns.length === 4) [kcal, p, f, c] = ns; else { [p, f, c] = ns; kcal = 4 * p + 9 * f + 4 * c; }
   return { kcal: Math.round(kcal), p: r1(p), f: r1(f), c: r1(c) };
 }
-// кусок текста (между ;/переносами строк) с одним или несколькими КБЖУ → [[кусок без этих чисел, КБЖУ], …],
-// по одной паре на каждое вхождение — так «курица кбжу А, В кбжу Б» не сливает два блюда в одно. Между двумя
-// вхождениями режем по первой запятой: то, что до неё, — хвост (обычно вес) текущего блюда, после — начало
-// следующего. Нет чисел вовсе — null (кусок обрабатывается как обычно, по справочнику) — как food.split_macro_segment.
+// кусок текста (между ;/переносами строк) с явными КБЖУ → [[название блюда, КБЖУ | null], …] - как
+// food.split_macro_segment. К блюду с КБЖУ относится кусок списка с числами, соседние куски перед ним БЕЗ своего
+// количества (части составного блюда: «рис с креветками, яйцом и луком фри кбжу …») и куски после него, где только
+// количество («…кбжу 250/30/5/10, 200г»). Куски со своим количеством («слива 72 гр.») - отдельные продукты, с КБЖУ
+// null, дальше - по справочнику. Нет чисел вовсе - null.
+const WEAK_COMMA_RE = /(?<!\d),|,(?!\d)/u;
+const BARE_QTY_RE = /^[\s\-–(]*\d+(?:[.,]\d+)?\s*(?:г|гр|грамм[\p{L}]*|кг|мл|л|шт|штук[\p{L}]*)?\.?[\s)]*$/iu;
+const PH_RE = /\u0000(\d+)\u0000/gu;
+const hasQty = p => QTY_RE.test(p) || BARE_UNIT_RE.test(p);
 function splitMacroSegment(seg) {
   const whole = MACRO_WHOLE_RE.exec(seg);
   if (whole) return [['', macroFrom(nums(whole))]];
-  const re = new RegExp(MACRO_SLASH_RE.source, 'gu');
-  const ms = [...seg.matchAll(re)];
+  const ms = [...seg.matchAll(new RegExp(MACRO_SLASH_RE.source, 'gu'))];
   if (!ms.length) return null;
+  const macros = ms.map(m => macroFrom(nums(m)));
+  // числа КБЖУ сами бывают через «, » - прячем их, прежде чем делить список по запятым
+  let ph = '', last = 0;
+  ms.forEach((m, i) => { ph += seg.slice(last, m.index) + `\u0000${i}\u0000`; last = m.index + m[0].length; });
+  ph += seg.slice(last);
+  const pieces = ph.split(WEAK_COMMA_RE);
+  const clean = t => t.replace(MACRO_LABEL_RE, ' ').replace(/\s+/g, ' ').trim().replace(/^[\s,]+|[\s,]+$/g, '');
+  const marksOf = p => [...p.matchAll(new RegExp(PH_RE.source, 'gu'))];
   const out = [];
-  let prevEnd = 0;
-  ms.forEach((m, i) => {
-    const nextStart = i + 1 < ms.length ? ms[i + 1].index : seg.length;
-    const between = seg.slice(m.index + m[0].length, nextStart);
-    const cut = i + 1 < ms.length ? between.indexOf(',') : -1;
-    const tail = cut < 0 ? between : between.slice(0, cut);
-    const macro = macroFrom(nums(m));
-    const name = (seg.slice(prevEnd, m.index) + ' ' + tail).replace(MACRO_LABEL_RE, ' ').replace(/\s+/g, ' ').trim();
-    out.push([name, macro]);
-    prevEnd = m.index + m[0].length + tail.length + (cut >= 0 ? 1 : 0);
-  });
+  let pending = [], k = 0;
+  const flush = () => { const rest = pending.filter(x => x.trim()).join(', ').trim(); if (rest) out.push([rest, null]); pending = []; };
+  while (k < pieces.length) {
+    const piece = pieces[k], marks = marksOf(piece);
+    if (!marks.length) { pending.push(piece); k++; continue; }
+    let take = [];
+    while (pending.length && pending[pending.length - 1].trim() && !hasQty(pending[pending.length - 1])) take.unshift(pending.pop());
+    // в куске только «кбжу …» без названия: блюдо - предыдущий кусок («курица 200г, кбжу 250/30/5/10»)
+    if (!clean(piece.replace(new RegExp(PH_RE.source, 'gu'), ' ')) && !take.length && pending.length) take = [pending.pop()];
+    flush();
+    const tail = [];
+    let j = k + 1;
+    while (j < pieces.length && !marksOf(pieces[j]).length && BARE_QTY_RE.test(pieces[j])) tail.push(pieces[j++]);
+    const cuts = [0, ...marks.map(m => m.index + m[0].length)];
+    marks.forEach((m, n) => {
+      const end = m.index + m[0].length;
+      const head = piece.slice(cuts[n], m.index);
+      let parts;
+      if (n + 1 < marks.length) {
+        // между двумя КБЖУ без запятой: вес сразу после чисел - этому блюду, остальное - следующему
+        const after = piece.slice(end, marks[n + 1].index);
+        const q = /^[\s\-–)]*\d+(?:[.,]\d+)?\s*(?:г|гр|грамм[\p{L}]*|кг|мл|л|шт)?\.?/iu.exec(after);
+        parts = [...(n === 0 ? take : []), head + ' ' + (q ? q[0] : '')];
+        if (q) cuts[n + 1] = end + q[0].length;
+      } else {
+        parts = [...(n === 0 ? take : []), head + ' ' + piece.slice(end), ...tail];
+      }
+      out.push([clean(parts.filter(x => x.trim()).join(', ')), macros[Number(m[1])]]);
+    });
+    k = j;
+  }
+  flush();
   return out;
 }
 // куски → [[кусок без КБЖУ, КБЖУ | null], …], по одной паре на каждое найденное КБЖУ - один кусок может дать

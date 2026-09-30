@@ -425,9 +425,9 @@ function timeBox(label, k, val, date, aria) {
   const m = /^(\d{1,2}):(\d{2})$/.exec(val || '');
   const a = `data-act="td-sleep-time" data-k="${k}" data-date="${date}"`;
   return `<label class="field"><span class="smallcaps">${label}</span><div class="a-hm">
-    <input class="control mono" type="number" inputmode="numeric" min="0" max="23" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="${esc(aria)}, часы">
+    <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="${esc(aria)}, часы">
     <span class="a-hm-sep">:</span>
-    <input class="control mono" type="number" inputmode="numeric" min="0" max="59" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="${esc(aria)}, минуты"></div></label>`;
+    <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="${esc(aria)}, минуты"></div></label>`;
 }
 function sleepCard(date) {
   const rec = sleepRec(date), d = rec?.data || {};
@@ -666,7 +666,7 @@ export async function background() {
   bgBusy = true;
   // разминка не зависит от заполненного профиля: без перевода старые пункты-упражнения
   // остаются в чек-листе, и «Не предлагать» / «Заменить» на них не действуют
-  try { await migrateMorning(); await ensureTodayRoutine(); await P.pairWarmSync?.(C.today()); if (profile().setup_done) { await ensureCups(); await ensureHabitLogItems(); } } catch (e) { warn(e); } finally { bgBusy = false; }
+  try { await migrateMorning(); await ensureTodayRoutine(); await P.pairSyncAll?.(C.today()); if (profile().setup_done) { await ensureCups(); await ensureHabitLogItems(); } } catch (e) { warn(e); } finally { bgBusy = false; }
 }
 
 function modulesBlock(date) {
@@ -779,7 +779,7 @@ function moduleCard(k, date) {
       ${pins.length && pins.length * 0.75 > (d.minutes || 10) * 0.7 ? `<div class="notice a-tight">Закреплено ${pins.length} ${pins.length < 5 ? 'упражнения' : 'упражнений'} - они есть в разминке всегда, и на ${d.minutes} мин тренеру почти не остаётся места.
         <div class="a-row-btns"><button class="btn quiet a-mini" data-act="td-unpin-all" data-date="${date}">Открепить все</button></div></div>` : ''}` : ''}
     ${modNote(k) ? `<p class="note a-tight">${esc(modNote(k))}</p>` : ''}
-    ${k === 'morning' && P.pairOn?.() ? `<p class="note a-tight">${d.pair_with ? `Общая разминка с ${esc(C.nameForms?.(store.partners().find(p => p.name === d.pair_with)?.id)?.ins || d.pair_with)}${exs.some(x => x.swapped_from) ? ' - упражнения из вашего «не предлагать» заменены похожими' : ''}.` : 'Общая разминка: партнёр получит этот же набор, если у него тоже включено.'}</p>` : ''}
+    ${safe(() => pairLine(k, d), '')}
     <div class="a-exlist">${exs.map((x, i) => {
       const e = S.exMap.get(x.id), pinned = pins.includes(x.id);
       const ctx = { kind: 'routine', module: k, date, i };
@@ -1050,6 +1050,14 @@ function duelBlock(date) {
   return `${cheer}${line ? `<div class="t-duel-line"><span class="note ell">${esc(line)}</span><a class="link" href="#together">вместе →</a></div>` : ''}`;
 }
 
+// общий комплекс с партнёром: с кем, что последнее он поменял
+function pairLine(k, d) {
+  const pa = P.pairPartner?.(k);
+  if (!pa) return '';
+  const ins = esc(C.nameForms?.(pa.id)?.ins || pa.name);
+  return `<p class="note a-tight a-pair">Общий комплекс с ${ins}: замена и пересборка - сразу у обоих.${d.pair_note ? ` <b>${esc(d.pair_note)}.</b>` : ''}</p>`;
+}
+
 // ════════════════ запись ════════════════
 
 async function setLog(itemId, date, v) {
@@ -1240,6 +1248,8 @@ export const actions = {
   'td-mod-redo': async el => {
     const cur = store.get(routineId(el.dataset.date, el.dataset.m))?.data;
     await makeRoutine(el.dataset.m, cur?.minutes || modDef(el.dataset.m)?.def || 15, el.dataset.date);
+    const pa = P.pairPartner?.(el.dataset.m);
+    if (pa) toast(`Пересобрано у вас и у ${C.nameForms?.(pa.id)?.gen || pa.name}`);
   },
   'td-goto-mod': async el => {
     const { m, date } = el.dataset;
@@ -1324,7 +1334,8 @@ export const actions = {
     closeModal();
     delete S.forms.act;
     await afterChange(f.date);
-    if (!prev) await C.shareHighlight('activity', def.name, minutes, f.date);
+    // личное (массаж, баня, медитация, дети) в ленту группы не уходит
+    if (!prev && !def.private) await C.shareHighlight('activity', def.name, minutes, f.date);
     toast(f.id ? 'Активность обновлена' : `${def.name}: ${minutes} мин записано`);
     if (!f.id && isBackdated(f.date)) setTimeout(() => toast('Засчитал. В следующий раз лучше отметить в тот же день.'), 3000);
   },
@@ -1376,6 +1387,24 @@ export const changes = {
     praiseLater(date);
   },
 };
+
+// часы/минуты сна: при фокусе выделить всё (ввод заменяет старое, а не дописывается к нему - «0300»),
+// только цифры, после двух цифр часов - сразу к минутам
+const hmBox = t => t?.matches?.('.a-hm input');
+document.addEventListener('focusin', e => {
+  if (!hmBox(e.target)) return;
+  const el = e.target;
+  setTimeout(() => { if (document.activeElement === el) el.select(); });
+});
+// Safari снимает выделение отпусканием пальца/кнопки сразу после фокуса
+document.addEventListener('mouseup', e => { if (hmBox(e.target) && e.target.selectionStart !== e.target.selectionEnd) e.preventDefault(); });
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!hmBox(el)) return;
+  const v = el.value.replace(/\D/g, '').slice(0, 2);
+  if (v !== el.value) el.value = v;
+  if (el.dataset.part === 'h' && v.length === 2) el.parentElement.querySelector('[data-part="m"]')?.focus();
+});
 
 // поле «минуты» в форме активности: пересчитать ккал в окне без перерисовки
 document.addEventListener('input', e => {

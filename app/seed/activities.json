@@ -2123,7 +2123,8 @@
     "weather_sensitive": false,
     "cold_ok": false,
     "cardio": false,
-    "support": null
+    "support": null,
+    "private": true
   },
   {
     "id": "massage",
@@ -2321,7 +2322,8 @@
     "weather_sensitive": false,
     "cold_ok": false,
     "cardio": false,
-    "support": null
+    "support": null,
+    "private": true
   },
   {
     "id": "breathing",
@@ -2386,7 +2388,8 @@
     "weather_sensitive": false,
     "cold_ok": false,
     "cardio": false,
-    "support": null
+    "support": null,
+    "private": true
   },
   {
     "id": "gardening",
@@ -2586,7 +2589,8 @@
       ],
       "why": "Детей поднимают и носят: приседания с прямой спиной, тяги и кор берегут поясницу.",
       "avoid": null
-    }
+    },
+    "private": true
   },
   {
     "id": "stairs",
@@ -5166,7 +5170,8 @@
       ],
       "why": "Коляску толкают в лёгком наклоне, а ребёнка носят на руках: тяги и упражнения на осанку, кор и ягодичный мост; после родов кор восстанавливать постепенно.",
       "avoid": null
-    }
+    },
+    "private": true
   },
   {
     "id": "windsurfing",

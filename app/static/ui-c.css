@@ -152,8 +152,9 @@
 .pf-steps .pf-num { width: 110px; }
 
 /* запись еды: строку можно убрать (крестик справа), продукт - дописать из справочника */
-.fi { grid-template-columns: minmax(0, 1fr) auto auto; }
-.fi .fi-del { padding: 4px 6px; min-height: 0; line-height: 1; color: var(--ink-3); }
+.fi { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+.fi .fi-del, .fi .fi-edit { padding: 4px 6px; min-height: 0; line-height: 1; color: var(--ink-3); }
+.fi .fi-edit:hover { color: var(--accent); }
 .fi .fi-del:hover { color: var(--err, var(--accent)); }
 .fi .fi-note { grid-column: 1 / -1; }
 .fi-add { margin-top: 8px; align-items: center; }
@@ -195,9 +196,10 @@
 .a-mac-toggle { display: inline-flex; margin: 6px 0; }
 .mac-f { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
 .mac-f .mac-l { white-space: nowrap; }
-.mac-f input { width: 44px; padding: 1px 4px; font-size: 12px; text-align: right; font-family: var(--mono); -moz-appearance: textfield; }
-.mac-f input[data-k="kcal"] { width: 52px; }
-.mac-f input::-webkit-outer-spin-button, .mac-f input::-webkit-inner-spin-button { margin: 0; }
+/* input.control задаёт широкие отступы - без .control в селекторе они съедали место под цифры («1…») */
+.mac-f input.control { width: 52px; min-height: 0; padding: 2px 5px; font-size: 12px; text-align: right; font-family: var(--mono); -moz-appearance: textfield; }
+.mac-f input.control[data-k="kcal"] { width: 58px; }
+.mac-f input::-webkit-outer-spin-button, .mac-f input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* кофе с молоком: строка под чашкой - тип молока и сколько мл, считается в БЖУ дня */
 .a-cup-milk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 8px 2ch; }
@@ -214,3 +216,11 @@
 .a-glr b { font: 16px/1.3 var(--serif); overflow-wrap: anywhere; }
 .a-glr .note { overflow-wrap: anywhere; }
 .a-glink { text-decoration: none; color: inherit; }
+/* окно правки продукта: КБЖУ на 100 г и съеденное рядом */
+.fi-tbl { width: 100%; border-collapse: collapse; margin-top: 14px; table-layout: fixed; }
+.fi-tbl th { font: 700 11px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); text-align: left; padding: 4px 6px; }
+.fi-tbl tbody th { font: italic 14px var(--serif, inherit); letter-spacing: 0; text-transform: none; width: 30%; }
+.fi-tbl td { padding: 4px 6px; }
+.fi-tbl input.control { width: 100%; min-width: 0; text-align: right; }
+.fi-modal .chk { margin-top: 10px; white-space: normal; align-items: flex-start; }
+.fi-modal .chk input { flex: none; margin-top: 2px; }

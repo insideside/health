@@ -74,7 +74,9 @@ function viewChat() {
 function refreshList() {
   const el = document.getElementById('chat-list');
   if (!el || !location.hash.startsWith('#chat')) return;
+  const stick = nearBottom(el);
   el.innerHTML = listHtml();
+  if (stick) el.scrollTop = el.scrollHeight;
   const btn = document.querySelector('[data-act=chat-send]');
   if (btn) btn.disabled = !(store.state.online && !aiOff() && !jobFor('chat'));
   afterRender();
@@ -345,17 +347,35 @@ document.addEventListener('input', e => {
 
 export const routes = { chat: () => viewChat() };
 
-export function afterRender() {
-  // отступ под зафиксированную панель ввода (на телефоне она над панелью вкладок)
+// Сообщения крутятся в своей области между заголовком и полем ввода, а не всей страницей: иначе, чтобы вернуть
+// шапку (синхронизация, «обновление», тема), приходилось листать всю переписку вверх. Колесо/палец над остальной
+// страницей прокручивает её саму.
+const nearBottom = el => el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+function fitList() {
   const comp = document.getElementById('chat-composer'), list = document.getElementById('chat-list');
+  if (!comp || !list) return;
   const tab = document.querySelector('.tabbar');
   const mobile = tab && getComputedStyle(tab).display !== 'none';
-  if (comp && list) {
-    comp.style.bottom = mobile ? `${tab.offsetHeight}px` : '';
-    list.style.paddingBottom = mobile ? `${comp.offsetHeight + 8}px` : '';
-  }
+  comp.style.bottom = mobile ? `${tab.offsetHeight}px` : '';
+  const top = list.getBoundingClientRect().top + window.scrollY;
+  const below = mobile ? comp.offsetHeight + tab.offsetHeight + 8 : comp.offsetHeight + 24;
+  const stick = !list.style.height || nearBottom(list);
+  let h = Math.max(220, window.innerHeight - top - below);
+  list.style.height = `${h}px`;
+  // отступы листа и раскладки под полем ввода: убираем то, на что страница всё ещё длиннее окна
+  const extra = document.documentElement.scrollHeight - window.innerHeight;
+  if (extra > 0 && h > 220) list.style.height = `${Math.max(220, h - extra)}px`;
+  if (stick) list.scrollTop = list.scrollHeight;
+}
+const refit = () => { if (location.hash.startsWith('#chat')) fitList(); };
+window.addEventListener('resize', refit);
+window.visualViewport?.addEventListener('resize', refit);     // iOS: клавиатура меняет видимую часть экрана
+
+export function afterRender() {
+  fitList();
+  const list = document.getElementById('chat-list');
   const count = messages().length + (jobFor('chat') ? 1 : 0);
-  if (entered || count !== lastCount) window.scrollTo(0, document.documentElement.scrollHeight);
+  if (list && (entered || count !== lastCount)) list.scrollTop = list.scrollHeight;
   entered = false; lastCount = count;
   // прочитано: снимаем точку на вкладке
   const hadDot = document.querySelector('a[href="#chat"] .dot');

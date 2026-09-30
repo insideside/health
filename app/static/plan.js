@@ -278,66 +278,103 @@ export async function makeRoutine(module, a, b, opts = {}) {
   if (MODULE_NOTES[module]) data.note = MODULE_NOTES[module];
   if (cfg.why) data.note = cfg.why + (cfg.avoid ? ` ${cfg.avoid}` : '');
   const rec = await store.put('routine', id, data, date);
-  // общая разминка: пересборка - новая версия для партнёра; первая сборка - сначала смотрим, не собрал ли он уже
-  if (module === 'morning' && pairOn(uid)) {
-    if (rebuild) await publishWarm(date, rec, Date.now(), uid);
-    else await pairWarmSync(date, uid);
+  // общий комплекс: пересборка - новая версия для партнёра; первая сборка - сначала смотрим, не собрал ли он уже
+  if (pairOn(uid, module)) {
+    if (rebuild) await publishWarm(date, rec, Date.now(), uid, module, { kind: 'rebuild', fem: prof(uid).sex === 'f' });
+    else await pairWarmSync(date, uid, module);
   }
   return store.get(id) || rec;
 }
 
-// ── общая утренняя разминка с партнёром ──
-// Включается у каждого в профиле (modules.morning.shared). Кто собрал разминку, публикует партнёру только список
-// упражнений (запись pairwarm:{uid}:{дата}, вид из PUBLIC_KINDS) с версией v. У второго она подменяет свою, пока
-// тот её не начал; из двух версий побеждает более новая (пересборка у одного доходит до другого).
-// Упражнения, которые у человека в «не предлагать», заменяются похожими - остальное одинаковое.
-export const pairOn = (uid = store.uid()) => !!prof(uid).modules?.morning?.shared;
-function partnerWarm(date) {
-  let best = null;
-  for (const pa of store.partners()) {
-    const r = store.get(`pairwarm:${pa.id}:${date}`);
-    if (r?.data?.exercises?.length && (!best || (r.data.v || 0) > (best.data.v || 0))) best = r;
-  }
-  return best;
+// ── общие комплексы с партнёром (утренняя разминка, шея, осанка, короткие домашние - не зал) ──
+// Каждый сам отмечает в профиле, какие комплексы готов делать вместе (profile.pair.modules; старое
+// modules.morning.shared = согласие на разминку) и публикует согласие записью pairwarm:{uid}:consent. Комплекс общий,
+// только если его отметили оба. Кто собрал или поменял комплекс, публикует список упражнений (pairwarm:{uid}:{дата}
+// для разминки, pairwarm:{uid}:{дата}:{модуль} для остальных) с версией v; у второго он подменяет свой, сохраняя
+// отметки у тех же упражнений (замена одного - сразу у обоих), если тот ещё не закончил комплекс.
+// Упражнения из «не предлагать» человека заменяются похожими - остальное одинаковое.
+export const PAIR_MODULES = ['morning', 'neck', 'posture', 'workout', 'abs', 'legs', 'arms', 'back', 'stretch', 'cardio'];
+export function pairChosen(uid = store.uid()) {
+  const p = prof(uid);
+  const list = Array.isArray(p.pair?.modules) ? p.pair.modules : (p.modules?.morning?.shared ? ['morning'] : []);
+  return PAIR_MODULES.filter(m => list.includes(m));
 }
-async function publishWarm(date, rec, v, uid = store.uid()) {
-  await store.put('pairwarm', `pairwarm:${uid}:${date}`, {
-    v, minutes: rec.data.minutes, exercises: (rec.data.exercises || []).map(({ id, amount, per_side }) => ({ id, amount, per_side: !!per_side })),
+export const consentId = uid => `pairwarm:${uid}:consent`;
+// на что согласен партнёр (по его опубликованной записи)
+export function partnerChosen(pid) {
+  const r = store.get(consentId(pid));
+  return Array.isArray(r?.data?.modules) ? r.data.modules : [];
+}
+// с кем комплекс общий: партнёр, который тоже его отметил
+export function pairPartner(module = 'morning', uid = store.uid()) {
+  if (!PAIR_MODULES.includes(module) || !pairChosen(uid).includes(module)) return null;
+  return store.partners().find(pa => partnerChosen(pa.id).includes(module)) || null;
+}
+export const pairOn = (uid = store.uid(), module = 'morning') => !!pairPartner(module, uid);
+// опубликовать своё согласие (при смене настройки и в фоне, если ещё не опубликовано или устарело)
+export async function publishConsent(uid = store.uid()) {
+  const modules = pairChosen(uid), cur = store.get(consentId(uid))?.data?.modules || null;
+  if (cur && cur.length === modules.length && cur.every(m => modules.includes(m))) return;
+  await store.put('pairwarm', consentId(uid), { modules }, null);
+}
+const pwId = (uid, date, module) => module === 'morning' ? `pairwarm:${uid}:${date}` : `pairwarm:${uid}:${date}:${module}`;
+function partnerWarm(date, module) {
+  const pa = pairPartner(module);
+  const r = pa && store.get(pwId(pa.id, date, module));
+  return r?.data?.exercises?.length ? r : null;
+}
+async function publishWarm(date, rec, v, uid = store.uid(), module = 'morning', change = null) {
+  await store.put('pairwarm', pwId(uid, date, module), {
+    v, module, minutes: rec.data.minutes, ...(change ? { change } : {}),
+    exercises: (rec.data.exercises || []).map(({ id, amount, per_side }) => ({ id, amount, per_side: !!per_side })),
   }, date);
 }
-function warmFromPartner(pw, uid) {
+function warmFromPartner(pw, uid, module, cur) {
   const ids = pw.data.exercises.map(x => x.id), out = [];
+  const doneIds = new Set((cur || []).filter(x => x.done).map(x => x.id));
   for (const x of pw.data.exercises) {
     let id = x.id, amount = x.amount, swapped = null;
-    if (!exById(id) || PF.isExcluded(id, uid, { place: 'home', module: 'morning' })) {
-      const alt = alternativesFor(id, { place: 'home', module: 'morning', exclude: [...ids, ...out.map(o => o.id)], n: 1, uid })[0];
+    if (!exById(id) || PF.isExcluded(id, uid, { place: 'home', module })) {
+      const alt = alternativesFor(id, { place: 'home', module, exclude: [...ids, ...out.map(o => o.id)], n: 1, uid })[0];
       if (!alt) continue;
       swapped = id; id = alt.id;
       if (alt.unit !== exById(x.id)?.unit) amount = alt.unit === 'seconds' ? '30 с' : '10 раз';
     }
-    out.push({ id, amount, per_side: !!exById(id)?.per_side, done: false, ...(swapped ? { swapped_from: swapped } : {}) });
+    // отметки у тех же упражнений сохраняем: замена одного упражнения не сбрасывает сделанное
+    out.push({ id, amount, per_side: !!exById(id)?.per_side, done: doneIds.has(id), ...(swapped ? { swapped_from: swapped } : {}) });
   }
   return out;
 }
-// → true, если разминку заменили на версию партнёра
-export async function pairWarmSync(date = C.today(), uid = store.uid()) {
-  if (!pairOn(uid)) return false;
-  const id = `routine:${uid}:${date}:morning`, cur = store.get(id), mineId = `pairwarm:${uid}:${date}`;
+// → true, если комплекс заменили на версию партнёра
+export async function pairWarmSync(date = C.today(), uid = store.uid(), module = 'morning') {
+  if (!pairOn(uid, module)) return false;
+  const id = `routine:${uid}:${date}:${module}`, cur = store.get(id), mineId = pwId(uid, date, module);
   if (!cur) return false;
-  const mine = store.get(mineId), pw = partnerWarm(date);
+  const mine = store.get(mineId), pw = partnerWarm(date, module);
   if (!pw || (pw.data.v || 0) <= (mine?.data.v || 0)) {
-    if (!mine) await publishWarm(date, cur, Date.now(), uid);
+    if (!mine) await publishWarm(date, cur, Date.now(), uid, module);
     return false;
   }
-  if ((cur.data.exercises || []).some(x => x.done)) return false;        // уже начали - свою не трогаем
-  const exercises = warmFromPartner(pw, uid);
+  if (cur.data.done) return false;                                  // уже закончил - свой не трогаем
+  const exercises = warmFromPartner(pw, uid, module, cur.data.exercises);
   if (!exercises.length) return false;
   const who = store.partners().find(p => p.id === pw.user_id)?.name || 'партнёр';
   const minutes = pw.data.minutes || cur.data.minutes;
-  await store.put('routine', id, { ...cur.data, minutes, title: `Утренняя разминка · ${minutes} мин`, exercises, done: false, pair_v: pw.data.v, pair_with: who }, date);
-  await store.put('pairwarm', mineId, { v: pw.data.v, minutes, exercises: exercises.map(({ id: e, amount, per_side }) => ({ id: e, amount, per_side })) }, date);
+  const title = `${(MODULES[module] || MODULES.morning).title} · ${minutes} мин`;
+  const ch = pw.data.change;
+  const pair_note = ch?.kind === 'swap' ? `${who} ${ch.fem ? 'заменила' : 'заменил'} «${exById(ch.from)?.name || ch.from}» на «${exById(ch.to)?.name || ch.to}»`
+    : ch?.kind === 'rebuild' ? `${who} ${ch.fem ? 'пересобрала' : 'пересобрал'} комплекс` : null;
+  await store.put('routine', id, { ...cur.data, minutes, title, exercises, done: exercises.every(x => x.done), pair_v: pw.data.v, pair_with: who, pair_note }, date);
+  await store.put('pairwarm', mineId, { v: pw.data.v, module, minutes, exercises: exercises.map(({ id: e, amount, per_side }) => ({ id: e, amount, per_side })) }, date);
   await C.refreshDsum(date);
   return true;
+}
+// все общие комплексы дня (фон «Сегодня»)
+export async function pairSyncAll(date = C.today(), uid = store.uid()) {
+  await publishConsent(uid);
+  let any = false;
+  for (const m of pairChosen(uid)) if (await pairWarmSync(date, uid, m)) any = true;
+  return any;
 }
 
 // ── домашние тренировки ──
@@ -900,7 +937,9 @@ export async function swapExercise(ctx, to, uid = store.uid()) {
     const old = exById(cur.id), cfg = MODULES[ctx.module] || MODULES.morning;
     const amount = old && old.unit === e.unit ? cur.amount : e.unit === 'seconds' ? `${cfg.sec || 30} с` : `${cfg.reps || 10} раз`;
     exs[ctx.i] = { id: to, amount, per_side: !!e.per_side, done: false, swapped_from: cur.id };
-    await store.patch(id, { exercises: exs, done: exs.every(x => x.done) });
+    await store.patch(id, { exercises: exs, done: exs.every(x => x.done), pair_note: null });
+    // общий комплекс: замена сразу и у партнёра
+    if (pairOn(uid, ctx.module)) await publishWarm(ctx.date, store.get(id), Date.now(), uid, ctx.module, { kind: 'swap', from: cur.id, to, fem: prof(uid).sex === 'f' });
     await C.refreshDsum(ctx.date);
     return e;
   }

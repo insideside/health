@@ -91,7 +91,10 @@ ACTIONS_HELP = """actions - кнопки, которые клиент может
 там, где кнопка действительно что-то делает: если ты советуешь ничего не менять, никакую кнопку жать не зови.
 Просит записать еду или активность - обязательно предложи log_food / log_activity.
 Служебные id (из каталога упражнений, «можно на замену» и т. п.) - только внутри params действий, их не видит
-человек, которому ты отвечаешь. В тексте ответа называй упражнения обычными русскими названиями, никогда не id."""
+человек, которому ты отвечаешь. В тексте ответа называй упражнения обычными русскими названиями, никогда не id.
+Имена действий и параметров (rebuild_program, note, from, to, params и т. п.) в тексте тоже не пиши: что учесть, ты
+кладёшь в note кнопки, а человеку своими словами говоришь, что поменяешь («Пересоберу: верх и кор, ноги уберу,
+кардио на эллипсе»)."""
 
 
 # ── контекст ──
@@ -160,7 +163,8 @@ def _context(uid: str) -> str:
     free = [d for d in ((today + timedelta(days=i)).isoformat() for i in range(1, 5)) if d not in wos]
     acts_cat = ", ".join(f"{a['id']} ({a.get('name')})" for a in db.activities()) or "walking, running, cycling, swimming, other"
     injuries = userdata.open_injuries(uid)
-    return f"""Сегодня {today.isoformat()}, {WEEKDAYS[today.weekday()]}, {datetime.now():%H:%M}.
+    return f"""{_cardio_line(uid)}
+Сегодня {today.isoformat()}, {WEEKDAYS[today.weekday()]}, {datetime.now():%H:%M}.
 Клиент: {person_text(uid)}. Цели: {goals_text(goal)}.
 Нормы: {t.get('kcal', '-')} ккал, Б {t.get('p', '-')} / Ж {t.get('f', '-')} / У {t.get('c', '-')} г, вода {t.get('water_glasses', '-')} стак.,
 шаги {t.get('steps_manual') or t.get('steps', '-')}, сон {t.get('sleep_hours', '-')} ч, темп: {(t.get('intensity') or {}).get('label', '-')}.
@@ -171,6 +175,24 @@ def _context(uid: str) -> str:
 Ближайшие тренировки: {'; '.join(upcoming) or 'нет'}
 Свободные для переноса дни: {', '.join(f"{d} {WEEKDAYS[date.fromisoformat(d).weekday()]}" for d in free) or 'нет'}
 Виды активностей (id): {acts_cat}"""
+
+
+def _cardio_line(uid: str) -> str:
+    """Любимое кардио, чего нет в зале и постоянные занятия вне программы - иначе модель путает, например,
+    эллипс в зале с велосипедом, который в профиле как прогулочная активность."""
+    prof = userdata.profile(uid)
+    likes = [userdata.activity_name(x) for x in (prof.get("cardio") or {}).get("likes") or [] if isinstance(x, str)]
+    missing = [jobs.EQUIP_LABEL.get(x, x) for x in (prof.get("gym_equipment") or {}).get("missing") or []]
+    regular = [f"{userdata.activity_name(a.get('type') or 'other')} {a.get('per_week') or 1} раз/нед по {a.get('minutes') or 0} мин"
+               for a in prof.get("activities") or [] if isinstance(a, dict)]
+    out = []
+    if likes:
+        out.append("Любимое кардио клиента: " + ", ".join(likes) + ". Кардио в плане и в ответах - из этого списка, не подменяй другим.")
+    if missing:
+        out.append("В зале клиента НЕТ: " + ", ".join(missing) + " - не предлагай упражнения на этом.")
+    if regular:
+        out.append("Постоянные занятия вне программы (это не кардио в зале, не путай с ним): " + "; ".join(regular) + ".")
+    return "\n".join(out)
 
 
 def _history(uid: str, exclude: str) -> list[dict]:
@@ -241,6 +263,16 @@ def _guess_meal(text: str) -> str:
     return "breakfast" if h < 11 else "lunch" if h < 16 else "dinner" if h >= 18 else "snack"
 
 
+# служебное, что модель всё же вписала в текст: «с note: «…»», «(note: …)», длинное тире
+_PARAM_RE = re.compile(r"\s*(?:\(\s*)?(?:с\s+)?\b(?:note|params|from|to|reason)\s*[:=]\s*(?:«[^»]*»|\"[^\"]*\"|[^.,;)\n]*)\)?", re.I)
+
+
+def _humanize(reply: str) -> str:
+    reply = _PARAM_RE.sub("", reply)
+    reply = re.sub(r"\s*[—–]\s*", " - ", reply)
+    return re.sub(r"[ \t]{2,}", " ", reply).replace(" .", ".").strip()
+
+
 async def job_chat(uid: str, inp: dict) -> dict:
     msg = db.get(inp["message_id"])
     if msg and msg["user_id"] != uid:
@@ -255,6 +287,7 @@ async def job_chat(uid: str, inp: dict) -> dict:
     if len(reply) > REPLY_MAX:
         # модель слила рассуждения в ответ - берём последний абзац (обычно это и есть ответ)
         reply = reply.split("\n\n")[-1].strip().strip('"«»')[:REPLY_MAX]
+    reply = _humanize(reply)
     if not reply:
         raise AIError("Модель промолчала - спросите ещё раз")
     actions = _clean_actions(out.get("actions"), uid)

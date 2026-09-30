@@ -1,6 +1,6 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
-import { esc, num, fmt, dayTitle, WD, profile, glyph, gradeGlyph } from '../ui.js';
+import { esc, num, fmt, dayTitle, WD, profile, glyph, gradeGlyph, todayMark } from '../ui.js';
 import { H } from './today.js';
 
 // Календарь — дневник здоровья с масштабами: день → неделя → месяц → квартал → год.
@@ -74,7 +74,7 @@ function head(scale, anchor, title) {
   const cur = norm(scale, t) === anchor;
   return `<div class="head-row"><div><div class="kicker smallcaps">Дневник здоровья</div><h1>${esc(cap(title))}</h1></div>
     <div class="datenav"><a class="btn quiet" href="${href(scale, shift(scale, anchor, -1))}" aria-label="Назад">←</a>
-      ${cur ? '' : `<a class="btn" href="${href(scale, norm(scale, t))}">Сегодня</a>`}
+      ${cur ? todayMark() : `<a class="btn" href="${href(scale, norm(scale, t))}">Сегодня</a>`}
       <a class="btn quiet" href="${href(scale, shift(scale, anchor, 1))}" aria-label="Вперёд">→</a></div></div>
     <nav class="a-tabs" aria-label="Масштаб">${SCALES.map(([k, l]) => `<a href="${href(k, norm(k, pickAnchor(scale, anchor)))}" class="${k === scale ? 'on' : ''}" ${k === scale ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
 }

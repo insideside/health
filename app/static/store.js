@@ -302,13 +302,17 @@ function mergeRecord(entry, server) {
 export function conflicts() {
   return [...outbox.values()].filter(e => e.held && e.conflict).map(e => ({
     id: e.id, kind: e.rec.kind, date: e.rec.date, local: e.rec, server: e.conflict.server, fields: e.conflict.fields,
+    newer: (e.rec.updated_at || 0) >= (e.conflict.server.updated_at || 0) ? 'local' : 'server',
   }));
 }
 
-// choice: 'local' — оставить данные этого устройства, 'server' — взять с сервера, 'merge' — объединить
-export async function resolveConflict(id, choice) {
+// choice: 'local' — оставить данные этого устройства, 'server' — взять с сервера, 'merge' — объединить,
+// 'fields' — по каждому спорному полю отдельно (picks)
+export async function resolveConflict(id, choice, picks) {
   const e = outbox.get(id);
   if (!e || !e.conflict) return;
+  // спор «удалили / изменили» - одна строка, это просто выбор стороны целиком
+  if (choice === 'fields' && e.conflict.deletion) choice = (picks || [])[0] === 'server' ? 'server' : 'local';
   const server = e.conflict.server;
   const t = tx(['records', 'outbox'], 'readwrite');
   if (choice === 'server') {
@@ -321,11 +325,14 @@ export async function resolveConflict(id, choice) {
     broadcast({ t: 'recs', recs: [server] });
   } else {
     let rec = { ...e.rec, updated_at: Date.now() };
-    if (choice === 'merge') {
+    if (choice === 'merge' || choice === 'fields') {
       const conf = [];
       const merged = merge3(e.base, e.rec.data, server.data, '', conf);
       const localNewer = (e.rec.updated_at || 0) >= (server.updated_at || 0);
-      const data = conf.length ? resolveMarkers(merged, conf, (l, s) => combine(l, s, localNewer)) : merged;
+      // 'fields': picks[i] - 'local' | 'server' для i-го спорного поля (порядок как в conflict.fields)
+      let i = 0;
+      const pick = choice === 'fields' ? (l, s) => ((picks || [])[i++] === 'server' ? s : l) : (l, s) => combine(l, s, localNewer);
+      const data = conf.length ? resolveMarkers(merged, conf, pick) : merged;
       rec = { ...rec, data, deleted: e.conflict.deletion ? false : !!e.rec.deleted };
     }
     const entry = { id, rec, base_rev: server.rev, base: clone(server.data), base_deleted: !!server.deleted, held: false };

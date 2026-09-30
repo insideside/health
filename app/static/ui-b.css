@@ -186,7 +186,9 @@ details.pf-inner > summary { cursor: pointer; color: var(--ink-3); font-family: 
 
 /* ════════ чат ════════ */
 .chat-v2 h1 { margin-bottom: 14px; }
-.chat-list { display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; }
+.chat-list { display: flex; flex-direction: column; gap: 10px; padding: 2px 4px 12px 2px; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; scrollbar-gutter: stable; }
+.chat-list > * { flex-shrink: 0; }
 .chat-day { align-self: center; color: var(--ink-3); margin: 10px 0 2px; }
 .msg { display: flex; flex-direction: column; max-width: min(560px, 86%); min-width: 0; }
 .msg.m-user { align-self: flex-end; align-items: flex-end; }
@@ -228,7 +230,6 @@ details.pf-inner > summary { cursor: pointer; color: var(--ink-3); font-family: 
   }
   .chat-quick { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px 8px; padding: 0 12px 2px; }
   .chat-quick::-webkit-scrollbar { display: none; }
-  .chat-list { padding-bottom: 150px; }
   .msg { max-width: 90%; }
   .msg .bubble { font-size: 15px; }
   #chat-in { font-size: 16px; }   /* iOS не увеличивает страницу при фокусе */
@@ -259,3 +260,9 @@ details.pf-inner > summary { cursor: pointer; color: var(--ink-3); font-family: 
   .pg-week td:nth-child(8)::before { content: "Состояние"; }
   .pg-week tfoot tr { border-bottom: 0; }
 }
+/* «Прогресс вместе»: соревнование - вложенная настройка под обменом прогрессом */
+.pf-compete .pf-sub { margin: 6px 0 0 26px; }
+.pf-compete .pf-sub .chk { white-space: normal; }
+.pf-pair .chips { margin-top: 6px; }
+.pf-pair-ok { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 4px; border-radius: 50%;
+  font: 700 10px var(--sans); background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }

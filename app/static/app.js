@@ -113,34 +113,85 @@ function syncBadge() {
 const KIND_NAME = { profile: 'Профиль', goal: 'Цели', target: 'Нормы', item: 'Пункт чек-листа', log: 'Отметка чек-листа',
   food: 'Запись о еде', body: 'Вес и замеры', workout: 'Тренировка', program: 'Программа', sleep: 'Сон', state: 'Самочувствие',
   daytype: 'Тип дня', activity: 'Активность', injury: 'Травма', routine: 'Разминка', favfood: 'Избранное блюдо', chat: 'Сообщение', drink: 'Чашка чая или кофе', supp: 'Приём добавки',
-  dsum: 'Итог дня', wsum: 'Итог недели', ach: 'Достижение', coach: 'Разбор тренера' };
+  dsum: 'Итог дня', wsum: 'Итог недели', ach: 'Достижение', coach: 'Разбор тренера', mtest: 'Тест', vitals: 'Пульс и HRV',
+  period: 'Цикл', pairwarm: 'Общий комплекс', smoke: 'Отметка о курении', alcohol: 'Отметка об алкоголе', highlight: 'Веха для группы' };
 const FIELD_NAME = { v: 'значение', bed: 'лёг', wake: 'встал', weight: 'вес', text: 'текст', meal: 'приём пищи', time: 'время',
   wellbeing: 'самочувствие', soreness: 'мышцы', stress: 'стресс', sleepy: 'сонливость', note: 'заметка', type: 'тип', minutes: 'минуты',
-  intensity: 'интенсивность', title: 'название', done: 'выполнено', reps: 'повторы', name: 'имя', height: 'рост' };
+  intensity: 'интенсивность', title: 'название', done: 'выполнено', reps: 'повторы', name: 'имя', height: 'рост',
+  id: 'упражнение', exercise_id: 'упражнение', sets: 'подходы', rest: 'отдых', alarm: 'первый будильник', alarms: 'будильников',
+  awakening: 'пробуждение', fall: 'засыпание', continuity: 'сон', rise: 'подъём', grams: 'граммы', kcal: 'калории', p: 'белки',
+  f: 'жиры', c: 'углеводы', items: 'продукты', exercises: 'упражнения', amount: 'количество', dose: 'доза', distance_km: 'расстояние',
+  waist: 'талия', start: 'начало', end: 'конец', status: 'состояние', pinned: 'закреплённые', place: 'место', date: 'дата' };
 
-function fieldLabel(path) {
-  const last = String(path).replace(/\[\d+\]/g, '').split('.').filter(Boolean).pop() || path;
-  return FIELD_NAME[last] || last;
+// id упражнения → название из справочника на устройстве
+const exName = id => (store.getMeta('exercises', null) || []).find(e => e.id === id)?.name || null;
+// значение по пути вида exercises[2].done[1] внутри data записи
+function atPath(data, path) {
+  let v = data;
+  for (const part of String(path).match(/[^.[\]]+/g) || []) { if (v == null) return undefined; v = v[part]; }
+  return v;
 }
-function valueLabel(v) {
+const ownerName = o => o && typeof o === 'object' && !Array.isArray(o) ? (o.name || o.title || exName(o.exercise_id || o.id)) : null;
+
+// «выполнено» у пятого упражнения разминки → «Махи ногами в сторону: выполнено, подход 2»
+function fieldLabel(path, c) {
+  const p = String(path);
+  if (p === '(удаление)') return 'запись';
+  const last = p.replace(/\[\d+\]/g, '').split('.').filter(Boolean).pop() || '';
+  let label = FIELD_NAME[last] || 'другие данные';
+  const set = /\.done\[(\d+)\]$/.exec(p);
+  if (set) label += `, подход ${Number(set[1]) + 1}`;
+  // ближайший элемент списка с названием (упражнение, продукт) - в начало подписи
+  const cuts = [...p.matchAll(/\[\d+\]/g)].map(m => m.index + m[0].length).reverse();
+  for (const cut of cuts) {
+    const pre = p.slice(0, cut);
+    const nm = c ? ownerName(atPath(c.local.data, pre)) || ownerName(atPath(c.server.data, pre)) : null;
+    if (nm && !(last === 'id' || last === 'exercise_id')) return `${nm}: ${label}`;
+    if (nm) break;
+  }
+  return label;
+}
+function valueLabel(v, path = '') {
   if (v === true) return 'да';
   if (v === false) return 'нет';
-  if (v == null || v === '') return '-';
-  const t = typeof v === 'object' ? JSON.stringify(v) : String(v);
-  return t.length > 60 ? t.slice(0, 57) + '…' : t;
+  if (v == null || v === '') return 'пусто';
+  if (/(^|\.)(id|exercise_id)$/.test(String(path)) && typeof v === 'string') return exName(v) || 'другое упражнение';
+  if (Array.isArray(v)) {
+    if (v.every(x => x === null || typeof x !== 'object')) return v.length ? v.map(x => x === true ? 'да' : x === false ? 'нет' : x ?? '-').join(', ') : 'пусто';
+    const names = v.map(ownerName).filter(Boolean);
+    return names.length ? names.join(', ').slice(0, 80) : `${v.length} шт.`;
+  }
+  if (typeof v === 'object') return ownerName(v) || 'другой вариант';
+  const t = String(v);
+  return t.length > 80 ? t.slice(0, 77) + '…' : t;
+}
+const fmtStamp = ms => ms ? new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(ms) : '';
+
+// выбор по строкам: id записи → ['local' | 'server', …] по спорным полям; по умолчанию - более свежая правка
+const conflictPicks = new Map();
+function picksFor(c) {
+  let p = conflictPicks.get(c.id);
+  if (!p || p.length !== c.fields.length) { p = c.fields.map(() => c.newer); conflictPicks.set(c.id, p); }
+  return p;
 }
 
 function conflictHtml(c) {
   const when = c.date ? ` · ${esc(new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' }).format(C.parse(c.date)))}` : '';
+  const picks = picksFor(c);
+  const side = (f, i, who) => {
+    const on = picks[i] === who;
+    return `<button class="conflict-opt${on ? ' on' : ''}" data-act="conflict-pick" data-id="${esc(c.id)}" data-i="${i}" data-choice="${who}" aria-pressed="${on}">
+      <span class="smallcaps muted">${who === 'local' ? 'это устройство' : 'сервер'}</span><span class="conflict-val">${esc(valueLabel(who === 'local' ? f.local : f.server, f.path))}</span></button>`;
+  };
   return `<div class="raised card conflict-card">
     <div class="smallcaps muted">${esc(KIND_NAME[c.kind] || c.kind)}${when}</div>
-    <table class="conflict-table"><thead><tr><th></th><th>это устройство</th><th>сервер</th></tr></thead><tbody>
-      ${c.fields.slice(0, 6).map(f => `<tr><td>${esc(fieldLabel(f.path))}</td><td>${esc(valueLabel(f.local))}</td><td>${esc(valueLabel(f.server))}</td></tr>`).join('')}
-    </tbody></table>
+    <p class="note">Правка на этом устройстве: ${esc(fmtStamp(c.local.updated_at))}, на сервере: ${esc(fmtStamp(c.server.updated_at))}. Отмечено более свежее - можно выбрать иначе в каждой строке.</p>
+    <div class="conflict-rows">
+      ${c.fields.map((f, i) => `<div class="conflict-row"><div class="conflict-field">${esc(fieldLabel(f.path, c))}</div>${side(f, i, 'local')}${side(f, i, 'server')}</div>`).join('')}
+    </div>
     <div class="actions conflict-actions">
-      <button class="btn" data-act="conflict" data-id="${esc(c.id)}" data-choice="local">Это устройство</button>
-      <button class="btn" data-act="conflict" data-id="${esc(c.id)}" data-choice="server">Сервер</button>
-      <button class="btn" data-act="conflict" data-id="${esc(c.id)}" data-choice="merge">Объединить</button>
+      <button class="btn solid" data-act="conflict" data-id="${esc(c.id)}" data-choice="fields">Применить выбор</button>
+      <button class="btn quiet" data-act="conflict" data-id="${esc(c.id)}" data-choice="merge" title="Сложить всё, что можно сложить; в спорном - более свежая правка, тексты склеить">Объединить сами</button>
     </div></div>`;
 }
 
@@ -152,7 +203,7 @@ function syncPanel() {
       <p class="small">${store.state.online ? 'Сервер на связи.' : 'Сервер недоступен - правки сохраняются на этом устройстве и уйдут при подключении.'}
         Последний обмен: <span class="mono">${esc(last)}</span>. Ждут отправки: <span class="mono">${n}</span>.</p>
       ${store.state.error ? `<p class="err">${esc(store.state.error)}</p>` : ''}
-      ${cs.length ? `<div class="notice">Одни и те же данные изменили на разных устройствах по-разному. Выберите, что оставить. «Объединить» сложит всё, что можно сложить, а в спорных местах возьмёт более свежую правку и склеит тексты.</div>
+      ${cs.length ? `<div class="notice">Одни и те же данные изменили на разных устройствах по-разному. В каждой строке выберите, какое значение оставить, и нажмите «Применить выбор». «Объединить сами» сложит всё, что можно сложить, а в спорных местах возьмёт более свежую правку и склеит тексты.</div>
         ${cs.map(conflictHtml).join('')}
         ${cs.length > 1 ? `<div class="actions"><span class="note">Для всех:</span>
           <button class="btn quiet" data-act="conflict-all" data-choice="local">Это устройство</button>
@@ -165,7 +216,7 @@ function syncPanel() {
     <p class="note"><a class="link" href="#about" data-act="close-go">Что работает без сети, а что - только с сервером</a></p>
     </div>
     <div class="modal-foot"><button class="btn quiet" data-act="close">Закрыть</button>
-      <button class="btn solid" data-act="sync-now" ${store.state.online ? '' : 'disabled'}>Синхронизировать</button></div>`);
+      <button class="btn${cs.length ? '' : ' solid'}" data-act="sync-now" ${store.state.online ? '' : 'disabled'}>Синхронизировать</button></div>`);
 }
 
 // новый конфликт — показываем панель сами (один раз на набор)
@@ -264,8 +315,17 @@ Object.assign(actions, {
   },
   // без связи не сбрасываем кэш оболочки: после перезагрузки приложение не открылось бы вовсе
   'app-update': () => store.state.online ? applyUpdate() : toast('Без связи с сервером обновить нельзя - приложение работает из кэша'),
+  'conflict-pick': el => {
+    const c = store.conflicts().find(x => x.id === el.dataset.id);
+    if (!c) return;
+    picksFor(c)[Number(el.dataset.i)] = el.dataset.choice;
+    const row = el.closest('.conflict-row');
+    row?.querySelectorAll('.conflict-opt').forEach(b => { const on = b === el; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  },
   conflict: async el => {
-    await store.resolveConflict(el.dataset.id, el.dataset.choice);
+    const c = store.conflicts().find(x => x.id === el.dataset.id);
+    await store.resolveConflict(el.dataset.id, el.dataset.choice, c ? picksFor(c) : undefined);
+    conflictPicks.delete(el.dataset.id);
     store.conflicts().length ? syncPanel() : (closeModal(), toast('Готово: данные согласованы'));
   },
   'conflict-all': async el => { await store.resolveAll(el.dataset.choice); closeModal(); toast('Готово: данные согласованы'); },

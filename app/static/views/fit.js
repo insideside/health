@@ -19,13 +19,19 @@ export function exActions(id, ctx, { like = true } = {}) {
   </div>`;
 }
 
+// с кем общий комплекс, в котором меняем упражнение (творительный падеж имени) - или null
+function pairWith(ctx) {
+  const pa = ctx?.kind === 'routine' ? P.pairPartner?.(ctx.module) : null;
+  return pa ? (C.nameForms?.(pa.id)?.ins || pa.name) : null;
+}
 function swapModal(id, ctx) {
   const alts = P.alternativesIn(ctx, 5);
   const meta = e => [(e.muscles || []).slice(0, 3).join(', '), (e.equipment || []).length ? (e.equipment || []).map(PF.equipLabel).join(', ') : 'без инвентаря'].filter(Boolean).join(' · ');
   openModal(`<div class="modal-head"><div class="kicker smallcaps">Замена · ${esc(exName(id))}</div><h2>На что заменить?</h2></div>
     <div class="modal-body">${alts.length ? `<div class="fx-alts">${alts.map(e => `<button type="button" class="raised fx-alt" data-act="ex-swap-do" data-to="${esc(e.id)}" ${ctxAttrs(ctx)}>
         <b>${esc(e.name)}</b>${PF.isLiked(e.id) ? ' <span class="chip">любимое</span>' : ''}<span class="note">${esc(meta(e))}</span></button>`).join('')}</div>
-      <p class="note">Тот же тип движения и мышцы, с учётом инвентаря, ограничений и «не предлагать». Отметки остальных упражнений сохранятся.</p>`
+      <p class="note">Тот же тип движения и мышцы, с учётом инвентаря, ограничений и «не предлагать». Отметки остальных упражнений сохранятся.</p>
+      ${pairWith(ctx) ? `<div class="notice">Это общий комплекс с ${esc(pairWith(ctx))}: замена будет сразу у вас обоих.</div>` : ''}`
       : '<p class="empty">Подходящей замены в каталоге нет. Проверьте в профиле «Что есть дома» - с новым инвентарём вариантов станет больше.</p>'}</div>
     <div class="modal-foot"><button class="btn quiet" data-act="ex-excl-open" data-ex="${esc(id)}" ${ctxAttrs(ctx)}>Не предлагать совсем</button><button class="btn" data-act="close">Отмена</button></div>`);
 }
@@ -165,7 +171,9 @@ export const actions = {
     const from = P.ctxInfo(ctx)?.id;
     const e = await P.swapExercise(ctx, el.dataset.to);
     closeModal();
-    if (e) toast(`Заменил${from ? ` «${exName(from)}»` : ''} на «${e.name}»`);
+    const pw = pairWith(ctx);
+    const pp = pw ? P.pairPartner(ctx.module) : null;
+    if (e) toast(`Заменил${from ? ` «${exName(from)}»` : ''} на «${e.name}»${pp ? ` - у вас и у ${C.nameForms?.(pp.id)?.gen || pp.name}` : ''}`);
     await afterPrefs(ctx?.date);
   },
   'ex-excl-open': el => {
