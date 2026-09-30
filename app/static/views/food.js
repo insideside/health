@@ -11,6 +11,9 @@ import * as MPL from '../mealplan.js';
 
 const MEALS = [['breakfast', 'Завтрак'], ['lunch', 'Обед'], ['dinner', 'Ужин'], ['snack', 'Перекус']];
 const MEAL_NAME = Object.fromEntries(MEALS);
+// БЖУ по строкам питания редактируют либо как употреблено (по умолчанию), либо на 100 г продукта - тогда
+// употреблённое пересчитывается на лету по граммовке; сам сохранённый item.kcal/p/f/c всегда «употреблено»
+let macMode = 'consumed';
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 const hm = t => /^\d{1,2}:\d{2}$/.test(t || '') ? t.padStart(5, '0') : null;
 const timeOf = e => hm(e.data.time) || (e.data.created ? new Date(e.data.created).toTimeString().slice(0, 5) : '');
@@ -803,8 +806,9 @@ function viewFood(date) {
     return `<div class="macro" data-dom="${MACRO_DOM[k]}"><div class="top"><span class="smallcaps muted">${label}</span><span class="mono">${num(v)}${g ? ' / ' + num(g) : ''} ${unit}</span></div>
       <div class="groove ${g && v > g * 1.05 && !cheat ? 'over' : ''}"><div class="fill" style="width:${pct}%"></div></div></div>`;
   };
-  const h = new Date().getHours();
-  const defMeal = h < 11 ? 'breakfast' : h < 16 ? 'lunch' : h < 21 ? 'dinner' : 'snack';
+  // приём пищи по умолчанию - следующий не внесённый сегодня: завтрак → обед → ужин → перекус (и дальше перекус)
+  const mealsToday = new Set(entries.map(e => e.data.meal || 'snack'));
+  const defMeal = ['breakfast', 'lunch', 'dinner'].find(k => !mealsToday.has(k)) || 'snack';
   const uncounted = entries.filter(e => e.data.status !== 'calculated').length;
   const win = eatingWindow();
   const favs = store.list('favfood').sort((a, b) => (a.data.title || '').localeCompare(b.data.title || ''));
@@ -836,12 +840,18 @@ function viewFood(date) {
       ${yMeals.length ? `<div class="a-quick"><span class="smallcaps muted">Как вчера</span><div class="chips">${yMeals.map(([k, l]) => `<button class="chip" data-act="fd-yesterday" data-meal="${k}" data-date="${date}">${l}</button>`).join('')}</div></div>` : ''}
       <p class="note" style="margin:8px 0 0">Пишите как есть: «тарелка борща», «2 куска пиццы» - или выберите продукты из справочника и укажите граммы. Знакомое посчитается сразу, остальное - локальной ИИ по кнопке.</p>
     </div>
-    ${MEALS.map(([k, label]) => {
-      const es = entries.filter(e => (e.data.meal || 'snack') === k);
-      if (!es.length) return '';
-      const kc = es.reduce((a, e) => a + (e.data.totals?.kcal || 0), 0);
-      return `<div class="meal-title" data-dom="food"><span class="smallcaps muted">${label}</span><span class="mono">${num(kc)} ккал</span></div>${es.map(e => foodEntry(e, win)).join('')}`;
-    }).join('')}
+    ${entries.some(e => e.data.items?.length) ? `<div class="chips a-mac-toggle">
+      <button class="chip ${macMode === 'consumed' ? 'on' : ''}" data-act="mac-mode" data-mode="consumed">Употреблено</button>
+      <button class="chip ${macMode === 'per100' ? 'on' : ''}" data-act="mac-mode" data-mode="per100">На 100 г</button></div>` : ''}
+    ${(() => {
+      // блоки по времени: завтрак, обед, ужин - по одному, каждый перекус отдельно (C.mealBlocks)
+      const bl = C.mealBlocks(date, undefined, { all: true }), sn = bl.filter(b => b.meal === 'snack').length;
+      return bl.map(b => {
+        const kc = b.entries.reduce((a, e) => a + (e.data.totals?.kcal || 0), 0);
+        const label = b.meal === 'snack' && sn > 1 ? `${MEAL_NAME.snack} ${b.n}` : MEAL_NAME[b.meal] || b.meal;
+        return `<div class="meal-title" data-dom="food"><span class="smallcaps muted">${label}</span><span class="mono">${num(kc)} ккал</span></div>${b.entries.map(e => foodEntry(e, win)).join('')}`;
+      }).join('');
+    })()}
     ${!entries.length ? '<p class="empty" style="margin-top:20px">За этот день ничего не записано.</p>' : ''}
     ${mpSection(date)}
     ${planSection(date)}`;
@@ -851,6 +861,7 @@ function viewFood(date) {
 function calcLabel(d) {
   if (d.status !== 'calculated' || !d.items?.length) return d.partial ? '<span class="fd-calc">часть посчитана по справочнику</span>' : '';
   if (d.calc === 'supp') return '<span class="fd-calc">из добавок - отмечено на «Сегодня»</span>';
+  if (d.calc === 'drink') return '<span class="fd-calc">молоко к кофе - отмечено на «Сегодня»</span>';
   if (d.calc === 'ai' || d.items.some(i => i.source === 'ai')) return '<span class="fd-calc">уточнено ИИ</span>';
   return `<span class="fd-calc">посчитано по справочнику${d.items.some(i => i.source === 'brain') ? ' и памяти тренера' : ''}</span>`;
 }
@@ -868,10 +879,21 @@ function foodEntry(e, win) {
       ${d.unresolved?.length && aiOff() ? aiOffHint('Продукта нет в справочнике - его посчитает ИИ')
         : `<button class="btn" data-act="food-calc" data-id="${e.id}">Посчитать${d.unresolved?.length ? ' с ИИ' : ''}</button>`}</div>`;
   }
-  const items = (d.items || []).map((it, i) => { const is = itemState(it); return `<div class="fi"><div class="ell nm">${esc(it.name)}${stBadge(is.st)}${it.source === 'ai' ? '<span class="src-ai" title="Оценка ИИ: продукта нет в справочнике">≈ИИ</span>' : it.source === 'brain' ? '<span class="src-brain" title="Так эту фразу раньше разобрала ИИ - теперь считается без неё">память</span>' : ''}</div>
+  const macF = (label, k, v, name, i, act) => `<label class="mac-f"><span class="mac-l">${label}</span>
+    <input class="control mono" type="number" inputmode="decimal" step="${k === 'kcal' ? 1 : 0.1}" min="0" value="${esc(String(v ?? 0))}"
+      data-act="${act}" data-k="${k}" data-id="${e.id}" data-i="${i}" aria-label="${label === 'ккал' ? 'Калории' : label}: ${esc(name)}"></label>`;
+  const per100 = it => { const k = it.grams ? 100 / it.grams : 0; return { kcal: it.kcal * k, p: it.p * k, f: it.f * k, c: it.c * k }; };
+  const items = (d.items || []).map((it, i) => { const is = itemState(it); const p100 = per100(it);
+    const macRow = macMode === 'per100'
+      ? `<div class="mac mac-edit">${macF('ккал', 'kcal', Math.round(p100.kcal), it.name, i, 'food-macro100')}${macF('Б', 'p', Math.round(p100.p * 10) / 10, it.name, i, 'food-macro100')}${macF('Ж', 'f', Math.round(p100.f * 10) / 10, it.name, i, 'food-macro100')}${macF('У', 'c', Math.round(p100.c * 10) / 10, it.name, i, 'food-macro100')}</div>
+        <div class="mac-calc note">употреблено (${num(it.grams)} г): ${num(it.kcal)} ккал · Б ${dec(it.p)} · Ж ${dec(it.f)} · У ${dec(it.c)}</div>`
+      : `<div class="mac mac-edit">${macF('ккал', 'kcal', it.kcal, it.name, i, 'food-macro')}${macF('Б', 'p', it.p, it.name, i, 'food-macro')}${macF('Ж', 'f', it.f, it.name, i, 'food-macro')}${macF('У', 'c', it.c, it.name, i, 'food-macro')}</div>
+        ${it.grams ? `<div class="mac-calc note">на 100 г: ${num(Math.round(p100.kcal))} ккал · Б ${dec(p100.p)} · Ж ${dec(p100.f)} · У ${dec(p100.c)}</div>` : ''}`;
+    return `<div class="fi"><div class="ell nm">${esc(it.name)}${stBadge(is.st)}${it.source === 'ai' ? '<span class="src-ai" title="Оценка ИИ: продукта нет в справочнике">≈ИИ</span>' : it.source === 'brain' ? '<span class="src-brain" title="Так эту фразу раньше разобрала ИИ - теперь считается без неё">память</span>' : it.source === 'manual' ? '<span class="src-brain" title="БЖУ заданы вручную">своё</span>' : ''}</div>
     <label class="g"><input class="control g-in" type="number" inputmode="numeric" value="${it.grams}" data-act="food-grams" data-id="${e.id}" data-i="${i}" aria-label="граммы: ${esc(it.name)}"> г</label>
     <button class="btn quiet a-mini fi-del" data-act="food-item-del" data-id="${e.id}" data-i="${i}" aria-label="Убрать из записи: ${esc(it.name)}" title="Убрать эту строку">${glyph('cross')}</button>
-    <div class="mac">${num(it.kcal)} ккал · Б ${dec(it.p)} · Ж ${dec(it.f)} · У ${dec(it.c)}</div>${is.note ? `<div class="fi-note">${esc(is.note)}</div>` : ''}</div>`; }).join('');
+    ${macRow}
+    ${is.note ? `<div class="fi-note">${esc(is.note)}</div>` : ''}</div>`; }).join('');
   const t = timeOf(e);
   const out = win && t && !inWindow(t, win);
   const fav = isFav(e);
@@ -917,6 +939,7 @@ const aiErr = e => e.status === 404 || e.status === 400 ? 'Эта функция
 export const actions = {
   ...pickerActions,
   ...mpActions,
+  'mac-mode': el => { macMode = el.dataset.mode; S.render(); },
   'food-add': async el => {
     const text = (fval('food', 'text') || '').trim();
     if (!text) return toast('Напишите, что съели');
@@ -937,8 +960,9 @@ export const actions = {
   'food-del': async el => {
     const r = store.get(el.dataset.id);
     await store.remove(el.dataset.id);
-    // протеин из добавок: убираем и отметку приёма, иначе на «Сегодня» он остался бы принятым
+    // протеин из добавок / молоко к кофе: убираем и саму отметку, иначе на «Сегодня» она осталась бы висеть
     if (r?.data.supp_id && store.get(r.data.supp_id)) await store.remove(r.data.supp_id);
+    if (r?.data.drink_id && store.get(r.data.drink_id)) await store.patch(r.data.drink_id, { milk: null, food_id: null });
     if (r) await afterChange(r.date);
   },
   'food-edit': el => {
@@ -1072,6 +1096,15 @@ export const actions = {
   },
 };
 
+// пересчёт итога записи по строкам (как в food-grams/food-macro)
+function itemsTotals(items) {
+  const totals = { kcal: 0, p: 0, f: 0, c: 0 };
+  if (items.some(i => i.fiber !== undefined)) totals.fiber = 0;
+  items.forEach(i => { for (const m in totals) totals[m] += i[m] || 0; });
+  for (const m of ['p', 'f', 'c', 'fiber']) if (totals[m] !== undefined) totals[m] = Math.round(totals[m] * 10) / 10;
+  return totals;
+}
+
 export const changes = {
   'mp-wt': el => { MP.wt = el.value; S.render(); },
   'food-grams': async el => {
@@ -1084,12 +1117,32 @@ export const changes = {
       ['p', 'f', 'c', 'fiber'].forEach(m => { if (it[m] !== undefined) it[m] = Math.round(it[m] * k * 10) / 10; });
     }
     it.grams = g;
-    const totals = { kcal: 0, p: 0, f: 0, c: 0 };
-    if (items.some(i => i.fiber !== undefined)) totals.fiber = 0;
-    items.forEach(i => { for (const m in totals) totals[m] += i[m] || 0; });
-    for (const m of ['p', 'f', 'c', 'fiber']) if (totals[m] !== undefined) totals[m] = Math.round(totals[m] * 10) / 10;
-    await store.patch(r.id, { items, totals });
+    await store.patch(r.id, { items, totals: itemsTotals(items) });
     BR.gramsEdited(items, Number(el.dataset.i));     // поправка порции/фразы → память для всех устройств
+  },
+  // БЖУ строки правится напрямую - числа заданы человеком, справочнику и памяти это уже не в зачёт
+  // (food_id/state снимаем, как у позиций с явным КБЖУ в тексте - см. food.py _macro_item)
+  'food-macro': async el => {
+    const r = store.get(el.dataset.id);
+    const items = structuredClone(r.data.items), it = items[Number(el.dataset.i)];
+    const k = el.dataset.k, v = Math.max(0, Number(el.value) || 0);
+    it[k] = k === 'kcal' ? Math.round(v) : Math.round(v * 10) / 10;
+    it.source = 'manual';
+    delete it.food_id;
+    delete it.state;
+    await store.patch(r.id, { items, totals: itemsTotals(items) });
+  },
+  // тот же ввод, но число - на 100 г продукта (переключатель «На 100 г»): в item хранится только употреблённое,
+  // пересчитываем его по граммовке строки и патчим как обычно
+  'food-macro100': async el => {
+    const r = store.get(el.dataset.id);
+    const items = structuredClone(r.data.items), it = items[Number(el.dataset.i)];
+    const k = el.dataset.k, per100 = Math.max(0, Number(el.value) || 0), v = per100 * (it.grams || 0) / 100;
+    it[k] = k === 'kcal' ? Math.round(v) : Math.round(v * 10) / 10;
+    it.source = 'manual';
+    delete it.food_id;
+    delete it.state;
+    await store.patch(r.id, { items, totals: itemsTotals(items) });
   },
 };
 

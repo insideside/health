@@ -2,7 +2,7 @@
 
 Модель только предлагает действия (кнопки), выполняет их сервер и только после нажатия:
 так ИИ не может сам ничего поменять в плане, а сервер проверяет, что действие действительно
-было предложено в этом сообщении и ещё не выполнено. Все изменения — обычные записи,
+было предложено в этом сообщении и ещё не выполнено. Все изменения - обычные записи,
 клиент получает их синхронизацией.
 """
 import re
@@ -51,30 +51,47 @@ REPLY_MAX = 900
 STYLE = """Это чат в мессенджере. Отвечай как живой тренер, который знает клиента: коротко, 1–4 предложения,
 по сути вопроса, со ссылкой на его реальные цифры, если они к месту. Без списков и заголовков, если сам не просит план.
 Не начинай с «Отличный вопрос», «Конечно!», «Понимаю», «Как ИИ…», не повторяй вопрос, не подводи итоги в конце,
-без канцелярита и без смайликов (максимум один, если очень к месту). Не знаешь — так и скажи, не выдумывай.
-Про лекарства, боли и болезни — без диагнозов: при сильной, острой или непроходящей боли — к врачу.
-Если клиент жалуется на боль, травму или болезнь — никаких подколок и упрёков в любом тоне: коротко, по-человечески,
+без канцелярита и без смайликов (максимум один, если очень к месту). Не знаешь - так и скажи, не выдумывай.
+Обращайся на «ты» - всегда, без исключений и без соскальзывания на «вы» в середине ответа.
+Пиши нормальными связными предложениями, не нанизывай через тире одно короткое утверждение за другим
+(«калорий мало - добавь белка - и высыпайся» ты никогда не скажешь вслух) - если нужно перечислить несколько
+вещей, соедини их по смыслу или сделай отдельными предложениями, как в живой речи, а не списком через тире.
+Пиши обычной разговорной речью, как в переписке с человеком, а не готовыми шаблонами и не заезженными канцелярскими
+оборотами («жми кнопку - сделаю», «выполнено», «данные обработаны» и т. п.) - если фраза не встраивается по смыслу
+и грамматике в остальной ответ (например ты советуешь оставить всё как есть, но всё равно зовёшь «жать кнопку») -
+не пиши её вообще, лучше просто ответь по сути своими словами.
+Про лекарства, боли и болезни - без диагнозов: при сильной, острой или непроходящей боли - к врачу.
+Если клиент жалуется на боль, травму или болезнь - никаких подколок и упрёков в любом тоне: коротко, по-человечески,
 с заботой; предложи записать травму (add_injury) и облегчить или перенести тренировку."""
 
-ACTIONS_HELP = """actions — кнопки, которые клиент может нажать. Предлагай 0–2, ТОЛЬКО если они прямо помогают по теме
-разговора; обычный вопрос-ответ — actions пустой. Действие выполнится только после нажатия. Виды и params:
-- skip_today {date} — не тренироваться в этот день: тренировка переносится на ближайший свободный день, день отмечается отдыхом;
-- move_workout {from, to} — перенести тренировку с даты на дату;
-- lighten_today {date} — облегчить тренировку дня (меньше подходов, дольше отдых);
-- swap_exercise {date, from, to} — заменить упражнение (from, to — id; to — только из списка «можно на замену»);
-- recalc_norms {} — пересчитать нормы ЗАНОВО ПО ФОРМУЛАМ (цифры не меняет по просьбе, только после изменений в профиле);
-- set_macros {kcal?, p?, f?, c?} — поставить свои цифры, о которых договорились («углеводы до 200» → {c: 200});
+ACTIONS_HELP = """actions - кнопки, которые клиент может нажать. Предлагай 0–2, ТОЛЬКО если они прямо помогают по теме
+разговора; обычный вопрос-ответ - actions пустой. Действие выполнится только после нажатия. Виды и params:
+- skip_today {date} - не тренироваться в этот день: тренировка переносится на ближайший свободный день, день отмечается отдыхом;
+- move_workout {from, to} - перенести тренировку с даты на дату;
+- lighten_today {date} - облегчить тренировку дня (меньше подходов, дольше отдых);
+- swap_exercise {date, from, to} - заменить ОДНО упражнение (from, to - id; to - только из списка «можно на замену»);
+  просят поменять несколько упражнений или весь день - не перечисляй несколько swap_exercise и не пиши id в ответе,
+  предложи rebuild_program с note (опиши в note, что именно поменять);
+- recalc_norms {} - пересчитать нормы ЗАНОВО ПО ФОРМУЛАМ (цифры не меняет по просьбе, только после изменений в профиле);
+- set_macros {kcal?, p?, f?, c?} - поставить свои цифры, о которых договорились («углеводы до 200» → {c: 200});
   указывай только то, что меняем; калории пересчитаются сами (минус 4 ккал на каждый убранный грамм углеводов);
-- rebuild_program {} — пересобрать будущий план тренировок;
-- set_daytype {date, type} — тип дня: cheat (читмил), special (особый), sick (болею), rest (отдых);
-- add_injury {zone, note} — записать, что болит; zone: chest, shoulders, arms, back, abs, sides, glutes, legs, neck,
+- rebuild_program {note?} - пересобрать будущий план тренировок; note - коротко перескажи, что учесть при пересборке
+  (акценты по зонам, что убрать/оставить, предпочтения по кардио и т. п. - из того, что клиент только что описал),
+  иначе пересборка о разговоре ничего не узнает и придумает своё;
+- set_daytype {date, type} - тип дня: cheat (читмил), special (особый), sick (болею), rest (отдых);
+- add_injury {zone, note} - записать, что болит; zone: chest, shoulders, arms, back, abs, sides, glutes, legs, neck,
   knees, lower_back, wrists, ankles, hips;
-- set_pace {pace} — темп: slower, normal, faster (пересчитает нормы и план);
-- log_food {text, meal} — записать еду как написал клиент; meal: breakfast, lunch, dinner, snack;
-- log_activity {type, minutes, intensity} — записать активность; type — id из списка активностей; intensity: low, mid, high.
-Даты — YYYY-MM-DD. label — коротко на кнопке, 2–5 слов («Перенести на четверг»).
-Ты сам ничего не записываешь и не переносишь — только предлагаешь кнопку. Не пиши «записал», «перенёс»:
-пиши «жми — запишу», «могу перенести». Просит записать еду или активность — обязательно предложи log_food / log_activity."""
+- set_pace {pace} - темп: slower, normal, faster (пересчитает нормы и план);
+- log_food {text, meal} - записать еду как написал клиент; meal: breakfast, lunch, dinner, snack;
+- log_activity {type, minutes, intensity} - записать активность; type - id из списка активностей; intensity: low, mid, high.
+Даты - YYYY-MM-DD. label - коротко на кнопке, 2–5 слов («Перенести на четверг»).
+Ты сам ничего не делаешь, пока не нажата кнопка - не пиши так, будто уже записал, перенёс или заменил. Но и не
+подставляй в каждый ответ одну и ту же фразу «жми - сделаю»: предложи действие обычными словами, как в разговоре
+(«Давай запишу», «Могу перенести на четверг», «Если хочешь, заменю на планку») - своими, а не по шаблону, и только
+там, где кнопка действительно что-то делает: если ты советуешь ничего не менять, никакую кнопку жать не зови.
+Просит записать еду или активность - обязательно предложи log_food / log_activity.
+Служебные id (из каталога упражнений, «можно на замену» и т. п.) - только внутри params действий, их не видит
+человек, которому ты отвечаешь. В тексте ответа называй упражнения обычными русскими названиями, никогда не id."""
 
 
 # ── контекст ──
@@ -129,7 +146,7 @@ def _context(uid: str) -> str:
     swap = ""
     if tw:
         today_wo = f"«{tw.get('title')}»: " + ", ".join(
-            f"{x.get('name')} [{x.get('id')}] {x.get('sets')}×{x.get('reps')}" for x in tw.get("exercises") or [])
+            f"{x.get('name')} [{x.get('id')}, для from] {x.get('sets')}×{x.get('reps')}" for x in tw.get("exercises") or [])
         prof = userdata.profile(uid)
         place = next((p["data"].get("place") for p in db.list_kind(uid, "program") if p["data"].get("active")), "home")
         excl = jobs.excluded_codes(uid, prof)
@@ -138,14 +155,15 @@ def _context(uid: str) -> str:
         by_id = {e["id"]: e for e in db.exercises()}
         pats = {(by_id.get(i) or {}).get("pattern") for i in have}
         cand = [e for e in cat if e.get("pattern") in pats and e["id"] not in have][:25]
-        swap = "\nМожно на замену (id — название — паттерн): " + "; ".join(f"{e['id']} — {e['name']} — {e['pattern']}" for e in cand)
+        swap = ("\nМожно на замену, для to в swap_exercise (название [id], id клиенту не показывай): "
+                + "; ".join(f"{e['name']} [{e['id']}]" for e in cand))
     free = [d for d in ((today + timedelta(days=i)).isoformat() for i in range(1, 5)) if d not in wos]
     acts_cat = ", ".join(f"{a['id']} ({a.get('name')})" for a in db.activities()) or "walking, running, cycling, swimming, other"
     injuries = userdata.open_injuries(uid)
     return f"""Сегодня {today.isoformat()}, {WEEKDAYS[today.weekday()]}, {datetime.now():%H:%M}.
 Клиент: {person_text(uid)}. Цели: {goals_text(goal)}.
-Нормы: {t.get('kcal', '—')} ккал, Б {t.get('p', '—')} / Ж {t.get('f', '—')} / У {t.get('c', '—')} г, вода {t.get('water_glasses', '—')} стак.,
-шаги {t.get('steps_manual') or t.get('steps', '—')}, сон {t.get('sleep_hours', '—')} ч, темп: {(t.get('intensity') or {}).get('label', '—')}.
+Нормы: {t.get('kcal', '-')} ккал, Б {t.get('p', '-')} / Ж {t.get('f', '-')} / У {t.get('c', '-')} г, вода {t.get('water_glasses', '-')} стак.,
+шаги {t.get('steps_manual') or t.get('steps', '-')}, сон {t.get('sleep_hours', '-')} ч, темп: {(t.get('intensity') or {}).get('label', '-')}.
 Травмы: {'; '.join(f"{i.get('zone')} {i.get('note') or ''} с {i.get('since')}" for i in injuries) or 'нет'}.
 Последние 7 дней:
 {chr(10).join(lines)}
@@ -166,7 +184,7 @@ def _history(uid: str, exclude: str) -> list[dict]:
 
 
 def _clean_actions(raw: list, uid: str) -> list[dict]:
-    """Проверить предложенное моделью: вид, обязательные параметры, даты. Непонятное — выбросить."""
+    """Проверить предложенное моделью: вид, обязательные параметры, даты. Непонятное - выбросить."""
     out = []
     today = date.today().isoformat()
     for a in raw or []:
@@ -235,12 +253,12 @@ async def job_chat(uid: str, inp: dict) -> dict:
     out = await ask_json(system, text, CHAT_SCHEMA, temperature=0.7, think=True, history=_history(uid, inp["message_id"]))
     reply = (out.get("reply") or "").strip()
     if len(reply) > REPLY_MAX:
-        # модель слила рассуждения в ответ — берём последний абзац (обычно это и есть ответ)
+        # модель слила рассуждения в ответ - берём последний абзац (обычно это и есть ответ)
         reply = reply.split("\n\n")[-1].strip().strip('"«»')[:REPLY_MAX]
     if not reply:
-        raise AIError("Модель промолчала — спросите ещё раз")
+        raise AIError("Модель промолчала - спросите ещё раз")
     actions = _clean_actions(out.get("actions"), uid)
-    # модель иногда отвечает «записал», не предложив кнопку: если просили записать еду — добавляем её сами
+    # модель иногда отвечает «записал», не предложив кнопку: если просили записать еду - добавляем её сами
     if re.search(r"запиш|записа|внес", text, re.I) and not any(a["kind"] == "log_food" for a in actions):
         idx = food.Index()
         # берём только утвердительные фразы с продуктами, без вопросов и «запиши»
@@ -251,7 +269,7 @@ async def job_chat(uid: str, inp: dict) -> dict:
             actions.append({"id": uuid.uuid4().hex[:8], "kind": "log_food", "label": "Записать еду",
                             "params": {"text": ", ".join(parts), "meal": _guess_meal(text)}, "status": "offered"})
             if re.search(r"(?i)записал|записан", reply):
-                reply = (re.sub(r"(?i)[^.!?]*записа[лн][^.!?]*[.!?]?\s*", "", reply).strip() + " Жми кнопку — запишу.").strip()
+                reply = (re.sub(r"(?i)[^.!?]*записа[лн][^.!?]*[.!?]?\s*", "", reply).strip() + " Жми кнопку - запишу.").strip()
     rec_id = uuid.uuid4().hex
     db.server_put(uid, "chat", rec_id, {"role": "coach", "text": reply, "created": db.now_ms(), "source": "ai",
                                         "reply_to": inp["message_id"], "actions": actions},
@@ -269,7 +287,7 @@ async def chat_post(request: Request, u=Depends(userdata.current_user)):
     text = (body.get("text") or "").strip()
     mid = body.get("message_id")
     if mid:
-        # клиент сам пишет запись сообщения (и синхронизирует её) — второй не создаём, текст берём из запроса
+        # клиент сам пишет запись сообщения (и синхронизирует её) - второй не создаём, текст берём из запроса
         rec = db.get(mid)
         if rec and rec["user_id"] != uid:
             raise HTTPException(403, "чужое сообщение")
@@ -312,7 +330,7 @@ def _move(uid: str, frm: str, to: str) -> str:
     if not w:
         raise HTTPException(400, f"На {frm} нет тренировки")
     if any(x.get("log") for x in w["data"].get("exercises") or []):
-        raise HTTPException(400, "В этой тренировке уже есть отметки подходов — переносить поздно")
+        raise HTTPException(400, "В этой тренировке уже есть отметки подходов - переносить поздно")
     if _wo(uid, to):
         raise HTTPException(409, f"На {to} уже стоит тренировка")
     d = dict(w["data"])
@@ -352,7 +370,7 @@ async def execute(uid: str, kind: str, p: dict) -> dict:
             return {"text": _move(uid, d, to) + ", день отмечен отдыхом", "to": to}
         w = _wo(uid, d)
         db.server_put(uid, "workout", w["id"], {**w["data"], "skipped": True}, d)
-        return {"text": "Ближайшие дни заняты — тренировка пропущена, день отмечен отдыхом"}
+        return {"text": "Ближайшие дни заняты - тренировка пропущена, день отмечен отдыхом"}
     if kind == "move_workout":
         to = p.get("to") or _free_day(uid, p.get("from") or today)
         if not to:
@@ -419,8 +437,9 @@ async def execute(uid: str, kind: str, p: dict) -> dict:
             raise HTTPException(400, "Нет активной программы")
         if userdata.ai_mode(uid) == "off":
             raise HTTPException(403, "ИИ выключена в профиле - план можно поправить вручную в «Тренировках»")
-        return {"text": "Пересобираю план — это займёт пару минут",
-                "job_id": jobs.submit(uid, "program", {"rebuild": True, "reason": p.get("note") or "по просьбе в чате"})}
+        return {"text": "Пересобираю план - это займёт пару минут",
+                "job_id": jobs.submit(uid, "program", {"rebuild": True, "reason": p.get("note") or "по просьбе в чате",
+                                                        "notes": p.get("note") or ""})}
     if kind == "set_daytype":
         _set_daytype(uid, p.get("date") or today, p["type"], p.get("note") or "")
         return {"text": "Тип дня отмечен"}
@@ -440,7 +459,7 @@ async def execute(uid: str, kind: str, p: dict) -> dict:
         rec = db.server_put(uid, "food", rid, {"meal": p.get("meal") or "snack", "text": p["text"], "items": [],
                                                "status": "raw", "time": datetime.now().strftime("%H:%M"),
                                                "entered_at": db.now_ms()}, today)
-        done, rest = food.quick_parse(p["text"])
+        done, rest = food.quick_parse(p["text"], uid=uid)
         if not rest:
             jobs._save_food(rec, done)
             return {"text": f"Записал: {food.totals(done)['kcal']:.0f} ккал", "record_id": rid}

@@ -135,12 +135,12 @@ const M = [
     lim: { up: () => 600 }, note: { up: 'Больше 2–3 минут планка почти ничего не добавляет - дальше лучше усложнять.' },
     eff: { up: { zones: { abs: 1.4, sides: 1.1 }, patterns: { core_anti: 1.6 } } }, hint: { up: 'Планка в конце каждой тренировки, +5 с каждый раз.' } },
   { id: 'squat_1rm', label: 'Присед (1ПМ)', acc: 'присед', group: 'perf', unit: 'кг', src: 'test', ex: ['barbell_back_squat'], e1rm: true, dirs: ['up'], step: 2.5,
-    how: 'оценка по формуле Эпли из рабочих подходов (до 12 повторов) или ваш тест',
+    how: 'оценка по формуле Эпли из рабочих подходов (до 12 повторов) или свой тест',
     rates: { up: ({ level, cur }) => (level <= 1 ? [1.5, 2.5, 4] : level === 2 ? [0.5, 1, 1.5] : [0.25, 0.5, 0.75]).map(x => x / 100 * (cur || 40)) },
     note: { up: 'Новичок прибавляет почти каждую неделю; дальше прогресс идёт циклами.' },
     eff: { up: { zones: { legs: 1.4, glutes: 1.2 }, patterns: { squat: 1.6 } } }, hint: { up: 'Приседай 2 раза в неделю и прибавляй 2,5 кг, когда все подходы сделаны.' } },
   { id: 'bench_1rm', label: 'Жим лёжа (1ПМ)', acc: 'жим лёжа', group: 'perf', unit: 'кг', src: 'test', ex: ['barbell_bench_press'], e1rm: true, dirs: ['up'], step: 2.5,
-    how: 'оценка по формуле Эпли из рабочих подходов (до 12 повторов) или ваш тест',
+    how: 'оценка по формуле Эпли из рабочих подходов (до 12 повторов) или свой тест',
     rates: { up: ({ level, cur, sex }) => (level <= 1 ? [1, 2, 3] : level === 2 ? [0.4, 0.8, 1.2] : [0.2, 0.4, 0.6]).map(x => x / 100 * (cur || 30) * (sex === 'f' ? 0.8 : 1)) },
     note: { up: 'Жим растёт медленнее приседа; помогают отжимания на брусьях и трицепс.' },
     eff: { up: { zones: { chest: 1.4, arms: 1.2, shoulders: 1.1 }, patterns: { push_h: 1.6 } } }, hint: { up: 'Жим 2 раза в неделю, трицепс - отдельным упражнением.' } },
@@ -383,7 +383,7 @@ export function realism(gl, profileOrUid, list) {
 // ── прогресс ──
 // progress(goal) → { from, to, current, pct, done, trend (ед./нед.), need_week, eta, status, label, change, since_days, cur }
 // status: done | ahead | on | behind | early (мало данных для тренда) | nodata
-export const STATUS_RU = { done: 'цель достигнута', ahead: 'опережаете', on: 'по плану', behind: 'отстаёте', early: 'рано судить', nodata: 'нет данных' };
+export const STATUS_RU = { done: 'цель достигнута', ahead: 'опережаешь план', on: 'по плану', behind: 'отстаёшь', early: 'рано судить', nodata: 'нет данных' };
 export function progress(gl, uid = store.uid()) {
   const m = metric(gl.metric);
   const cur = current(gl.metric, uid);
@@ -556,9 +556,9 @@ const LINES = {
     sergeant: ['{label} {delta} за {period}? Отстаём от графика. {hint}', '{label}: {delta} за {period}. Это не темп, это прогулка. {hint}'],
   },
   done: {
-    soft: ['{label}: цель {to} достигнута! Ты {это сделал|это сделала} - время поставить новую.'],
-    coach: ['{label}: {to} - цель взята. Ставим следующую.'],
-    sergeant: ['{label}: {to}. Цель взята, боец. Следующая - в профиле, живо.'],
+    soft: ['{label}: {to}{habit} - {дошёл|дошла} до цели! Захочешь дальше - подними планку в «Целях», когда будешь готов{|а}.'],
+    coach: ['{label}: {to}{habit} - цель выполнена. Если есть силы на большее - подними планку в «Целях».'],
+    sergeant: ['{label}: {to}{habit}. Взял{|а}. Мало? Планку выше - сам{|а}, в «Целях».'],
   },
 };
 const LINE_MOOD = { on: 'praise', ahead: 'praise', behind: 'scold', done: 'praise' };
@@ -574,7 +574,12 @@ export function lines(uid = store.uid()) {
     const days = pr.cur?.date && gl.since ? C.daysBetween(gl.since, pr.cur.date) : null;
     if (pr.status !== 'done' && (days == null || days < 7 || pr.change == null || (Math.abs(pr.change) < (m.step || 0.5) && pr.status !== 'behind'))) continue;
     const vars = { label: m.label, delta: `${fmtSigned(pr.change, m)} ${m.unit}`, period: period(Math.max(1, days || 0)),
-      to: `${fmtNum(pr.to, m)} ${m.unit}`, hint: m.hint?.[dirOf(gl)] || '' };
+      // {to} в шаблоне done - реально достигнутое значение (pr.current), не цель: иначе «10000 шагов - цель выполнена»
+      // звучит как цифра из настроек, даже если реально прошли 12000
+      to: `${fmtNum(pr.status === 'done' ? pr.current : pr.to, m)} ${m.unit}`, hint: m.hint?.[dirOf(gl)] || '',
+      // «в среднем» - только когда это правда среднее за несколько дней (pr.cur.approx - данных мало, по сути
+      // это цифра одного дня, а не привычка за неделю; называть её «средней» вводит в заблуждение)
+      habit: m.group === 'habit' && !pr.cur?.approx ? ' в среднем' : '' };
     const set = LINES[pr.status][tone] || LINES[pr.status].coach;
     const text = set[hash(today + gl.metric + pr.status) % set.length]
       .replace(/\{([^{}|]*)\|([^{}|]*)\}/g, (_, a, b) => (f ? b : a)).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '').replace(/\s+$/, '');

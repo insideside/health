@@ -25,21 +25,21 @@ function nutrition(uid) {
   const t = C.target(uid), out = [];
   if (!t?.kcal) return [R('info', 'Нормы питания ещё не посчитаны.', 'Профиль → «Нормы» → «Пересчитать».')];
   const ds = lastDays().map(d => C.foodDay(d, uid)).filter(f => f?.calculated);
-  if (ds.length < 3) return [R('info', ds.length ? `Еда посчитана только за ${days(ds.length)} из последних 7.` : 'За последние 7 дней еда ещё не записана.', 'Записывайте все приёмы пищи - без этого советы по питанию будут наугад.')];
+  if (ds.length < 3) return [R('info', ds.length ? `Еда посчитана только за ${days(ds.length)} из последних 7.` : 'За последние 7 дней еда ещё не записана.', 'Записывай все приёмы пищи - без этого советы по питанию будут наугад.')];
   const a = k => avg(ds.map(f => f[k]));
   const kcal = a('kcal'), p = a('p'), f = a('f'), c = a('c');
   const dk = (kcal - t.kcal) / t.kcal;
   out.push(Math.abs(dk) <= 0.1 ? R('good', `Калории в среднем ${num(kcal)} при норме ${num(t.kcal)} - в коридоре.`)
     : dk > 0 ? R('warn', `Калорий в среднем ${num(kcal)} - на ${Math.round(dk * 100)} % выше нормы ${num(t.kcal)}.`, 'Проще всего срезать сладкое, соусы и перекусы - основной рацион не трогая.')
-    : R('warn', `Калорий в среднем ${num(kcal)} - на ${Math.round(-dk * 100)} % ниже нормы ${num(t.kcal)}.`, dk < -0.25 ? 'Сильный недобор тормозит обмен и съедает мышцы - добавьте полноценный приём пищи.' : 'Возможно, не всё записано. Если записано всё - добавьте перекус с белком.'));
+    : R('warn', `Калорий в среднем ${num(kcal)} - на ${Math.round(-dk * 100)} % ниже нормы ${num(t.kcal)}.`, dk < -0.25 ? 'Сильный недобор тормозит обмен и съедает мышцы - добавь полноценный приём пищи.' : 'Возможно, не всё записано. Если записано всё - добавь перекус с белком.'));
   const dp = p / t.p;
   out.push(dp >= 0.9 ? R('good', `Белок в среднем ${num(p)} г из ${num(t.p)} - хорошо.`)
     : R('warn', `Белка в среднем ${num(p)} г из ${num(t.p)} - не хватает ${num(t.p - p)} г в день.`, 'Белок в каждый приём: творог, яйца, курица, рыба, греческий йогурт. 100 г творога 5 % - это 17 г.'));
-  if (t.c && c > t.c * 1.15) out.push(R('warn', `Углеводов в среднем ${num(c)} г при норме ${num(t.c)}.`, 'Уберите сладкое и мучное вне тренировочных дней.'));
-  if (t.f && f > t.f * 1.2) out.push(R('warn', `Жиров в среднем ${num(f)} г при норме ${num(t.f)}.`, 'Масло, сыр, орехи и соусы - взвешивайте, их легко перебрать.'));
+  if (t.c && c > t.c * 1.15) out.push(R('warn', `Углеводов в среднем ${num(c)} г при норме ${num(t.c)}.`, 'Убери сладкое и мучное вне тренировочных дней.'));
+  if (t.f && f > t.f * 1.2) out.push(R('warn', `Жиров в среднем ${num(f)} г при норме ${num(t.f)}.`, 'Масло, сыр, орехи и соусы - взвешивай, их легко перебрать.'));
   const late = ds.filter(x => x.late.length).length;
   if (late >= 3) out.push(R('warn', `Поздняя еда в ${days(late)} из ${ds.length}.`, 'Последний плотный приём - за 3 часа до сна.'));
-  if (t.macros_manual) out.push(R('info', `Нормы БЖУ у вас свои: ${t.p} / ${t.f} / ${t.c} г, ${num(t.kcal)} ккал (по формуле ${num(t.formula?.kcal)} ккал).`));
+  if (t.macros_manual) out.push(R('info', `Нормы БЖУ у тебя свои: ${t.p} / ${t.f} / ${t.c} г, ${num(t.kcal)} ккал (по формуле ${num(t.formula?.kcal)} ккал).`));
   return out;
 }
 
@@ -48,8 +48,8 @@ function water(uid) {
   const out = [];
   const own = C.goalTo('water_avg', uid), norm = t?.water_glasses;
   if (own && norm && own < norm) {
-    out.push(R('warn', `Ваша цель - ${own} ${plural(own, 'стакан', 'стакана', 'стаканов')}, а по расчёту нужно около ${norm} (${num(t.water_ml)} мл, 30 мл на кг веса).`,
-      'Часть воды приходит с едой (супы, овощи, фрукты), так что начать с вашей цели можно. Но в дни тренировок и в жару добирайте до расчётной, а цель в «Целях» поднимайте по стакану в неделю.'));
+    out.push(R('warn', `Твоя цель - ${own} ${plural(own, 'стакан', 'стакана', 'стаканов')}, а по расчёту нужно около ${norm} (${num(t.water_ml)} мл, 30 мл на кг веса).`,
+      'Часть воды приходит с едой (супы, овощи, фрукты), так что начать с твоей цели можно. Но в дни тренировок и в жару добирай до расчётной, а цель в «Целях» поднимай по стакану в неделю.'));
   }
   if (it) {
     const vals = lastDays().map(d => Number(C.logVal(d, it.id, uid))).filter(v => v > 0);
@@ -57,7 +57,7 @@ function water(uid) {
       const a = avg(vals), goal = C.itemTarget(it, C.today(), uid);
       out.push(a >= goal * 0.9 ? R('good', `Воды в среднем ${dec(a)} ${plural(Math.round(a), 'стакан', 'стакана', 'стаканов')} в день - цель ${goal} выполняется.`)
         : R('warn', `Воды в среднем ${dec(a)} стак. при цели ${goal}.`, 'Стакан воды к каждому приёму пищи и после тренировки - уже половина нормы.'));
-    } else out.push(R('info', 'Воду отмечали меньше трёх дней за неделю.', 'Отмечайте стаканы на «Сегодня» - так тренер увидит, хватает ли воды.'));
+    } else out.push(R('info', 'Вода отмечена меньше трёх дней за неделю.', 'Отмечай стаканы на «Сегодня» - так тренер увидит, хватает ли воды.'));
   }
   return out;
 }
@@ -67,9 +67,9 @@ function sleepAdvice(uid) {
   if (st.count < 3) return [R('info', st.count ? `Сон записан за ${days(st.count)} из последних 7.` : 'За последние 7 дней сон ещё не записан.', 'Записывайте сон каждое утро - без этого не видно, откуда усталость.')];
   out.push(st.avgHours >= need - 0.25 ? R('good', `Сон в среднем ${dec(st.avgHours)} ч при норме ${dec(need)} - хватает.`)
     : R('warn', `Сон в среднем ${dec(st.avgHours)} ч при норме ${dec(need)}; коротких ночей: ${st.shortNights}.`, 'Отбой на 15 минут раньше каждую неделю - так сдвигать проще всего. Недосып мешает худеть: растёт аппетит и тяга к сладкому.'));
-  if (st.bedtimeSpreadMin >= 60) out.push(R('warn', `Время отбоя гуляет в среднем на ${st.bedtimeSpreadMin} мин.`, 'Ложитесь в одно время и в выходные - сон станет глубже без лишних часов.'));
+  if (st.bedtimeSpreadMin >= 60) out.push(R('warn', `Время отбоя гуляет в среднем на ${st.bedtimeSpreadMin} мин.`, 'Ложись в одно время и в выходные - сон станет глубже без лишних часов.'));
   if (st.avgSnooze >= 20) out.push(R('info', `Дрёма после будильника в среднем ${st.avgSnooze} мин.`, 'Этот сон рваный и почти не восстанавливает - лучше поставить будильник позже и вставать с первого.'));
-  if (st.trend === 'down') out.push(R('warn', 'Качество сна за неделю снизилось.', 'Проверьте поздний кофе, еду перед сном и экран в постели.'));
+  if (st.trend === 'down') out.push(R('warn', 'Качество сна за неделю снизилось.', 'Проверь поздний кофе, еду перед сном и экран в постели.'));
   return out;
 }
 
@@ -83,7 +83,7 @@ function activity(uid) {
       const a = avg(vals);
       out.push(a >= goal * 0.9 ? R('good', `Шагов в среднем ${num(a)} при цели ${num(goal)}.`)
         : R('warn', `Шагов в среднем ${num(a)} при цели ${num(goal)} - не хватает ${num(goal - a)}.`, `Это около ${Math.round((goal - a) / 100)} минут ходьбы: прогулка после ужина или часть пути пешком.`));
-    } else out.push(R('info', 'Шаги почти не записаны за неделю.', 'Подключите «Здоровье» (Профиль → «Здоровье») - шаги будут приходить сами.'));
+    } else out.push(R('info', 'Шаги почти не записаны за неделю.', 'Подключи «Здоровье» (Профиль → «Здоровье») - шаги будут приходить сами.'));
   }
   const ct = safe(() => P.cardioTarget(uid)), cw = safe(() => P.cardioWeek(C.today(), uid));
   if (ct && cw) {
@@ -101,12 +101,12 @@ function training(uid) {
   const from = C.addDays(C.today(), -14);
   const ws = store.list('workout', uid, r => r.date >= from && r.date < C.today() && r.data.variant !== 'moved');
   if (!ws.length && !store.list('program', uid).some(r => r.data.active !== false)) {
-    return [R('info', 'Программы тренировок пока нет.', '«Спорт» → «Составить программу»: тренер разложит тренировки по вашим дням.')];
+    return [R('info', 'Программы тренировок пока нет.', '«Спорт» → «Составить программу»: тренер разложит тренировки по твоим дням.')];
   }
   if (ws.length) {
     const done = ws.filter(w => C.workoutProgress(w) >= 0.8).length;
     out.push(done >= ws.length * 0.8 ? R('good', `За 2 недели сделано ${done} из ${ws.length} тренировок по плану.`)
-      : R('warn', `За 2 недели сделано ${done} из ${ws.length} тренировок.`, 'Не получается в свой день - переносите, а не пропускайте: на «Сегодня» есть «перенести», тренер найдёт свободный день.'));
+      : R('warn', `За 2 недели сделано ${done} из ${ws.length} тренировок.`, 'Не получается в свой день - переноси, а не пропускай: на «Сегодня» есть «перенести», тренер найдёт свободный день.'));
   }
   // план недели: комплексы и активности, которые ещё впереди
   const plan = safe(() => C.planTasks(uid), []);
@@ -116,7 +116,7 @@ function training(uid) {
     for (let d = mon; d <= C.today(); d = C.addDays(d, 1)) if (C.planDone(t, d, uid) >= 0.5) n++;
     if (n < t.n) left.push(`${t.kind === 'module' ? (P.MODULES?.[t.module]?.title || t.module) : t.name || actName(t.type)} ${n}/${t.n}`);
   }
-  if (left.length) out.push(R('info', `План недели: ${left.join(', ')}.`, 'Пропущенное тренер переносит на оставшиеся дни - смотрите чек-лист «Сегодня».'));
+  if (left.length) out.push(R('info', `План недели: ${left.join(', ')}.`, 'Пропущенное тренер переносит на оставшиеся дни - смотри чек-лист «Сегодня».'));
   if (safe(() => P.needsDeload?.(), false)) out.push(R('warn', 'Пора разгрузочную неделю.', '«Спорт» → «Разгрузочная неделя»: те же упражнения, меньше подходов и веса.'));
   return out;
 }
@@ -124,10 +124,10 @@ function training(uid) {
 function body(uid) {
   const out = [];
   const tr = safe(() => C.weightTrend(21, uid)), dir = C.goalDir(uid);
-  if (tr == null) out.push(R('info', 'Для тренда веса мало взвешиваний.', 'Взвешивайтесь 2-3 раза в неделю утром натощак - тренд покажет, работает ли план.'));
-  else if (dir === 'down') out.push(tr <= -0.2 ? R(tr < -1 ? 'warn' : 'good', `Вес снижается на ${dec(-tr)} кг в неделю${tr < -1 ? ' - быстровато, так уходят и мышцы' : ''}.`, tr < -1 ? 'Добавьте 150-200 ккал и держите белок.' : '')
-    : R('warn', `Вес за 3 недели почти стоит (${tr > 0 ? '+' : ''}${dec(tr)} кг в неделю).`, 'Проверьте, всё ли записано в еде; если да - нормы стоит пересчитать с новым весом.'));
-  else if (dir === 'up') out.push(tr >= 0.1 ? R('good', `Вес растёт на ${dec(tr)} кг в неделю.`) : R('warn', 'Вес не растёт.', 'Добавьте 200 ккал в день, лучше углеводами вокруг тренировки.'));
+  if (tr == null) out.push(R('info', 'Для тренда веса мало взвешиваний.', 'Взвешивайся 2-3 раза в неделю утром натощак - тренд покажет, работает ли план.'));
+  else if (dir === 'down') out.push(tr <= -0.2 ? R(tr < -1 ? 'warn' : 'good', `Вес снижается на ${dec(-tr)} кг в неделю${tr < -1 ? ' - быстровато, так уходят и мышцы' : ''}.`, tr < -1 ? 'Добавь 150-200 ккал и держи белок.' : '')
+    : R('warn', `Вес за 3 недели почти стоит (${tr > 0 ? '+' : ''}${dec(tr)} кг в неделю).`, 'Проверь, всё ли записано в еде; если да - нормы стоит пересчитать с новым весом.'));
+  else if (dir === 'up') out.push(tr >= 0.1 ? R('good', `Вес растёт на ${dec(tr)} кг в неделю.`) : R('warn', 'Вес не растёт.', 'Добавь 200 ккал в день, лучше углеводами вокруг тренировки.'));
   if (safe(() => C.plateau(uid)?.weight)) out.push(R('warn', 'Похоже на плато по весу.', 'Профиль → «Нормы» → «Пересчитать»: нормы подстроятся под новый вес.'));
   for (const g of safe(() => GL.metricGoals(uid), [])) {
     const pr = safe(() => GL.progress(g, uid));
@@ -135,7 +135,7 @@ function body(uid) {
     // привычки (вода, шаги, сон, белок) разобраны в своих разделах - здесь только тело и результаты
     if (!pr || !m || m.group === 'habit' || pr.status === 'nodata' || pr.status === 'early') continue;
     if (pr.status === 'behind') out.push(R('warn', `${m.label}: ${pr.label}.`, m.hint?.[g.to > g.from ? 'up' : 'down'] || ''));
-    else if (pr.status === 'done') out.push(R('good', `${m.label}: цель достигнута.`, 'Поставьте следующую ступень в «Целях».'));
+    else if (pr.status === 'done') out.push(R('good', `${m.label}: цель достигнута.`, 'Поставь следующую ступень в «Целях».'));
   }
   return out;
 }
@@ -148,9 +148,32 @@ function feel(uid) {
   const bad = ss.filter(s => s.wellbeing === 'meh' || s.wellbeing === 'broken').length, sore = ss.filter(s => s.soreness === 'strong').length;
   if (stress >= 3) out.push(R('warn', `Сильный стресс ${days(stress)} из ${ss.length}.`, 'В такие дни лучше прогулка или лёгкая тренировка вместо тяжёлой; сон важнее обычного.'));
   if (sleepy >= 3) out.push(R('warn', `В сон днём клонило ${days(sleepy)} из ${ss.length}.`, 'Чаще всего это недосып или тяжёлый обед; кофе после 14:00 делает только хуже ночью.'));
-  if (sore >= 3) out.push(R('warn', `Сильная мышечная боль ${days(sore)} из ${ss.length}.`, 'Нагрузка растёт слишком быстро - облегчите ближайшую тренировку и добавьте сна.'));
-  if (bad >= 3) out.push(R('warn', `Самочувствие «так себе» или хуже ${days(bad)} из ${ss.length}.`, 'Посмотрите на сон и питание выше; если держится - отдых и, при необходимости, врач.'));
+  if (sore >= 3) out.push(R('warn', `Сильная мышечная боль ${days(sore)} из ${ss.length}.`, 'Нагрузка растёт слишком быстро - облегчи ближайшую тренировку и добавь сна.'));
+  if (bad >= 3) out.push(R('warn', `Самочувствие «так себе» или хуже ${days(bad)} из ${ss.length}.`, 'Посмотри на сон и питание выше; если держится - отдых и, при необходимости, врач.'));
   if (!out.length) out.push(R('good', 'Самочувствие ровное: без сильного стресса, сонливости и боли.'));
+  return out;
+}
+
+// курение/алкоголь - только если отмечено в целях (без цели этого раздела не будет вовсе). Считаем и сегодня,
+// не только прошедшую неделю - иначе «сорвался сегодня» может показаться зелёной галочкой (неделя-то ещё чистая)
+function habitLine(freeDays, todayN, weekN, freeText, weekWord, tip) {
+  if (todayN > 0) return R('warn', `Сегодня уже отмечено случаев: ${todayN}.`, tip);
+  if (weekN > 0) return R('warn', `За неделю отмечено случаев: ${weekN}.`, tip);
+  return R('good', freeDays != null ? `${freeText} ${days(freeDays)} подряд - так держать.` : `За неделю ${weekWord} не отмечен${weekWord === 'алкоголь' ? '' : 'о'}.`);
+}
+function habits(uid) {
+  const out = [];
+  const today = C.today();
+  if (C.smokingOn(uid)) {
+    const todayN = C.smokeList(today, uid).length, weekN = lastDays().reduce((a, d) => a + C.smokeList(d, uid).length, 0);
+    out.push(habitLine(C.smokeFreeDays(uid), todayN, weekN, 'Без курения', 'курение',
+      'Отмечай каждый случай честно - тренер видит прогресс только по записям, не по ощущениям.'));
+  }
+  if (C.alcoholOn(uid)) {
+    const todayN = C.alcoholList(today, uid).length, weekN = lastDays().reduce((a, d) => a + C.alcoholList(d, uid).length, 0);
+    out.push(habitLine(C.alcoholFreeDays(uid), todayN, weekN, 'Без алкоголя', 'алкоголь',
+      'Считается любая порция - так лучше видно, где чаще всего срывы.'));
+  }
   return out;
 }
 
@@ -167,7 +190,8 @@ function insights(uid) {
 const SECTIONS = [
   ['food', 'Питание', 'food', nutrition], ['water', 'Вода', 'water', water], ['sleep', 'Сон', 'sleep', sleepAdvice],
   ['move', 'Активность', 'move', activity], ['train', 'Тренировки', 'train', training], ['goal', 'Вес и цели', 'goal', body],
-  ['mood', 'Самочувствие', 'mood', feel], ['supp', 'Добавки', 'food', supplements], ['coach', 'Что показал анализ', 'coach', insights],
+  ['mood', 'Самочувствие', 'mood', feel], ['habits', 'Курение и алкоголь', 'mood', habits],
+  ['supp', 'Добавки', 'food', supplements], ['coach', 'Что показал анализ', 'coach', insights],
 ];
 
 export function collect(uid = store.uid()) {
@@ -181,7 +205,7 @@ function viewAdvice() {
   const all = secs.flatMap(s => s.items), warn = all.filter(x => x.level === 'warn').length, good = all.filter(x => x.level === 'good').length;
   const t = C.target();
   const top = secs.flatMap(s => s.items.filter(x => x.level === 'warn').map(x => ({ ...x, sec: s.title }))).slice(0, 3);
-  return `<div class="head-row"><div><div class="kicker smallcaps">Тренер · по вашим данным за неделю</div><h1>Рекомендации</h1></div></div>
+  return `<div class="head-row"><div><div class="kicker smallcaps">Тренер · по твоим данным за неделю</div><h1>Рекомендации</h1></div></div>
     <p class="lede">Сводка по всему сразу. Обновляется сама, когда появляются новые записи: еда, сон, шаги, тренировки, вес.</p>
     <div class="stats"><span class="chip">${glyph('dip')} обратить внимание: <span class="mono">${warn}</span></span><span class="chip">${glyph('check')} хорошо: <span class="mono">${good}</span></span></div>
     ${top.length ? `<div class="raised a-card adv-top" data-dom="coach"><div class="smallcaps">Главное сейчас</div><ol>${top.map(x => `<li><b>${esc(x.sec)}.</b> ${esc(x.text)}</li>`).join('')}</ol></div>` : ''}
@@ -190,7 +214,7 @@ function viewAdvice() {
         <div><div>${esc(x.text)}</div>${x.tip ? `<div class="note">${esc(x.tip)}</div>` : ''}</div></div>`).join('')}</div>`).join('')}
     ${t?.explanation ? `<div class="coach inset info"><div class="who smallcaps">Комментарий тренера к нормам</div><p style="margin:0">${esc(t.explanation)}</p>
       ${t.tips?.length ? `<ul>${t.tips.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>` : ''}
-    <p class="note">Это наблюдения по вашим записям, а не диагноз. Чем полнее записи, тем точнее советы.</p>`;
+    <p class="note">Это наблюдения по твоим записям, а не диагноз. Чем полнее они, тем точнее советы.</p>`;
 }
 
 export const routes = { advice: () => viewAdvice() };

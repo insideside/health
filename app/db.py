@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS device_tokens (
 """
 
 # Партнёр видит только эти виды записей: выполнение дня, достижения и сводку недели.
-PUBLIC_KINDS = ("dsum", "ach", "wsum")
+# видно партнёру: итоги дня/недели, достижения и общая утренняя разминка (только список упражнений, у кого она включена)
+PUBLIC_KINDS = ("dsum", "ach", "wsum", "pairwarm", "highlight")
 
 _lock = threading.RLock()
 _conn: sqlite3.Connection | None = None
@@ -82,6 +83,12 @@ def conn() -> sqlite3.Connection:
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA journal_mode=WAL")
         c.executescript(SCHEMA)
+        # миграция: is_admin появился позже - CREATE TABLE IF NOT EXISTS столбец в старую таблицу не добавит.
+        # Админ - первый зарегистрированный пользователь сервера, может создавать группы (см. item 15/группы).
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(users)")}
+        if "is_admin" not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+            c.execute("UPDATE users SET is_admin = 1 WHERE id = (SELECT id FROM users ORDER BY created ASC, id ASC LIMIT 1)")
         _conn = c
     return _conn
 
@@ -178,8 +185,36 @@ def revoke_device(token: str) -> None:
         c.execute("DELETE FROM device_tokens WHERE token_hash = ?", (token_hash(token),))
 
 
+def is_admin(user_id: str) -> bool:
+    rows = q("SELECT is_admin FROM users WHERE id = ?", (user_id,))
+    return bool(rows and rows[0]["is_admin"])
+
+
+def groups() -> list[dict]:
+    """Все группы (kind='group', создаёт только админ) - {id, name, member_ids}."""
+    return [{"id": r["id"], **json.loads(r["data"])} for r in q("SELECT id, data FROM records WHERE kind = 'group' AND deleted = 0")]
+
+
+def user_groups(user_id: str) -> list[dict]:
+    return [g for g in groups() if user_id in (g.get("member_ids") or [])]
+
+
 def partner_ids(user_id: str) -> list[str]:
-    return [r["id"] for r in q("SELECT id FROM users WHERE id != ?", (user_id,))]
+    """Раньше - все остальные аккаунты (пока их было двое, это и был единственный партнёр). Теперь, когда
+    зарегистрироваться может больше двух человек, видимость - по общей группе (см. группы, item 15).
+    Обратная совместимость: пока админ не создал ни одной группы - ведём себя как раньше (видно всех
+    остальных), чтобы у существующих пар ничего не сломалось само; как только появилась хоть одна группа -
+    совместные данные (dsum/ach/wsum) видны только внутри своей группы."""
+    all_groups = groups()
+    if not all_groups:
+        return [r["id"] for r in q("SELECT id FROM users WHERE id != ?", (user_id,))]
+    ids: set[str] = set()
+    for g in all_groups:
+        if user_id in (g.get("member_ids") or []):
+            for m in g["member_ids"]:
+                if m != user_id:
+                    ids.add(m)
+    return list(ids)
 
 
 # ── записи ──

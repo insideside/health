@@ -126,6 +126,8 @@
   /* строчный элемент: отступ строку не раздвигает; пунктир — подчёркиванием, чтобы не уехал вниз вместе с отступом */
   .row .title button { padding-block: 10px; border-bottom: 0; text-decoration: underline dotted var(--ink-3); text-decoration-thickness: 1px; text-underline-offset: 4px; }
   .row .tick { width: 40px; height: 40px; margin: -7px; position: relative; background: none; border: 0; box-shadow: none; }
+  /* у добавок вторая колонка строки - тоже кнопка (открывает приёмы): увеличенная зона галочки не должна на неё наезжать */
+  .row.sp-row .tick { margin-right: 0; }
   .row .tick::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; border: 1.5px solid var(--rule-2);
     background: var(--sunken); box-shadow: var(--shadow-inset); transition: .15s; }
   .row .tick.on::before { background: linear-gradient(180deg, var(--accent), var(--accent-2)); border-color: transparent; box-shadow: none; }
@@ -166,3 +168,49 @@
 .adv-mark svg { width: 20px; height: 20px; }
 .adv-good .adv-mark { color: var(--good, #4c7a4c); }
 .adv-warn .adv-mark { color: var(--accent); }
+
+/* чат: замечание тренера, которое уже выполнено */
+.msg.resolved .bubble { opacity: .6; }
+.msg-meta svg { width: 12px; height: 12px; vertical-align: -1px; }
+
+/* окно чашек: у каждой чашки размер - целая или половинка */
+.a-cup-line { grid-template-columns: 2ch minmax(0, 1fr) auto auto; }
+.a-cup-line.a-cup-new { grid-template-columns: 2ch minmax(0, 1fr) auto; }
+.a-cup-amt { display: inline-flex; gap: 4px; flex-wrap: nowrap; }
+.a-cup-amt .chip { min-width: 34px; justify-content: center; padding-left: 8px; padding-right: 8px; }
+
+/* шапка экрана: заголовок и кнопки дней никогда не «прыгают» от длины дня недели.
+   Широкий экран - кнопки справа (заголовок переносится внутри своей колонки), телефон - кнопки всегда отдельной строкой. */
+.head-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 16px; }
+.head-row > * { min-width: 0; }
+.datenav { flex-wrap: nowrap; white-space: nowrap; }
+@media (max-width: 640px) {
+  .head-row { grid-template-columns: minmax(0, 1fr); }
+  .head-row > :not(:first-child) { justify-self: start; }
+}
+
+/* БЖУ строки в записи еды - редактируемые поля (числа вручную важнее справочника, food-macro) */
+.fi .mac-edit { display: flex; flex-wrap: wrap; gap: 3px 12px; }
+.fi .mac-calc { grid-column: 1 / -1; margin-top: 2px; }
+.a-mac-toggle { display: inline-flex; margin: 6px 0; }
+.mac-f { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.mac-f .mac-l { white-space: nowrap; }
+.mac-f input { width: 44px; padding: 1px 4px; font-size: 12px; text-align: right; font-family: var(--mono); -moz-appearance: textfield; }
+.mac-f input[data-k="kcal"] { width: 52px; }
+.mac-f input::-webkit-outer-spin-button, .mac-f input::-webkit-inner-spin-button { margin: 0; }
+
+/* кофе с молоком: строка под чашкой - тип молока и сколько мл, считается в БЖУ дня */
+.a-cup-milk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 8px 2ch; }
+.a-cup-milk select { max-width: 160px; }
+.a-cup-ml { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink-3); }
+.a-cup-ml input { width: 52px; text-align: right; font-family: var(--mono); padding: 3px 5px; }
+
+/* зал со своей программой: ручная запись тренировки - выбранные упражнения, поиск по каталогу, последние записи */
+.a-glist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.a-glp { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 12px; }
+.a-glp .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.a-glres { display: grid; gap: 8px; margin-top: 8px; max-height: 40vh; overflow-y: auto; }
+.a-glr { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border: 0; cursor: pointer; font: inherit; color: var(--ink-strong); min-width: 0; }
+.a-glr b { font: 16px/1.3 var(--serif); overflow-wrap: anywhere; }
+.a-glr .note { overflow-wrap: anywhere; }
+.a-glink { text-decoration: none; color: inherit; }

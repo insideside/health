@@ -146,13 +146,14 @@ export function profileBody() {
 // ── действия ──
 const rerender = async date => { await afterChange(date || C.today()); };
 export const actions = {
+  // задним числом отмечаем так же, одним нажатием (как еда, активности и всё остальное) - время «сейчас»
+  // не имеет смысла для прошлого дня, но его можно поправить потом, нажав на название приёма
   'sp-take': async el => {
     const { key, date } = el.dataset, s = SP.plan().find(x => x.key === key);
     if (!s) return;
-    if (!isToday(date)) return intakesModal(key, date, true);
     await SP.mark(s, date, nowHM());
     await rerender(date);
-    toast(`${s.name}: отмечено в ${nowHM()} - время можно поправить, нажав на название`, 3000);
+    toast(`${s.name}: отмечено${isToday(date) ? ` в ${nowHM()}` : ''} - время можно поправить, нажав на название`, 3000);
   },
   'sp-intakes': el => intakesModal(el.dataset.key, el.dataset.date),
   'sp-add': async el => {

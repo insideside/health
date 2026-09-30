@@ -1,7 +1,7 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
 import * as P from '../plan.js';
-import { S, esc, fmt, dayTitle, WD, profile, CHECK, toast, field, select, input, openModal, closeModal, techHtml, jobFor, addJob, dateNav, afterChange, routeArg } from '../ui.js';
+import { S, esc, fmt, dayTitle, WD, profile, CHECK, toast, field, select, input, openModal, closeModal, techHtml, jobFor, addJob, dateNav, afterChange, routeArg, glyph, detailsOpen } from '../ui.js';
 import { H } from './today.js';
 import * as PF from '../prefs.js';
 import { exActions } from './fit.js';
@@ -93,13 +93,17 @@ function viewWorkout(date) {
     const next = store.list('workout', store.uid(), r => r.date > date).sort((a, b) => a.date.localeCompare(b.date))[0];
     const moved = store.list('workout', store.uid(), r => r.data.moved_from === date)[0];
     const prog = activeProgram();
+    const prof = profile();
+    const ownGym = prof.gym && prof.gym_program === 'own';
     return `<div class="head-row"><div><div class="kicker smallcaps">Тренировка · ${esc(dayTitle(date))}</div><h1>День отдыха</h1></div>${dateNav('workout', date)}</div>
-      <p class="lede">${moved ? `Тренировка перенесена на ${esc(dayTitle(moved.date))}.` : prog ? 'По программе в этот день тренировки нет. Восстановление - часть прогресса.' : 'Программы тренировок пока нет.'}</p>
+      <p class="lede">${moved ? `Тренировка перенесена на ${esc(dayTitle(moved.date))}.` : ownGym ? 'Своя программа в зале - записывайте тренировки вручную.' : prog ? 'По программе в этот день тренировки нет. Восстановление - часть прогресса.' : 'Программы тренировок пока нет.'}</p>
       ${next ? `<p>Следующая: <a class="link" href="#workout/${next.date}">${esc(next.data.title)} - ${esc(dayTitle(next.date))}</a></p>` : ''}
       ${date >= C.today() ? H.variantBlock(date) : ''}
       ${date >= C.today() && prog ? deloadNote() : ''}
-      <div class="actions"><a class="btn" href="#generator/${date}">Тренировка на любой случай <span class="arrow">→</span></a>
-        <a class="btn ${prog ? 'quiet' : 'solid'}" href="#program">${prog ? 'Программа' : 'Составить программу'}</a></div>
+      <div class="actions">${ownGym
+        ? `<button class="btn solid" data-act="gym-log-open" data-date="${date}">Записать тренировку <span class="arrow">→</span></button>`
+        : `<a class="btn" href="#generator/${date}">Тренировка на любой случай <span class="arrow">→</span></a>
+        <a class="btn ${prog ? 'quiet' : 'solid'}" href="#program">${prog ? 'Программа' : 'Составить программу'}</a>`}</div>
       ${balanceCard(date)}`;
   }
   const d = w.data;
@@ -120,7 +124,7 @@ function viewWorkout(date) {
       ${x.note ? `<p class="note">${esc(x.note)}</p>` : ''}${prev ? `<div class="prev">${esc(prev)}</div>` : ''}
       ${hint ? `<div class="a-prog"><span class="smallcaps">прогрессия</span> ${esc(hint)}</div>` : ''}
       <div class="sets">${sets}</div>
-      ${e ? `<details class="tech"><summary>Техника</summary>${techHtml(e)}</details>` : ''}
+      ${e ? `<details class="tech" data-key="wo|${w.id}|${xi}" ${detailsOpen(`wo|${w.id}|${xi}`) ? 'open' : ''}><summary>Техника</summary>${techHtml(e, { key: `wo|${w.id}|${xi}|more` })}</details>` : ''}
       ${!d.done && date >= C.today() && !(x.log || []).some(s => s?.done) ? exActions(x.id, { kind: 'workout', date, i: xi }) : ''}</div>`;
   };
   const chipList = (ids, kind) => `<div class="chips">${ids.map((id, i) => `<button class="chip" data-act="tech" data-ex="${id}" ${!d.done && date >= C.today() ? `data-ctx="${kind}" data-date="${date}" data-i="${i}"` : ''}>${esc(S.exMap.get(id)?.name || id)}</button>`).join('')}</div>`;
@@ -139,7 +143,8 @@ function viewWorkout(date) {
     ${!d.done && date >= C.today() ? H.variantBlock(date, { compact: true }) : ''}
     <div class="groove" data-dom="train"><div class="fill" style="width:${pr}%"></div></div>
     ${d.warmup?.length ? `<div class="section" data-dom="move"><div class="section-title"><span class="smallcaps">Разминка</span><span class="note">нажмите, чтобы увидеть технику</span></div>${chipList(d.warmup, 'warmup')}</div>` : ''}
-    <div class="section" data-dom="train"><div class="section-title"><span class="smallcaps">Основная часть</span></div>${(d.exercises || []).map(exRow).join('') || '<p class="empty">Упражнений нет.</p>'}</div>
+    <div class="section" data-dom="train"><div class="section-title"><span class="smallcaps">Основная часть</span></div>${(d.exercises || []).map(exRow).join('') || '<p class="empty">Упражнений нет.</p>'}
+      ${d.source === 'manual' && d.place === 'gym' && !d.done ? `<button class="btn quiet" style="margin-top:10px" data-act="gym-log-open" data-date="${date}">+ Добавить упражнение</button>` : ''}</div>
     ${d.cooldown?.length ? `<div class="section" data-dom="move"><div class="section-title"><span class="smallcaps">Заминка</span></div>${chipList(d.cooldown, 'cooldown')}</div>` : ''}
     <div class="actions">${d.done ? `<span class="chip">завершена</span><button class="btn quiet" data-act="wo-undo">Вернуть в работу</button>`
       : `<button class="btn solid" data-act="wo-finish">Завершить тренировку</button>`}<a class="btn quiet" href="#program">Программа</a><a class="btn quiet" href="#generator/${date}">Другая тренировка</a></div>
@@ -147,6 +152,52 @@ function viewWorkout(date) {
 }
 
 export function activeProgram() { return store.list('program').find(p => p.data.active) || null; }
+
+// ── зал со своей программой / личным тренером: без ИИ-программы, тренировки записываются вручную ──
+function ownGymBody(prof) {
+  const mine = store.list('workout', store.uid(), r => r.data.source === 'manual' && !r.data.program_id)
+    .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  return `<div class="kicker smallcaps">Программа тренировок</div>
+    <h1>Своя программа в зале</h1>
+    <p class="lede">В зале - сами или с личным тренером: тренер приложения программу не предлагает, только записывает то, что вы отмечаете, и учитывает нагрузку в анализе, советах и остальном плане.</p>
+    <div class="actions"><button class="btn solid" data-act="gym-log-open" data-date="${C.today()}">Записать тренировку <span class="arrow">→</span></button></div>
+    ${mine.length ? `<div class="section"><div class="section-title"><span class="smallcaps">Последние записи</span></div>
+      ${mine.map(w => `<a class="raised card a-glink" href="#workout/${w.date}" style="display:block;margin-top:10px">
+        <b>${esc(fmt(w.date, { day: 'numeric', month: 'long' }))}${w.data.done ? ' · сделана' : ''}</b>
+        <div class="note">${(w.data.exercises || []).map(x => esc(x.name || S.exMap.get(x.id)?.name || x.id)).join(', ') || 'без упражнений'}</div></a>`).join('')}</div>`
+      : '<p class="note">Пока ничего не записано.</p>'}
+    <p class="note" style="margin-top:14px">Передумали - переключить обратно на «Тренер составляет программу» можно в профиле, раздел «Тренировки».</p>`;
+}
+// поиск по каталогу зала для ручной записи (без нечёткого совпадения - по подстроке в названии/мышцах)
+function gymSearch(q) {
+  const n = String(q || '').trim().toLowerCase();
+  const all = [...S.exMap.values()].filter(e => (e.place || []).includes('gym'));
+  if (!n) return all.slice(0, 20);
+  return all.filter(e => e.name.toLowerCase().includes(n) || (e.muscles || []).some(m => m.toLowerCase().includes(n))).slice(0, 20);
+}
+function paintGymLog(focusId) {
+  openModal(gymLogModal());
+  if (!focusId) return;
+  const el = document.getElementById(focusId);
+  if (el) { el.focus({ preventScroll: true }); el.setSelectionRange?.(el.value.length, el.value.length); }
+}
+function gymLogModal() {
+  const f = S.forms.gymlog;
+  const picked = f.items.map((x, i) => `<div class="raised a-glp"><span class="ell">${esc(x.name)}</span>
+    <span class="mono muted">${x.sets} × ${esc(x.reps)}</span>
+    <button type="button" class="btn quiet a-mini" data-act="gym-log-rm" data-i="${i}" aria-label="Убрать ${esc(x.name)}">${glyph('cross')}</button></div>`).join('');
+  const results = f.q.trim().length ? gymSearch(f.q).filter(e => !f.items.some(x => x.id === e.id)) : [];
+  return `<div class="modal-head"><h2>Тренировка в зале · ${esc(fmt(f.date, { day: 'numeric', month: 'long' }))}</h2></div>
+    <div class="modal-body">
+      ${picked ? `<div class="a-glist">${picked}</div>` : '<p class="note" style="margin-top:0">Добавьте упражнения из каталога зала.</p>'}
+      <input class="control" type="search" id="gym-log-q" value="${esc(f.q)}" placeholder="жим лёжа, тяга, присед…" autocomplete="off" aria-label="Поиск упражнения" data-act="gym-log-q">
+      ${results.length ? `<div class="a-glres">${results.map(e => `<button type="button" class="raised a-glr" data-act="gym-log-add" data-ex="${esc(e.id)}">
+          <b>${esc(e.name)}</b><span class="note">${(e.muscles || []).slice(0, 3).join(', ')}</span></button>`).join('')}</div>`
+        : f.q.trim().length ? '<p class="note">Ничего не нашлось - попробуйте другое слово.</p>' : ''}
+    </div>
+    <div class="modal-foot"><button class="btn quiet" data-act="close">Отмена</button>
+      <button class="btn solid" data-act="gym-log-save" ${f.items.length ? '' : 'disabled'}>Записать${f.items.length ? ` · ${f.items.length}` : ''}</button></div>`;
+}
 
 // ── генератор «на любой случай» ──
 function viewGenerator(arg) {
@@ -222,6 +273,7 @@ async function generate({ minutes, focus, date, title, scenario }) {
 // ── программа ──
 function viewProgram() {
   const prog = activeProgram(), prof = profile();
+  if (prof.gym && prof.gym_program === 'own') return ownGymBody(prof);
   const job = jobFor('program');
   const f = 'program';
   if (!S.forms[f]) S.forms[f] = {
@@ -301,6 +353,23 @@ async function updateWorkout(date, fn) {
 }
 const woDate = () => { const a = routeArg(); return isDate(a) ? a : C.today(); };
 
+async function saveGymLog() {
+  const f = S.forms.gymlog;
+  const past = f.date < C.today();
+  const existing = C.workout(f.date);
+  const exercises = [...(existing?.data.source === 'manual' ? existing.data.exercises : []),
+    ...f.items.map(x => ({ id: x.id, name: x.name, unit: x.unit, sets: x.sets, reps: x.reps, rest_sec: 60,
+      log: past ? Array.from({ length: x.sets }, () => ({ done: true })) : [] }))];
+  await store.put('workout', `wo:${store.uid()}:${f.date}`, {
+    title: 'Тренировка в зале', focus: 'Зал', source: 'manual', place: 'gym', exercises,
+    done: past, ...(past ? { finished_at: Date.now() } : {}),
+  }, f.date);
+  closeModal();
+  await afterChange(f.date);
+  toast(past ? 'Тренировка записана' : 'Добавлена в план на сегодня - отмечайте подходы по ходу');
+  if (location.hash === `#workout/${f.date}`) S.render(); else location.hash = `#workout/${f.date}`;
+}
+
 export const actions = {
   'wo-deload': async () => {
     const n = await P.applyDeloadWeek();
@@ -327,7 +396,9 @@ export const actions = {
   },
   'rest-stop': () => { clearInterval(restTimer); restTimer = null; $rest.hidden = true; },
   'wo-finish': async () => {
-    await updateWorkout(woDate(), d => { d.done = true; d.finished_at = Date.now(); });
+    const date = woDate(), w = C.workout(date);
+    await updateWorkout(date, d => { d.done = true; d.finished_at = Date.now(); });
+    if (w) await C.shareHighlight(w.data.place === 'gym' ? 'gym' : 'workout', w.data.title, w.data.planned_minutes || null, date);
     toast(woPraise());
   },
   'wo-undo': async () => { await updateWorkout(woDate(), d => { d.done = false; }); },
@@ -383,6 +454,36 @@ export const actions = {
     closeModal();
     if (args) await generate(args);
   },
+  // ── зал со своей программой: ручная запись тренировки ──
+  'gym-log-open': el => {
+    S.forms.gymlog = { date: el.dataset.date || C.today(), q: '', items: [] };
+    paintGymLog();
+  },
+  'gym-log-add': el => {
+    const e = S.exMap.get(el.dataset.ex);
+    if (!e) return;
+    const f = S.forms.gymlog;
+    f.items.push({ id: e.id, name: e.name, unit: e.unit, sets: 3, reps: e.unit === 'seconds' ? '20-30' : '8-12' });
+    f.q = '';
+    paintGymLog();
+  },
+  'gym-log-rm': el => {
+    S.forms.gymlog.items.splice(Number(el.dataset.i), 1);
+    paintGymLog();
+  },
+  'gym-log-save': async () => {
+    const f = S.forms.gymlog;
+    if (!f.items.length) return;
+    const existing = C.workout(f.date);
+    if (existing && existing.data.source !== 'manual' && !existing.data.done) {
+      openModal(`<div class="modal-head"><div class="kicker smallcaps">Замена</div><h2>Заменить тренировку?</h2></div>
+        <div class="modal-body"><p>На этот день уже запланирована «${esc(existing.data.title)}» - она заменится записанной вручную.</p></div>
+        <div class="modal-foot"><button class="btn quiet" data-act="close">Отмена</button><button class="btn solid" data-act="gym-log-save-confirm">Заменить</button></div>`);
+      return;
+    }
+    await saveGymLog();
+  },
+  'gym-log-save-confirm': saveGymLog,
 };
 
 export const changes = {
@@ -394,6 +495,7 @@ export const changes = {
       ex.log[Number(el.dataset.i)] = { ...(ex.log[Number(el.dataset.i)] || {}), [el.dataset.f]: v };
     });
   },
+  'gym-log-q': el => { S.forms.gymlog.q = el.value; paintGymLog('gym-log-q'); },
 };
 
 export const routes = {

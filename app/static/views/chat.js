@@ -58,7 +58,7 @@ function viewChat() {
   const tone = profile().tone || 'coach';
   return `<div class="chat-v2">
     <div class="kicker smallcaps">Тренер · тон «${esc((C.TONE_NAMES?.[tone] || '').toLowerCase())}»</div><h1>Чат с тренером</h1>
-    <p class="note a-tight"><a class="link" href="#advice">Все рекомендации по вашим данным →</a></p>
+    <p class="note a-tight"><a class="link" href="#advice">Все рекомендации по твоим данным →</a></p>
     <div class="chat-list" id="chat-list">${listHtml()}</div>
     <div class="composer" id="chat-composer">
       <div class="chat-quick">${QUICK.map(([k, l]) => `<button type="button" class="chip" data-act="chat-quick" data-q="${k}">${esc(gx(l))}</button>`).join('')}</div>
@@ -101,9 +101,10 @@ function msgHtml(m) {
     if (st === 'declined') return `<span class="chip dim">${esc(a.label)} - нет</span>`;
     return `<button class="btn" data-act="chat-act" data-m="${esc(m.id)}" data-a="${esc(a.id)}" ${pending.has(key) ? 'disabled' : ''}>${pending.has(key) ? '<span class="spinner"></span> ' : ''}${esc(a.label)}</button>`;
   }).join('')}${offered.length ? `<button class="btn quiet" data-act="chat-decline" data-m="${esc(m.id)}">Не надо</button>` : ''}</div>` : '';
-  return `<div class="msg m-${role} ${src ? 'src-' + src : ''} ${d.mood ? 'mood-' + esc(d.mood) : ''}">
+  const solved = d.resolved_at ? ` · ${glyph('check')} сделано в <span class="mono">${hhmm(d.resolved_at)}</span>` : '';
+  return `<div class="msg m-${role} ${src ? 'src-' + src : ''} ${d.mood ? 'mood-' + esc(d.mood) : ''} ${d.resolved_at ? 'resolved' : ''}">
     <div class="bubble">${esc(d.text).replace(/\n/g, '<br>')}</div>${actHtml}
-    <div class="msg-meta"><span class="mono">${hhmm(created(m))}</span>${tag ? ` · ${tag}` : ''}</div></div>`;
+    <div class="msg-meta"><span class="mono">${hhmm(created(m))}</span>${tag ? ` · ${tag}` : ''}${solved}</div></div>`;
 }
 
 // ── запись сообщений ──
@@ -114,6 +115,9 @@ async function say(role, text, extra = {}) {
   return id;
 }
 const coach = (text, actions) => say('coach', text, { source: 'quick', ...(actions ? { actions: actions.map((a, i) => ({ id: a.id || `a${i}`, status: 'offered', local: true, params: {}, ...a })) } : {}) });
+// уведомление о завершении фоновой задачи (программа составлена/пересобрана, разбор недели готов…) - в чат,
+// чтобы не пропустить: тост живёт 4 секунды, а тут остаётся видно, что тренер закончил и что сделал
+export const announce = coach;
 
 // ── локальные действия (без сервера) ──
 function workoutToday(date = C.today()) { const w = C.workout(date); return w && !w.data.done && w.data.variant !== 'moved' ? w : null; }
@@ -269,7 +273,7 @@ async function send() {
   const id = await say('user', text);
   S.forms.chat = { text: '' };
   const ta = document.getElementById('chat-in');
-  if (ta) { ta.value = ''; ta.style.height = ''; }
+  if (ta) { ta.value = ''; ta.style.height = ''; ta.blur(); }
   refreshList();
   try {
     await store.sync();
@@ -358,12 +362,27 @@ export function afterRender() {
   store.setMeta('chat_seen', Date.now()).then(() => { if (hadDot) S.render(); });
 }
 
+// замечания, которые снимаются сами, когда человек сделал то, о чём просили (записал сон, отметил самочувствие…)
+const RESOLVABLE = new Set(['sleep', 'state', 'food', 'food_evening', 'water', 'weight', 'workout', 'measure', 'activity_unclear']);
+
 // Сообщения-правила и напоминания: раз в день на правило, id chat:{uid}:{date}:{rule}
 export async function background() {
   const uid = store.uid();
   if (!uid || !C.ruleMessages) return;
   const list = safe(() => C.ruleMessages(new Date()), []) || [];
   const d = C.today();
+  // уже сделано - помечаем сегодняшнее замечание, чтобы в чате не висело «сон не записан», когда он записан
+  const active = new Set(list.map(m => m?.rule));
+  for (const r of store.byDate('chat', d)) {
+    const x = r.data;
+    if (x.source === 'rule' && RESOLVABLE.has(x.rule) && !x.resolved_at && !active.has(x.rule)) {
+      await store.patch(r.id, { resolved_at: Date.now() });
+      // помимо галочки «сделано» - короткая похвала тем же тоном, что было исправлено (раз в день на правило)
+      const text = safe(() => C.resolvedPraise(x.rule), null);
+      const pid = `chat:${uid}:${d}:${x.rule}:done`;
+      if (text && !store.get(pid)) await store.put('chat', pid, { role: 'coach', text, created: Date.now(), source: 'rule', rule: x.rule, mood: 'praise' }, d);
+    }
+  }
   let i = 0;
   for (const m of list) {
     if (!m?.rule || !m.text) continue;

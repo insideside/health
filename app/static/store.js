@@ -115,11 +115,13 @@ export function getMeta(k, def) { return k in meta ? meta[k] : def; }
 export async function setMeta(k, v) {
   meta[k] = v;
   await req2p(tx('meta', 'readwrite').objectStore('meta').put(v, k));
-  if (k === 'cursor' || k === 'me' || k === 'partners' || k === 'jobs') broadcast({ t: 'meta', k, v });
+  if (k === 'cursor' || k === 'me' || k === 'partners' || k === 'jobs' || k === 'is_admin' || k === 'groups') broadcast({ t: 'meta', k, v });
 }
 
 export function me() { return getMeta('me', null); }
 export function partners() { return getMeta('partners', []); }
+export function isAdmin() { return !!getMeta('is_admin', false); }
+export function groups() { return getMeta('groups', []); }
 
 // ── чтение ──
 export function get(id) { const r = mem.get(id); return r && !r.deleted ? r : null; }

@@ -33,7 +33,9 @@ const ZONES_MUSCLE = [['chest', 'грудь'], ['shoulders', 'плечи'], ['ar
 const INJURY_ZONES = [...ZONES_MUSCLE, ['neck', 'шея'], ['knees', 'колени'], ['lower_back', 'поясница'], ['wrists', 'запястья'], ['ankles', 'голеностоп'], ['hips', 'тазобедренный сустав']];
 const ZONE_NAME = Object.fromEntries(INJURY_ZONES);
 const HABITS = [['less_sugar', 'меньше сахара'], ['less_flour', 'меньше мучного'], ['less_coffee', 'меньше кофе'], ['less_alcohol', 'меньше алкоголя'],
-  ['less_fastfood', 'меньше фастфуда'], ['less_late_eating', 'не есть поздно'], ['more_veg', 'больше овощей'], ['more_protein', 'больше белка'], ['more_fiber', 'больше клетчатки']];
+  ['less_fastfood', 'меньше фастфуда'], ['less_late_eating', 'не есть поздно'], ['more_veg', 'больше овощей'], ['more_protein', 'больше белка'],
+  ['more_fiber', 'больше клетчатки'], ['quit_smoking', 'бросить курить']];
+const SMOKE_TYPES = [['cigarette', 'Сигареты'], ['vape', 'Вейп / HQD'], ['iqos', 'Системы нагревания (IQOS и похожие)'], ['hookah', 'Кальян'], ['other', 'Другое']];
 const PRIO = [[1, 'главная'], [2, 'важная'], [3, 'по возможности']];
 const BODY = [['ecto', 'Эктоморф'], ['meso', 'Мезоморф'], ['endo', 'Эндоморф'], ['mixed', 'Смешанный']];
 const BODY_HINT = {
@@ -89,24 +91,26 @@ function initForm() {
     name: p.name ?? store.me()?.name ?? '', sex: p.sex || '', birth: p.birth || '', height: p.height ?? '',
     weight: C.weights().slice(-1)[0]?.w ?? p.weight ?? '', activity: p.activity || 'light',
     body_type: p.body_type || '', patterns: p.patterns || '',
-    goals: g.goals?.length ? clone(g.goals) : legacyGoals(g), habits: [...(g.habits || [])], deadline: g.deadline || '', goal_text: g.text || '',
+    goals: g.goals?.length ? clone(g.goals) : legacyGoals(g), habits: [...(g.habits || [])], smoking_types: [...(g.smoking_types || [])],
+    deadline: g.deadline || '', goal_text: g.text || '',
     pace: p.pace || 'normal',
     limitations: [...(p.limitations || [])], limitations_note: p.limitations_note || '', diet: p.diet || 'normal',
     allergies: p.allergies || '', medications: p.medications || '', extra_notes: p.extra_notes || '',
     cycle_on: !!p.cycle?.enabled, cycle_last: p.cycle?.last_start || '', cycle_len: p.cycle?.length || 28, cycle_period: p.cycle?.period || 5,
-    gym: !!p.gym, weekdays: [...(p.weekdays || [0, 2, 4])], max_sessions_week: p.max_sessions_week ?? (p.weekdays || [0, 2, 4]).length,
+    gym: !!p.gym, gym_program: p.gym_program === 'own' ? 'own' : 'ai', weekdays: [...(p.weekdays || [0, 2, 4])], max_sessions_week: p.max_sessions_week ?? (p.weekdays || [0, 2, 4]).length,
     time_budget_min: p.time_budget_min || 60, equipment: [...(p.equipment || [])], start_mode: p.start_mode || 'smooth',
     gym_missing: [...(p.gym_equipment?.missing || [])], cardio_likes: [...(p.cardio?.likes || [])],
     cardio_places: [...(p.cardio?.places || (p.gym ? ['gym', 'home', 'outdoor'] : ['home', 'outdoor']))], location: p.location ? { ...p.location } : null,
     sched_irregular: !!p.schedule?.irregular, sched_days: days,
     activities: clone(p.activities || []),
     mod_home_on: m.home_plan?.enabled !== false,
-    mod_morning_on: m.morning?.enabled ?? true, mod_morning_min: m.morning?.minutes || 10,
+    mod_morning_on: m.morning?.enabled ?? true, mod_morning_shared: !!m.morning?.shared, mod_morning_min: m.morning?.minutes || 10,
     mod_neck_on: !!m.neck?.enabled, mod_neck_week: m.neck?.per_week || 3, mod_neck_min: m.neck?.minutes || 5,
     mod_posture_on: !!m.posture?.enabled, mod_posture_week: m.posture?.per_week || 3, mod_posture_min: m.posture?.minutes || 10,
     ew_on: !!p.eating_window?.enabled, ew_from: p.eating_window?.from || '10:00', ew_to: p.eating_window?.to || '20:00',
     glass_ml: p.glass_ml || 250, reminders: clone(p.reminders || []), tone: p.tone || 'coach',
     ai: p.ai === 'off' ? 'off' : 'on',
+    share_activity: p.share_activity !== false,
   };
 }
 let snapshot = '', stamp = '';
@@ -192,7 +196,7 @@ function viewProfile() {
     sec('health', 'Здоровье', [fm.limitations.length ? `ограничений: ${fm.limitations.length}` : '', injuries.length ? `травм: ${injuries.length}` : '', fm.diet !== 'normal' ? DIETS.find(d => d[0] === fm.diet)?.[1] : ''].filter(Boolean).join(' · ') || 'без ограничений', healthBody(fm)),
     fm.sex === 'f' ? sec('cycle', 'Цикл', fm.cycle_on ? 'учитывается' : 'не учитывается', cycleBody(fm)) : '',
     `<div class="pgroup smallcaps">План и режим</div>`,
-    sec('training', 'Тренировки', `${fm.gym ? 'зал' : 'дома'} · ${fm.weekdays.map(i => WD[i]).join(', ') || 'дни не выбраны'} · до ${fm.time_budget_min} мин`, trainingBody(fm)),
+    sec('training', 'Тренировки', `${fm.gym ? (fm.gym_program === 'own' ? 'зал - своя программа' : 'зал') : 'дома'} · ${fm.weekdays.map(i => WD[i]).join(', ') || 'дни не выбраны'} · до ${fm.time_budget_min} мин`, trainingBody(fm)),
     sec('equipment', 'Что есть дома', equipSummary(fm), equipBody(fm)),
     sec('cardio', 'Кардио', cardioSummary(fm), cardioBody(fm)),
     sec('myex', 'Мои упражнения', myExSummary(), myExBody()),
@@ -205,6 +209,7 @@ function viewProfile() {
     sec('tone', 'Тон тренера', C.TONE_NAMES[fm.tone] || '', toneBody(fm)),
     sec('ai', 'ИИ-тренер', fm.ai === 'off' ? 'выключена' : 'включена', aiBody(fm)),
     sec('compete', 'Соревнование с партнёром', competeSummary(), competeBody()),
+    sec('group', 'Группа', groupSummary(fm), groupBody(fm)),
     sec('privacy', 'Данные и приватность', BR.privacySummary(), BR.privacyBody()),
     sec('norms', 'Нормы', tg ? `${num(tg.kcal)} ккал · белок ${tg.p} г · ${num(tg.steps_manual || tg.steps)} шагов` : 'ещё не считались', normsBody(tgRec)),
     sec('checklist', 'Чек-лист', `${store.list('item').filter(i => i.data.active !== false).length} пунктов`, checklistBody()),
@@ -273,6 +278,10 @@ function goalsBody(fm) {
     ${metricGoalsBody(fm)}
     <div class="field" style="margin-top:16px"><span class="smallcaps">Пищевые привычки, которые хочу изменить</span>${chips(F, 'habits', fm.habits, HABITS, true)}</div>
     <p class="note">Выбранные привычки станут пунктами чек-листа и войдут в оценку питания.</p>
+    ${fm.habits.includes('quit_smoking') ? `<div class="field" style="margin-top:10px"><span class="smallcaps">Что курите - можно несколько</span>
+      ${chips(F, 'smoking_types', fm.smoking_types, SMOKE_TYPES, true)}</div>
+      <p class="note">Появится счётчик в чек-листе на «Сегодня» - отмечайте каждый раз, тренер будет отслеживать прогресс.</p>` : ''}
+    ${fm.habits.includes('less_alcohol') ? '<p class="note">Появится журнал алкоголя на «Сегодня» - отмечайте выпитое, тренер будет отслеживать прогресс.</p>' : ''}
     <div style="margin-top:12px">${field('Своими словами', textarea(F, 'goal_text', fm.goal_text, 'rows="2" placeholder="например: подтянуть живот к лету, выносливость для походов"'))}</div>`;
 }
 
@@ -421,7 +430,11 @@ function cycleBody(fm) {
 }
 
 function trainingBody(fm) {
+  const own = fm.gym && fm.gym_program === 'own';
   return `${chk('gym', 'Хожу в зал', fm.gym)}
+    ${fm.gym ? `<div class="field" style="margin-top:10px"><span class="smallcaps">Кто ведёт зал</span>${chips(F, 'gym_program', fm.gym_program, [['ai', 'Тренер составляет программу'], ['own', 'Своя программа или личный тренер']])}</div>
+      <p class="note">${own ? 'Программу в зале строите сами или с личным тренером - здесь только записываете, что делали. Тренер приложения не предлагает упражнения в зале, но анализирует, советует по питанию и сну и собирает остальное: разминку, домашние комплексы, кардио.'
+        : 'Тренер составит программу в зале по вашим целям, дням и инвентарю - ниже.'}</p>` : ''}
     <div class="field" style="margin-top:14px"><span class="smallcaps">Дни силовых</span>${chips(F, 'weekdays', fm.weekdays, WD.map((w, i) => [i, w]), true)}</div>
     <div class="grid2" style="margin-top:14px">
       ${field('Максимум тренировок в неделю', select(F, 'max_sessions_week', fm.max_sessions_week, [1, 2, 3, 4, 5, 6, 7].map(k => [k, String(k)])))}
@@ -439,7 +452,7 @@ function trainingBody(fm) {
         <input class="control mono" data-act="pf-sched" data-d="${i}" data-k="busy" value="${esc(fm.sched_days[i].busy)}" placeholder="09:00-18:00" inputmode="numeric" aria-label="Занят ${w}">
         <select class="control" data-act="pf-sched" data-d="${i}" data-k="slot" aria-label="Удобно ${w}">${SLOTS.map(([k, l]) => `<option value="${k}" ${fm.sched_days[i].slot === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}</div>
     </details>
-    <div class="actions"><a class="btn quiet" href="#program">Программа тренировок <span class="arrow">→</span></a></div>`;
+    <div class="actions">${own ? '<a class="btn quiet" href="#workout">Записанные тренировки <span class="arrow">→</span></a>' : '<a class="btn quiet" href="#program">Программа тренировок <span class="arrow">→</span></a>'}</div>`;
 }
 
 // ── «Что есть дома» и зал ──
@@ -528,7 +541,9 @@ function modulesBody(fm) {
   return `<div class="pf-mod"><div>${chk('mod_home_on', '<b>Домашние комплексы под цели</b>', fm.mod_home_on)}
       <p class="note">Тренер ставит в дни без зала комплексы на зоны из ваших целей (например, руки или пресс) и добирает тренировки до нормы. Пропущенное переносит на другие дни недели.</p></div></div>
     <div class="pf-mod"><div>${chk('mod_morning_on', '<b>Утренняя разминка</b>', fm.mod_morning_on)}
-      <p class="note">Каждый день новая, из упражнений для дома, под выбранное время.</p></div>
+      <p class="note">Каждый день новая, из упражнений для дома, под выбранное время.</p>
+      ${fm.mod_morning_on && store.partners().length ? `${chk('mod_morning_shared', `Общая с ${esc(C.nameForms(store.partners()[0].id).ins || store.partners()[0].name)}`, fm.mod_morning_shared)}
+        <p class="note">Если включено у обоих - по утрам одна и та же разминка: кто собрал первым, тот и задаёт набор. Упражнения из вашего «не предлагать» заменятся похожими.</p>` : ''}</div>
       ${fm.mod_morning_on ? chips(F, 'mod_morning_min', fm.mod_morning_min, [5, 10, 15, 20].map(k => [k, `${k} мин`])) : ''}</div>
     <div class="pf-mod"><div>${chk('mod_neck_on', '<b>Шея и скулы</b>', fm.mod_neck_on)}
       <p class="note">Тонус шеи и осанка. Честно: второй подбородок уходит только вместе с общим жиром.</p></div>
@@ -631,6 +646,48 @@ function checklistBody() {
       <div class="actions"><button class="btn quiet" data-act="tech" data-ex-from-form="1">Техника</button><button class="btn" data-act="item-add-ex">Делать каждый день</button></div>` : ''}`;
 }
 
+// ── группы (item 15): создаёт и правит только админ; у остальных - только вид своей группы и переключатель ──
+function groupSummary() {
+  const gs = store.groups();
+  return gs.length ? gs.map(g => g.name).join(', ') : store.isAdmin() ? 'групп ещё нет' : 'вы не в группе';
+}
+const adminGroups = { loading: false, users: null, groups: null };
+async function loadAdminGroups() {
+  if (adminGroups.loading) return;
+  adminGroups.loading = true;
+  try {
+    const [u, g] = await Promise.all([store.api('/api/admin/users'), store.api('/api/admin/groups')]);
+    adminGroups.users = u.users; adminGroups.groups = g.groups;
+  } catch (e) { toast(e.message || 'Не удалось загрузить группы', 5000); }
+  adminGroups.loading = false;
+  S.render();
+}
+function groupBody(fm) {
+  const gs = store.groups();
+  const mine = `${gs.length ? `<div class="chips">${gs.map(g => `<span class="chip">${esc(g.name)} · ${g.members.map(m => esc(m.name)).join(', ')}</span>`).join('')}</div>`
+    : '<p class="note" style="margin-top:0">Вы не состоите ни в одной группе - её создаёт админ.</p>'}
+    ${gs.length ? `<div class="field" style="margin-top:12px"><span class="smallcaps">Делиться активностью в группе</span>
+      <p class="note" style="margin:2px 0 6px">Другие в группе видят только общие вехи (тренировка, велосипед и т. п.) - время и минуты, без подробностей, что именно вы делали или ели.</p>
+      <label class="chk"><input type="checkbox" data-form="${F}" data-key="share_activity" ${fm.share_activity !== false ? 'checked' : ''}> делиться</label></div>` : ''}`;
+  if (!store.isAdmin()) return mine;
+  if (!adminGroups.users && !adminGroups.loading) loadAdminGroups();
+  const editing = S.forms.grp || null;
+  const userOpt = uid => adminGroups.users?.find(u => u.id === uid)?.name || uid;
+  return `${mine}<div class="pf-sub smallcaps" style="margin-top:16px">Управление группами (админ)</div>
+    ${adminGroups.loading && !adminGroups.groups ? '<p class="note">Загрузка…</p>' : `
+    ${(adminGroups.groups || []).map(g => `<div class="raised card" style="margin-top:8px"><div class="ell"><b>${esc(g.name)}</b>
+      <div class="note">${(g.member_ids || []).map(userOpt).map(esc).join(', ') || 'без участников'}</div></div>
+      <div class="a-row-btns"><button class="btn quiet a-mini" data-act="grp-edit" data-id="${esc(g.id)}">Изменить</button>
+      <button class="btn quiet a-mini" data-act="grp-del" data-id="${esc(g.id)}">Удалить</button></div></div>`).join('')}
+    <div class="raised card" style="margin-top:8px">
+      <label class="field"><span class="smallcaps">${editing ? 'Изменить группу' : 'Новая группа'}</span>
+        <input class="control" data-form="grp" data-key="name" value="${esc(editing?.name || '')}" placeholder="Название группы"></label>
+      <div class="field" style="margin-top:8px"><span class="smallcaps">Участники</span>
+        <div class="chips">${(adminGroups.users || []).map(u => `<button type="button" class="chip ${(editing?.member_ids || []).includes(u.id) ? 'on' : ''}" data-act="grp-member" data-id="${esc(u.id)}">${esc(u.name)}</button>`).join('')}</div></div>
+      <div class="actions" style="margin-top:10px"><button class="btn solid" data-act="grp-save">${editing ? 'Сохранить' : 'Создать'}</button>${editing ? '<button class="btn quiet" data-act="grp-cancel">Отмена</button>' : ''}</div>
+    </div>`}`;
+}
+
 function iphoneBody() {
   const base = serverConfig?.lan_host_url || serverConfig?.all_urls?.[0] || location.origin;
   const tok = health.loading ? '<span class="note"><span class="spinner"></span> Загружаю…</span>'
@@ -724,7 +781,7 @@ function buildProfile(fm) {
     body_type: fm.body_type || null, patterns: (fm.patterns || '').trim(),
     limitations: [...fm.limitations], limitations_note: (fm.limitations_note || '').trim(), diet: fm.diet || 'normal',
     allergies: (fm.allergies || '').trim(), medications: (fm.medications || '').trim(), extra_notes: (fm.extra_notes || '').trim(),
-    gym: !!fm.gym, weekdays, gym_days: weekdays.length, equipment: [...fm.equipment],
+    gym: !!fm.gym, gym_program: fm.gym === true && fm.gym_program === 'own' ? 'own' : 'ai', weekdays, gym_days: weekdays.length, equipment: [...fm.equipment],
     gym_equipment: { ...(cur.gym_equipment || {}), missing: [...(fm.gym_missing || [])] },
     cardio: { ...(cur.cardio || {}), likes: [...(fm.cardio_likes || [])], places: [...(fm.cardio_places || [])] },
     location: fm.location ? { city: fm.location.city, region: fm.location.region || '', lat: fm.location.lat, lon: fm.location.lon } : null,
@@ -737,7 +794,7 @@ function buildProfile(fm) {
       ...(cur.modules || {}),
       home_plan: { ...(cur.modules?.home_plan || {}), enabled: !!fm.mod_home_on },
       // ...cur: закреплённые упражнения разминки (pinned) правятся не в форме — не теряем их при сохранении
-      morning: { ...(cur.modules?.morning || {}), enabled: !!fm.mod_morning_on, minutes: n(fm.mod_morning_min) || 10 },
+      morning: { ...(cur.modules?.morning || {}), enabled: !!fm.mod_morning_on, minutes: n(fm.mod_morning_min) || 10, shared: !!fm.mod_morning_shared },
       neck: { ...(cur.modules?.neck || {}), enabled: !!fm.mod_neck_on, per_week: n(fm.mod_neck_week) || 3, minutes: n(fm.mod_neck_min) || 5 },
       posture: { ...(cur.modules?.posture || {}), enabled: !!fm.mod_posture_on, per_week: n(fm.mod_posture_week) || 3, minutes: n(fm.mod_posture_min) || 10 },
     },
@@ -745,6 +802,7 @@ function buildProfile(fm) {
     reminders: fm.reminders.map(r => ({ kind: r.kind, time: r.time || '09:00', enabled: !!r.enabled })),
     pace: fm.pace || 'normal', tone: fm.tone || 'coach', glass_ml: n(fm.glass_ml) || 250,
     ai: fm.ai === 'off' ? 'off' : 'on',
+    share_activity: fm.share_activity !== false,
   };
   if (fm.sex === 'f') data.cycle = { enabled: !!fm.cycle_on, last_start: fm.cycle_last || null, length: n(fm.cycle_len) || 28, period: n(fm.cycle_period) || 5 };
   data.setup_done = !!(data.sex && data.birth && data.height && weight);
@@ -769,8 +827,8 @@ function buildGoal(fm) {
     const share = u + l ? u / (u + l) : 0.6;
     up = Math.round(mg.amount * share * 2) / 2; low = Math.round((mg.amount - up) * 2) / 2;
   }
-  return { goals, habits: [...fm.habits], deadline: fm.deadline || null, text: (fm.goal_text || '').trim(),
-    fat_kg: fat, muscle_upper_kg: up, muscle_lower_kg: low };
+  return { goals, habits: [...fm.habits], smoking_types: [...(fm.smoking_types || [])], deadline: fm.deadline || null,
+    text: (fm.goal_text || '').trim(), fat_kg: fat, muscle_upper_kg: up, muscle_lower_kg: low };
 }
 
 const actKey = list => JSON.stringify((list || []).map(a => [a.type, Number(a.per_week) || 1, Number(a.minutes) || 0, a.intensity || 'mid', [...(a.weekdays || [])].sort()]));
@@ -824,6 +882,31 @@ const mGoalOf = id => form().goals.find(g => g.type === 'metric' && g.metric ===
 
 export const actions = {
   'prof-save': () => saveProfile(true),
+  // группы (item 15) - создаёт и правит только админ (сервер тоже проверяет)
+  'grp-edit': el => { const g = adminGroups.groups?.find(x => x.id === el.dataset.id); if (g) { S.forms.grp = { id: g.id, name: g.name, member_ids: [...(g.member_ids || [])] }; S.render(); } },
+  'grp-cancel': () => { delete S.forms.grp; S.render(); },
+  'grp-member': el => {
+    const f = (S.forms.grp ||= { name: '', member_ids: [] });
+    const id = el.dataset.id;
+    f.member_ids = f.member_ids.includes(id) ? f.member_ids.filter(x => x !== id) : [...f.member_ids, id];
+    S.render();
+  },
+  'grp-save': async () => {
+    const f = S.forms.grp || { name: document.querySelector('[data-form=grp][data-key=name]')?.value, member_ids: [] };
+    const name = (document.querySelector('[data-form=grp][data-key=name]')?.value || f.name || '').trim();
+    if (!name) return toast('Название группы не может быть пустым');
+    try {
+      await store.api('/api/admin/groups', { name, member_ids: f.member_ids || [], id: f.id });
+      delete S.forms.grp;
+      adminGroups.groups = null;
+      toast('Группа сохранена');
+      await loadAdminGroups();
+    } catch (e) { toast(e.message || 'Ошибка', 5000); }
+  },
+  'grp-del': async el => {
+    try { await store.api(`/api/admin/groups/${el.dataset.id}`, undefined, 'DELETE'); adminGroups.groups = null; await loadAdminGroups(); toast('Группа удалена'); }
+    catch (e) { toast(e.message || 'Ошибка', 5000); }
+  },
   'pf-open': el => { openSecs.add(el.dataset.sec); S.render(); setTimeout(() => document.getElementById(`sec-${el.dataset.sec}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); },
   'pf-city-find': async () => {
     const q = (document.getElementById('pf-city-q')?.value || '').trim();

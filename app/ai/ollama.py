@@ -1,4 +1,4 @@
-"""Минимальный клиент Ollama: один запрос — один JSON по схеме."""
+"""Минимальный клиент Ollama: один запрос - один JSON по схеме."""
 import json
 import os
 from urllib.parse import urlparse
@@ -33,7 +33,7 @@ async def status() -> dict:
 
 async def ask_json(system: str, user: str, schema: dict, temperature: float = 0.3, think: bool = False,
                    history: list[dict] | None = None) -> dict:
-    """history — прошлые реплики [{role: user|assistant, content}] между системным промптом и вопросом (чат)."""
+    """history - прошлые реплики [{role: user|assistant, content}] между системным промптом и вопросом (чат)."""
     body = {
         "model": MODEL,
         "messages": [{"role": "system", "content": system}, *(history or []), {"role": "user", "content": user}],

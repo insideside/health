@@ -323,7 +323,7 @@ function viewDay(date) {
     <div class="summary">${ring(s.pct, 72, 7, 'g-' + g.grade)}
       <div class="a-grow"><div class="stats"><span class="chip">${gradeDot(g.grade)}${g.grade === 'none' && isToday ? 'пока без отметок' : GRADE_NAME[g.grade]}${g.grade !== 'none' && g.score !== null ? ` · <span class="mono">${Math.round(g.score)}</span>` : ''}</span>
         <span class="chip">выполнено ${s.done} из ${s.total}</span>
-        <span class="chip">серия ${st.current} дн.${st.frozen ? ' · заморозка' : ''}</span><span class="chip" data-dom="goal">+${s.xp} XP</span></div>
+        <span class="chip">серия ${st.current} дн.${st.frozen ? ' <span title="Один слабый день на этой неделе не разорвал серию - раз в неделю так можно">· пропуск прощён</span>' : ''}</span><span class="chip" data-dom="goal">+${s.xp} XP</span></div>
         <p class="note" style="margin:8px 0 0">${s.pct >= streakMin ? 'День засчитан в серию.' : `Для серии нужно ${streakMin} % чек-листа.`}
           <a class="link" href="#calendar/day/${date}">дневник дня</a></p></div>
     </div>
@@ -419,6 +419,16 @@ function coachCard(date, g) {
 
 // ── сон ──
 const fem = () => store.get(`profile:${store.uid()}`)?.data?.sex === 'f';
+// часы и минуты отдельными полями (не <input type="time">, у которого нельзя сохранить одно окошко раньше
+// другого - см. changes['td-sleep-time'])
+function timeBox(label, k, val, date, aria) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(val || '');
+  const a = `data-act="td-sleep-time" data-k="${k}" data-date="${date}"`;
+  return `<label class="field"><span class="smallcaps">${label}</span><div class="a-hm">
+    <input class="control mono" type="number" inputmode="numeric" min="0" max="23" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="${esc(aria)}, часы">
+    <span class="a-hm-sep">:</span>
+    <input class="control mono" type="number" inputmode="numeric" min="0" max="59" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="${esc(aria)}, минуты"></div></label>`;
+}
 function sleepCard(date) {
   const rec = sleepRec(date), d = rec?.data || {};
   const info = sleepInfo(rec);
@@ -429,10 +439,10 @@ function sleepCard(date) {
       <span class="note">качество <span class="mono">${Math.round(info.score)}</span>/100</span>
       ${info.snoozeMin ? `<span class="note">+ ${info.snoozeMin} мин дрёмы после будильника, в зачёт наполовину</span>` : ''}</div>` : '';
   const body = `<div class="a-times">
-      <label class="field"><span class="smallcaps">${fem() ? 'Легла' : 'Лёг'}</span><input class="control mono" type="time" value="${esc(d.bed || '')}" data-act="td-sleep-time" data-k="bed" data-date="${date}" aria-label="Во сколько ${fem() ? 'легла' : 'лёг'} спать"></label>
-      <label class="field"><span class="smallcaps">${fem() ? 'Встала' : 'Встал'}</span><input class="control mono" type="time" value="${esc(d.wake || '')}" data-act="td-sleep-time" data-k="wake" data-date="${date}" aria-label="Во сколько ${fem() ? 'встала' : 'встал'}"></label></div>
+      ${timeBox(fem() ? 'Легла' : 'Лёг', 'bed', d.bed, date, `Во сколько ${fem() ? 'легла' : 'лёг'} спать`)}
+      ${timeBox(fem() ? 'Встала' : 'Встал', 'wake', d.wake, date, `Во сколько ${fem() ? 'встала' : 'встал'}`)}</div>
     <div class="a-times a-alarm">
-      <label class="field"><span class="smallcaps">Первый будильник</span><input class="control mono" type="time" value="${esc(d.alarm || '')}" data-act="td-sleep-time" data-k="alarm" data-date="${date}" aria-label="Во сколько был первый будильник (если их было несколько)"></label>
+      ${timeBox('Первый будильник', 'alarm', d.alarm, date, 'Во сколько был первый будильник (если их было несколько)')}
       ${d.alarm ? `<div class="field"><span class="smallcaps">Будильников</span>${pick('td-sleep', String(d.alarms || ''), [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4+']], `data-k="alarms" data-date="${date}"`)}</div>`
         : '<p class="note a-tight">если будильников было несколько - время первого, чтобы тренер учёл дрёму</p>'}</div>
     ${(() => { const h = C.sleepHint?.(rec); return h ? `<p class="note a-tight ${h.warn ? 'warn' : ''}">${esc(h.text)}</p>` : ''; })()}
@@ -519,7 +529,7 @@ function localPick(module, minutes, date, seed) {
     if ((e.tags || []).some(t => m.tags.includes(t))) return true;
     if (module === 'morning') return e.morning || ['warmup', 'mobility'].includes(e.category);
     if (module === 'neck') return (e.muscles || []).some(x => /ше[яи]|подбород|лиц/i.test(x)) || /ше[яи]|подбород/i.test(e.name);
-    if (module === 'posture') return e.category === 'mobility' || ['pull_h', 'core_anti'].includes(e.pattern) && home(e);
+    if (module === 'posture') return (e.zones || []).some(z => ['back', 'shoulders', 'neck'].includes(z)) && (e.category === 'mobility' || (['pull_h', 'core_anti'].includes(e.pattern) && home(e)));
     return false;
   };
   const excl = safe(() => P.excludedFor?.(), new Set());
@@ -585,14 +595,23 @@ async function migrateMorning() {
 function cupEditor(kind, date, focusNew = false) {
   const list = C.cupList(date, kind), c = C.CUPS[kind];
   const def = date === C.today() ? nowHM() : '';
+  // кофе с молоком - молоко идёт в БЖУ дня отдельной записью (C.setCupMilk), как протеин у добавок
+  const milkRow = r => kind !== 'coffee' ? '' : `<div class="a-cup-milk">
+    <button type="button" class="chip ${r.data.milk ? 'on' : ''}" aria-pressed="${!!r.data.milk}" data-act="cup-milk-on" data-id="${r.id}" data-date="${date}">${r.data.milk ? 'с молоком' : '+ молоко'}</button>
+    ${r.data.milk ? `<select class="control" data-act="cup-milk-type" data-id="${r.id}" data-date="${date}" aria-label="Какое молоко">
+        ${C.MILK_TYPES.map(([k, , l]) => `<option value="${k}" ${r.data.milk.type === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+      </select>
+      <label class="a-cup-ml"><input class="control mono" type="number" inputmode="numeric" min="0" step="10" value="${r.data.milk.ml || 50}" data-act="cup-milk-ml" data-id="${r.id}" data-date="${date}" aria-label="Сколько молока, мл"> мл</label>` : ''}
+  </div>`;
   openModal(`<div class="modal-head"><h2>${esc(c.title)} · ${esc(fmt(date, { day: 'numeric', month: 'long' }))}</h2></div><div class="modal-body">
     ${list.length ? `<div class="a-cups">${list.map((r, i) => `<div class="a-cup-line"><span class="smallcaps muted">${i + 1}</span>
       <input class="control" type="time" value="${esc(r.data.time || '')}" data-act="cup-time" data-id="${r.id}" data-date="${date}" aria-label="Время чашки ${i + 1}">
-      <button class="btn quiet" data-act="cup-rm" data-id="${r.id}" data-kind="${kind}" data-date="${date}" aria-label="Удалить чашку ${i + 1}">${glyph('cross')}</button></div>`).join('')}</div>`
+      <span class="chips a-cup-amt">${[[1, '1'], [0.5, '½']].map(([a, l]) => `<button type="button" class="chip ${C.cupAmount(r) === a ? 'on' : ''}" aria-pressed="${C.cupAmount(r) === a}" data-act="cup-amt" data-v="${a}" data-id="${r.id}" data-kind="${kind}" data-date="${date}" aria-label="${a === 1 ? 'Целая чашка' : 'Половина чашки'}">${l}</button>`).join('')}</span>
+      <button class="btn quiet" data-act="cup-rm" data-id="${r.id}" data-kind="${kind}" data-date="${date}" aria-label="Удалить чашку ${i + 1}">${glyph('cross')}</button></div>${milkRow(r)}`).join('')}</div>`
       : '<p class="note">Пока ни одной чашки.</p>'}
     <div class="a-cup-line a-cup-new"><span class="smallcaps muted">+</span><input class="control" type="time" id="cup-new-time" value="${def}" aria-label="Время новой чашки">
       <button class="btn" data-act="cup-new" data-kind="${kind}" data-date="${date}">Добавить</button></div>
-    <p class="note">После 14:00 кофеин заметнее мешает сну - тренер сравнит такие дни с ночами.</p>
+    <p class="note">После 14:00 кофеин заметнее мешает сну - тренер сравнит такие дни с ночами.${kind === 'coffee' ? ' Молоко в кофе считается в БЖУ дня.' : ''}</p>
     </div><div class="modal-foot"><button class="btn solid" data-act="close">Готово</button></div>`);
   if (focusNew) document.getElementById('cup-new-time')?.focus();
 }
@@ -614,6 +633,24 @@ async function ensureCups() {
   if (r) await store.put('profile', r.id, { ...r.data, cups_added: true }, null);
 }
 
+// Курение/алкоголь - пункты-учёт только пока в профиле отмечена соответствующая цель («бросить курить» /
+// «меньше алкоголя»). Сняли цель - пункт не удаляем (жалко историю отметок), просто гасим; поставили снова -
+// включаем тот же обратно, а не создаём второй.
+async function ensureHabitLogItems() {
+  const its = C.items();
+  for (const [kind, title, on] of [['smoke', 'Курение', C.smokingOn], ['alcohol', 'Алкоголь', C.alcoholOn]]) {
+    const id = `${kind}_${store.uid()}`;
+    const want = on(), cur = store.get(id);
+    if (!cur) {
+      if (!want) continue;
+      const order = its.reduce((m, i) => Math.max(m, Number(i.data.order) || 0), 0) + 0.1;
+      await store.put('item', id, { title, type: 'counter', group: 'day', target_from: kind, unit: 'случ.', track: true, order, active: true }, null);
+    } else if (cur.data.active !== want) {
+      await store.patch(id, { active: want });
+    }
+  }
+}
+
 // утренняя разминка на сегодня собирается сама, как только загружен каталог
 async function ensureTodayRoutine() {
   if (profile().modules?.morning?.enabled === false || !S.exMap.size) return;
@@ -629,7 +666,7 @@ export async function background() {
   bgBusy = true;
   // разминка не зависит от заполненного профиля: без перевода старые пункты-упражнения
   // остаются в чек-листе, и «Не предлагать» / «Заменить» на них не действуют
-  try { await migrateMorning(); await ensureTodayRoutine(); if (profile().setup_done) await ensureCups(); } catch (e) { warn(e); } finally { bgBusy = false; }
+  try { await migrateMorning(); await ensureTodayRoutine(); await P.pairWarmSync?.(C.today()); if (profile().setup_done) { await ensureCups(); await ensureHabitLogItems(); } } catch (e) { warn(e); } finally { bgBusy = false; }
 }
 
 function modulesBlock(date) {
@@ -742,13 +779,14 @@ function moduleCard(k, date) {
       ${pins.length && pins.length * 0.75 > (d.minutes || 10) * 0.7 ? `<div class="notice a-tight">Закреплено ${pins.length} ${pins.length < 5 ? 'упражнения' : 'упражнений'} - они есть в разминке всегда, и на ${d.minutes} мин тренеру почти не остаётся места.
         <div class="a-row-btns"><button class="btn quiet a-mini" data-act="td-unpin-all" data-date="${date}">Открепить все</button></div></div>` : ''}` : ''}
     ${modNote(k) ? `<p class="note a-tight">${esc(modNote(k))}</p>` : ''}
+    ${k === 'morning' && P.pairOn?.() ? `<p class="note a-tight">${d.pair_with ? `Общая разминка с ${esc(C.nameForms?.(store.partners().find(p => p.name === d.pair_with)?.id)?.ins || d.pair_with)}${exs.some(x => x.swapped_from) ? ' - упражнения из вашего «не предлагать» заменены похожими' : ''}.` : 'Общая разминка: партнёр получит этот же набор, если у него тоже включено.'}</p>` : ''}
     <div class="a-exlist">${exs.map((x, i) => {
       const e = S.exMap.get(x.id), pinned = pins.includes(x.id);
       const ctx = { kind: 'routine', module: k, date, i };
       return `<div class="a-ex ${x.done ? 'done' : ''}">
         <button class="tick ${x.done ? 'on' : ''}" data-act="td-rt-tick" data-m="${k}" data-i="${i}" data-date="${date}" aria-label="Отметить: ${esc(e?.name || x.id)}">${CHECK}</button>
         <details class="tech a-tech" data-key="${esc(`${date}|${k}|${i}|${x.id}`)}" ${openTech.has(`${date}|${k}|${i}|${x.id}`) ? 'open' : ''}><summary><span class="a-exname">${esc(e?.name || x.id)}</span> <span class="mono a-amount">${esc(x.amount || '')}${x.per_side ? ' на сторону' : ''}</span>${pinned ? ' <span class="chip a-pinned" title="Закреплено: будет в разминке каждый день">каждый день</span>' : ''}</summary>
-          ${e ? techHtml(e) : '<p class="empty">Описание не загружено</p>'}
+          ${e ? techHtml(e, { key: `${date}|${k}|${i}|${x.id}|more` }) : '<p class="empty">Описание не загружено</p>'}
           ${k === 'morning' ? `<div class="a-pinrow"><button class="btn quiet a-mini ${pinned ? 'on' : ''}" data-act="td-pin" data-ex="${esc(x.id)}" aria-pressed="${pinned}">${pinned ? 'Не закреплять' : 'Делать каждый день'}</button>
             <span class="note">${pinned ? 'Сейчас это упражнение есть в разминке каждый день.' : 'Закреплённое упражнение будет в разминке каждый день, остальные тренер подбирает сам.'}</span></div>` : ''}
           ${today && !x.done ? FX.exActions(x.id, ctx) : ''}</details>
@@ -773,7 +811,7 @@ function planRows(date) {
       return `<div class="row ${done ? 'done' : ''}" data-dom="train">${future ? '<span></span>'
         : `<button class="tick ${cls}" ${go} aria-label="Открыть: ${esc(m?.title || e.module)}">${CHECK}</button>`}
         <div><div class="title">${esc(m?.title || e.module)}${min ? ` · ${min} мин` : ''}</div><div class="hint">${esc(why)}</div></div>
-        ${future ? '<span></span>' : `<button class="go" ${go}>${rec ? 'открыть' : 'собрать'} →</button>`}</div>`;
+        ${future ? '<span></span>' : `<button class="go" ${go}>${rec ? 'упражнения' : 'собрать'} →</button>`}</div>`;
     }
     const name = e.name || activityName(e.type);
     const rec = store.byDate('activity', date).find(r => r.data.type === e.type);
@@ -921,16 +959,30 @@ function itemRow(it, date) {
     return `<div class="row ${done ? 'done' : ''}"${da}>${tick(`data-act="toggle" ${attrs}`)}
       <div><div class="title">${title}</div>${d.hint ? `<div class="hint">${esc(d.hint)}</div>` : ''}</div><span></span></div>`;
   }
+  if (d.type === 'counter' && d.track && (d.target_from === 'smoke' || d.target_from === 'alcohol')) {
+    // курение/алкоголь: только у тех, кто отметил цель в профиле - каждый случай отдельной записью, без даты
+    // с точностью до минуты (важно само событие, не время), «−» убирает последнюю запись за день
+    const kind = d.target_from;
+    const list = kind === 'smoke' ? C.smokeList(date) : C.alcoholList(date);
+    const label = kind === 'smoke' ? C.smokeLabel : C.alcoholLabel;
+    const free = kind === 'smoke' ? C.smokeFreeDays() : C.alcoholFreeDays();
+    const hint = list.length ? list.map(r => label(r.data.type)).join(', ')
+      : free != null ? `${free} ${plural(free, 'день', 'дня', 'дней')} без записей` : 'отмечайте каждый случай - тренер отследит прогресс';
+    const ka = `data-kind="${kind}" data-date="${date}"`;
+    return `<div class="row a-cup"${da}><span></span><div class="a-cup-t"><span class="title">${esc(d.title)}</span><span class="hint">${esc(hint)}</span></div>
+      <div class="stepper"><button data-act="log-del-last" ${ka} aria-label="Убрать последнюю запись: ${esc(d.title)}" ${list.length ? '' : 'disabled'}>−</button>
+        <span class="val">${list.length}</span><button data-act="log-add" ${ka} aria-label="Записать: ${esc(d.title)}">+</button></div></div>`;
+  }
   if (d.type === 'counter' && d.track) {
     // учёт, а не задача: без галочки и цели. Каждая чашка со своим временем - для анализа сна
-    const kind = d.target_from, list = C.cupList(date, kind), v = list.length;
-    const times = list.map(r => r.data.time).filter(Boolean);
+    const kind = d.target_from, list = C.cupList(date, kind), v = list.reduce((a, r) => a + C.cupAmount(r), 0);
+    const times = list.filter(r => r.data.time).map(r => r.data.time + (C.cupAmount(r) < 1 ? ' (½)' : ''));
     const hint = v ? (times.length <= 4 ? times.join(', ') : `последняя в ${times[times.length - 1]}`) : 'отмечайте каждую чашку - тренер сравнит со сном';
     const ka = `data-kind="${kind}" data-date="${date}"`;
     return `<div class="row a-cup"${da}><button class="a-cup-g" data-act="cup-edit" ${ka} aria-label="Чашки: ${esc(d.title)}, изменить время">${glyph('cup')}</button>
       <button class="a-cup-t" data-act="cup-edit" ${ka}><span class="title">${esc(d.title)}</span><span class="hint">${esc(hint)}${v ? ' · изменить' : ''}</span></button>
       <div class="stepper"><button data-act="cup-del-last" ${ka} aria-label="Убрать последнюю: ${esc(d.title)}" ${v ? '' : 'disabled'}>−</button>
-        <span class="val">${v}</span><button data-act="cup-add" ${ka} aria-label="Ещё чашка: ${esc(d.title)}">+</button></div></div>`;
+        <span class="val">${C.cupNum(v)}</span><button data-act="cup-add" ${ka} aria-label="Ещё чашка: ${esc(d.title)}">+</button></div></div>`;
   }
   if (d.type === 'counter') {
     const glasses = d.target_from === 'water' && p.target <= 16
@@ -961,6 +1013,16 @@ function itemRow(it, date) {
   return '';
 }
 
+// лента вех группы (item 15): агрегированно - тип, подпись, минуты, без подробностей (что съедено, какие
+// именно упражнения); видна, только если есть общая группа - store.groups() пуст, если групп нет вовсе
+function groupFeedBlock() {
+  if (!store.groups().length) return '';
+  const items = C.groupHighlights(1).slice(0, 8);
+  if (!items.length) return '<p class="note a-tight">В группе сегодня пока не отмечено активности.</p>';
+  return `<div class="a-quick"><span class="smallcaps muted">Активность группы сегодня</span>
+    <ul class="a-hlfeed">${items.map(h => `<li><b>${esc(h.name)}</b> - ${esc(h.label || h.type)}${h.minutes ? ` · ${h.minutes} мин` : ''}</li>`).join('')}</ul></div>`;
+}
+
 // ── партнёр ──
 function partnersBlock(date) {
   const ps = store.partners();
@@ -976,7 +1038,7 @@ function partnersBlock(date) {
         <div class="ell"><div class="name">${esc(p.name)} ${pg.grade !== 'none' ? `<span class="a-gtag g-${pg.grade}">${GRADE_NAME[pg.grade]}</span>` : ''}</div>
         <div class="note">${ds ? `${ds.done} из ${ds.total} пунктов` : 'пока без отметок'}${ds?.workout === 'done' ? ' · тренировка сделана' : ''} · серия ${st.current} дн.</div></div>
         ${both ? '<span class="chip">оба в строю</span>' : ''}</div>`;
-    }).join('')}${duelBlock(date)}</div>`;
+    }).join('')}${duelBlock(date)}${groupFeedBlock()}</div>`;
 }
 
 // соревнование пары: полученная поддержка и счёт недели (если соревнование включено у обоих)
@@ -1019,6 +1081,15 @@ function sleepPraise(info) {
   toast(t);
 }
 
+// курение/алкоголь: тип отмечается сразу по нажатию - без отдельного шага «сохранить»
+function logTypeModal(kind, date) {
+  const opts = kind === 'smoke' ? C.smokeTypesOf() : C.ALCOHOL_TYPES;
+  const title = kind === 'smoke' ? 'Что закурил' : 'Что выпил';
+  openModal(`<div class="modal-head"><h2>${esc(title)}</h2></div>
+    <div class="modal-body"><div class="chips">${opts.map(([k, l]) => `<button type="button" class="chip" data-act="log-type" data-kind="${kind}" data-date="${date}" data-type="${k}">${esc(l)}</button>`).join('')}</div></div>
+    <div class="modal-foot"><button class="btn quiet" data-act="close">Отмена</button></div>`);
+}
+
 function openActivity(date, preset = {}) {
   S.forms.act = { date, q: '', intensity: 'mid', ...preset };
   actModal();
@@ -1046,6 +1117,22 @@ export const actions = {
     if (last) { await store.remove(last.id); await afterChange(date); }
   },
   'cup-edit': el => cupEditor(el.dataset.kind, el.dataset.date),
+  // курение/алкоголь: «+» сразу спрашивает тип (без него не понять, что считать); «−» убирает последнюю запись дня
+  'log-add': el => logTypeModal(el.dataset.kind, el.dataset.date),
+  'log-type': async el => {
+    const { kind, date, type } = el.dataset;
+    closeModal();
+    await store.put(kind, store.newId(), { type, time: nowHM(), created: Date.now() }, date);
+    await afterChange(date);
+    const label = kind === 'smoke' ? C.smokeLabel(type) : C.alcoholLabel(type);
+    toast(`Записал: ${label}`, 3000);
+  },
+  'log-del-last': async el => {
+    const { kind, date } = el.dataset;
+    const list = kind === 'smoke' ? C.smokeList(date) : C.alcoholList(date);
+    const last = [...list].sort((a, b) => (a.data.created || 0) - (b.data.created || 0)).pop();
+    if (last) { await store.remove(last.id); await afterChange(date); }
+  },
   'cup-new': async el => {
     const { kind, date } = el.dataset;
     const t = document.getElementById('cup-new-time')?.value || nowHM();
@@ -1053,10 +1140,29 @@ export const actions = {
     await afterChange(date);
     cupEditor(kind, date);
   },
+  // половинка чашки: 0.5 (целая - поле убираем, как у старых записей)
+  'cup-amt': async el => {
+    const v = Number(el.dataset.v), r = store.get(el.dataset.id);
+    if (!r) return;
+    const { amount, ...rest } = r.data;
+    await store.put('drink', r.id, v === 1 ? rest : { ...rest, amount: v }, r.date);
+    await afterChange(el.dataset.date);
+    cupEditor(el.dataset.kind, el.dataset.date);
+  },
   'cup-rm': async el => {
+    const r = store.get(el.dataset.id);
+    if (r?.data.food_id && store.get(r.data.food_id)) await store.remove(r.data.food_id);
     await store.remove(el.dataset.id);
     await afterChange(el.dataset.date);
     cupEditor(el.dataset.kind, el.dataset.date);
+  },
+  // молоко к кофе - в БЖУ дня (как протеин у добавок); выключили - связанная запись еды убирается
+  'cup-milk-on': async el => {
+    const r = store.get(el.dataset.id);
+    if (!r) return;
+    await C.setCupMilk(el.dataset.id, r.data.milk ? null : { type: '2.5', ml: 50 });
+    await afterChange(el.dataset.date);
+    cupEditor('coffee', el.dataset.date);
   },
   inc: async el => {
     const { item, date } = el.dataset;
@@ -1218,6 +1324,7 @@ export const actions = {
     closeModal();
     delete S.forms.act;
     await afterChange(f.date);
+    if (!prev) await C.shareHighlight('activity', def.name, minutes, f.date);
     toast(f.id ? 'Активность обновлена' : `${def.name}: ${minutes} мин записано`);
     if (!f.id && isBackdated(f.date)) setTimeout(() => toast('Засчитал. В следующий раз лучше отметить в тот же день.'), 3000);
   },
@@ -1233,17 +1340,39 @@ export const actions = {
 export const changes = {
   'cup-time': async el => {
     if (!el.value) return;
+    const r = store.get(el.dataset.id);
     await store.patch(el.dataset.id, { time: el.value });
+    if (r?.data.food_id && store.get(r.data.food_id)) await store.patch(r.data.food_id, { time: el.value });
+    await afterChange(el.dataset.date);
+  },
+  // какое молоко к кофе (жирность/растительное) - пересчитывает связанную запись еды
+  'cup-milk-type': async el => {
+    const r = store.get(el.dataset.id);
+    if (!r) return;
+    await C.setCupMilk(el.dataset.id, { ...r.data.milk, type: el.value });
+    await afterChange(el.dataset.date);
+  },
+  'cup-milk-ml': async el => {
+    const r = store.get(el.dataset.id);
+    if (!r) return;
+    await C.setCupMilk(el.dataset.id, { ...r.data.milk, ml: Math.max(0, Number(el.value) || 0) });
     await afterChange(el.dataset.date);
   },
   setnum: el => setLog(el.dataset.item, el.dataset.date, Math.max(0, Number(el.value) || 0)),
+  // часы и минуты - отдельные поля (не единый <input type="time">): у него .value пуст, пока не заполнены
+  // ОБА внутренних окошка сразу, поэтому заполнение только часов и уход с поля ничего не сохраняло
   'td-sleep-time': async el => {
     const { k, date } = el.dataset;
+    const pair = [...document.querySelectorAll(`[data-act="td-sleep-time"][data-k="${k}"][data-date="${date}"]`)];
+    const raw = part => (pair.find(x => x.dataset.part === part)?.value ?? '').trim();
+    const h = raw('h'), m = raw('m');
+    const value = !h && !m ? null
+      : `${String(Math.min(23, Math.max(0, parseInt(h, 10) || 0))).padStart(2, '0')}:${String(Math.min(59, Math.max(0, parseInt(m, 10) || 0))).padStart(2, '0')}`;
     const extra = {};
     // первый будильник указан - значит, проснулся по будильнику; убран - и счётчик будильников не нужен
-    if (k === 'alarm' && el.value && !sleepRec(date)?.data.awakening) extra.awakening = 'alarm';
-    if (k === 'alarm' && !el.value) extra.alarms = null;
-    await upsertDaily('sleep', 'sleep', date, { [k]: el.value || null, ...extra });
+    if (k === 'alarm' && value && !sleepRec(date)?.data.awakening) extra.awakening = 'alarm';
+    if (k === 'alarm' && !value) extra.alarms = null;
+    await upsertDaily('sleep', 'sleep', date, { [k]: value, ...extra });
     praiseLater(date);
   },
 };

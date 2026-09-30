@@ -44,11 +44,151 @@ def unit_code(u: str | None) -> str | None:
 QTY_DOT_RE = re.compile(r"(\d\s*(?:г|гр|грамм\w*|кг|мл|л|шт|штук\w*)?|[^\W\d_]{3,})\.\s+(?=[^\W_])", re.I)
 
 
+# продолжение предыдущего продукта после запятой: «2 куриных ножки, запечённых с оливками», «кофе, на молоке»
+CONT_RE = re.compile(r"^(?:(?:с|со|в|во|на|под|без|из|по)\s|[а-яё]+(?:нн|енн|анн|ённ)[а-яё]{1,3}(?:\s|$))", re.I)
+
+
+# ── явные КБЖУ/БЖУ в тексте: «курица 200г 250/30/5/10», «250/30/5/10 курица 200г», «кбжу: 250/30/5/10» ──
+# 4 числа — калории/белки/жиры/углеводы по порядку (как принято писать); 3 — белки/жиры/углеводы, калории считаем.
+# Числа относятся к продукту, рядом с которым стоят (в том же куске или в соседнем, если написаны отдельной строкой),
+# и это значения на 100 г продукта (как в справочниках питания) - итог в БЖУ приёма пищи считаем на реально
+# указанный вес (грамм рядом, иначе по умолчанию); продукта ещё нет в справочнике - запоминаем в нём как есть (per_100).
+NUM = r"\d+(?:[.,]\d+)?"
+# число, за которым сразу (без разделителя-цифры) не идёт единица веса - иначе это не значение КБЖУ, а вес
+# продукта: «…17.9, 170г» (запятая перед весом, как ещё один разделитель списка) не должно принять «170» за
+# 4-е число КБЖУ
+NUM_STRICT = r"\d++(?:[.,]\d++)?+(?!\s*(?:кг|км|г|гр|грамм\w*|мл|л|литр\w*)\b)"
+MACRO_LABEL_RE = re.compile(r"(?:^|\s)(?:кбжу|бжу)\s*:?(?=\s|$)", re.I)
+# числа КБЖУ подряд: через / \ (без пробелов вокруг не обязательно) или через запятую с пробелом после -
+# «191, 12.5, 11.83, 8.97»; запятая без пробела после («12,5») — десятичная, не разделитель, её не трогаем
+SEP = r"(?:\s*[/\\]\s*|,\s+)"
+MACRO_SLASH_RE = re.compile(
+    rf"(?<![\d.,/\\])({NUM_STRICT}){SEP}({NUM_STRICT}){SEP}({NUM_STRICT})(?:{SEP}({NUM_STRICT}))?"
+    rf"(?!\d|\.)(?!{SEP}{NUM_STRICT})")
+# кусок целиком - только числа через пробел (после разбиения по ;/переносам строк так остаётся, если КБЖУ
+# написаны отдельной строкой без названия рядом, «Курица\n250 30 5 10»): здесь пробел без / \ , тоже разделитель
+MACRO_WHOLE_RE = re.compile(rf"^\s*(?:кбжу|бжу)?\s*:?\s*({NUM_STRICT})[\s/\\]+({NUM_STRICT})[\s/\\]+({NUM_STRICT})(?:[\s/\\]+({NUM_STRICT}))?\s*$", re.I)
+
+
+def _macro_from(nums: list[float]) -> dict:
+    if len(nums) == 4:
+        kcal, p, f, c = nums
+    else:
+        p, f, c = nums
+        kcal = 4 * p + 9 * f + 4 * c
+    return {"kcal": round(kcal), "p": round(p, 1), "f": round(f, 1), "c": round(c, 1)}
+
+
+def split_macro_segment(seg: str) -> list[tuple[str, dict]] | None:
+    """Кусок текста (между ;/переносами строк) с одним или несколькими КБЖУ → [(кусок без этих чисел, КБЖУ), …],
+    по одной паре на каждое вхождение — так «курица кбжу А, В кбжу Б» не сливает два блюда в одно. Между двумя
+    вхождениями режем по первой запятой: то, что до неё, — хвост (обычно вес) текущего блюда, после — начало
+    следующего. Нет чисел вовсе — None (кусок обрабатывается как обычно, по справочнику)."""
+    whole = MACRO_WHOLE_RE.match(seg)
+    if whole:
+        return [("", _macro_from([float(x.replace(",", ".")) for x in whole.groups() if x]))]
+    ms = list(MACRO_SLASH_RE.finditer(seg))
+    if not ms:
+        return None
+    out, prev_end = [], 0
+    for i, m in enumerate(ms):
+        next_start = ms[i + 1].start() if i + 1 < len(ms) else len(seg)
+        between = seg[m.end():next_start]
+        cut = between.find(",") if i + 1 < len(ms) else -1
+        tail = between if cut < 0 else between[:cut]
+        macro = _macro_from([float(x.replace(",", ".")) for x in m.groups() if x])
+        name = MACRO_LABEL_RE.sub(" ", seg[prev_end:m.start()] + " " + tail)
+        out.append((re.sub(r"\s+", " ", name).strip(), macro))
+        prev_end = m.end() + len(tail) + (1 if cut >= 0 else 0)
+    return out
+
+
+def macro_annotate(chunks: list[str]) -> list[tuple[str, dict | None]]:
+    """Куски текста → [(кусок без КБЖУ, КБЖУ-числа для него | None)], по одной паре на каждое найденное КБЖУ -
+    один кусок может дать и несколько пар (см. split_macro_segment). КБЖУ без названия рядом (своя строка,
+    цифры отдельно) приклеиваются к соседней паре — сначала к предыдущей, иначе к следующей."""
+    parsed: list[tuple[str, dict | None]] = []
+    for c in chunks:
+        entries = split_macro_segment(c)
+        parsed.extend(entries if entries is not None else [(c, None)])
+    out: list[list] = [[name, macro] for name, macro in parsed]
+    for i, (name, macro) in enumerate(parsed):
+        if name or macro is None:
+            continue
+        for j in (i - 1, i + 1):
+            if 0 <= j < len(out) and out[j][0] and out[j][1] is None:
+                out[j][1] = macro
+                break
+    # пустое название, не приклеившееся к соседу (цифры сами по себе, без блюда рядом), — отбрасываем
+    return [(name, macro) for name, macro in out if name]
+
+
+def split_strong(text: str) -> list[str]:
+    """Границы между заведомо разными блюдами: точка с запятой, перенос строки, «+». Запятая внутри —
+    слабая граница (см. split): у составного блюда через запятую часто перечислены его части
+    («рис с креветками, яйцом и луком»), а не отдельные блюда."""
+    text = QTY_DOT_RE.sub(r"\1, ", text or "")   # запятая внутри числа («молоко 1,5%») уже защищена этим шагом
+    return [p.strip() for p in re.split(r"[;\n+]", text) if p and p.strip()]
+
+
 def split(text: str) -> list[str]:
-    # запятая внутри числа («молоко 1,5%») — не разделитель
-    text = QTY_DOT_RE.sub(r"\1, ", text or "")
-    parts = re.split(r"(?<!\d),|,(?!\d)|[;\n+]|\s+и\s+(?=\d)", text)
-    return [p.strip() for p in parts if p and p.strip()]
+    return [c for seg in split_strong(text) for c in split_weak(seg)]
+
+
+def split_weak(text: str) -> list[str]:
+    """Один кусок «между точками с запятой» → отдельные продукты: по запятой и «и» перед числом."""
+    parts = [p.strip() for p in re.split(r"(?<!\d),|,(?!\d)|\s+и\s+(?=\d)", text) if p and p.strip()]
+    out: list[str] = []
+    for p in parts:
+        # кусок без количества, который начинается с предлога или причастия, - уточнение предыдущего продукта
+        if out and not QTY_RE.search(p) and not BARE_UNIT_RE.search(p) and CONT_RE.match(p):
+            out[-1] = f"{out[-1]} {p}"
+        else:
+            out.append(p)
+    return [q for p in out for q in split_two(p)]
+
+
+def split_two(p: str) -> list[str]:
+    """Два количества с единицами в одном куске: «творог 200 г со сметаной 20 г» → «творог 200 г», «сметаной 20 г»."""
+    ms = [m for m in QTY_RE.finditer(p) if m.group("u")]
+    if len(ms) < 2:
+        return [p]
+    gap = p[ms[0].end():ms[1].start()]
+    j = [m for m in re.finditer(r"\s(?:с|со|и|плюс)\s", gap, re.I)]
+    if not j:
+        return [p]
+    cut = ms[0].end() + j[-1].start()
+    return [p[:cut].strip(), *split_two(p[ms[0].end() + j[-1].end():].strip())]
+
+
+# уточнения, которые мешают найти продукт: «(это в сухом виде)», «сорта богатырь», «марки …»
+PAREN_RE = re.compile(r"\(([^)]*)\)")
+QUALIFIER_RE = re.compile(r"\b(?:сорта|сорт|марки|фирмы|бренда|производства)\s+[\w-]+", re.I)
+WITHOUT_RE = re.compile(r"\bбез\s+[\w-]+", re.I)
+# «… с оливками»: добавка к блюду без своего количества - отдельный продукт, если блюдо её не покрывает
+WITH_RE = re.compile(r"\s(?:с|со|плюс)\s+(.+)$", re.I)
+SMALL_RE = re.compile(r"\b(?:немного|немножко|чуть-чуть|чуть|щепотк\w*|несколько листьев|пар[ау] листьев)\b", re.I)
+STATE_HINT = [(r"сух", "сухой"), (r"сыр(ой|ая|ое|ом|ом виде)", "сырой"), (r"вар[её]н|отварн", "варёный"),
+              (r"запеч", "запечённый"), (r"жарен", "жареный"), (r"готов", "готовый")]
+
+
+def prepare(chunk: str) -> tuple[str, bool]:
+    """→ (кусок для разбора, «немного»). Состояние из скобок важнее слов снаружи: «рис отварной 40 г (в сухом виде)» - сухой."""
+    hint = None
+    for inner in PAREN_RE.findall(chunk):
+        for pat, word in STATE_HINT:
+            if re.search(pat, inner, re.I):
+                hint = word
+                break
+    text = PAREN_RE.sub(" ", chunk)
+    if hint:
+        text = STATE_WORDS.sub(" ", text) + " " + hint
+    text = QUALIFIER_RE.sub(" ", text)
+    text = WITHOUT_RE.sub(" ", text)            # «без сахара», «без масла» - не продукт
+    small = bool(SMALL_RE.search(text)) and not QTY_RE.search(text)
+    if small:
+        text = SMALL_RE.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip(), small
 
 
 def parse_chunk(chunk: str) -> tuple[str, float | None, str | None]:
@@ -67,6 +207,7 @@ def parse_chunk(chunk: str) -> tuple[str, float | None, str | None]:
 
 
 ENDINGS = sorted(["ами", "ями", "ого", "его", "ому", "ему", "ыми", "ими", "ой", "ей", "ий", "ый", "ая", "яя", "ое", "ее",
+                  "ых", "их", "ые", "ие", "ым", "им",
                   "ую", "юю", "ом", "ем", "ам", "ям", "ах", "ях", "ов", "ев", "а", "я", "ы", "и", "у", "ю", "е", "о", "ь"],
                  key=len, reverse=True)
 
@@ -89,6 +230,14 @@ STATE_WORDS = re.compile(r"\b(сух\w*|сыр(ой|ая|ое|ые|ом|ую)|в
                          r"тушен\w*|на пару|крупа|хлопь\w*|каш\w+|свеж\w*)\b", re.I)
 
 
+STOP = {"с", "со", "и", "в", "во", "на", "из", "по", "под", "без", "для", "к", "это", "вид", "виде", "шт", "г", "гр", "мл"}
+SMALL_G = 20          # «немного» без числа - горсть или 20 г
+
+
+def bag(name: str) -> frozenset:
+    return frozenset(w for w in stem(name).split() if w not in STOP and not w.isdigit())
+
+
 def base_name(name: str) -> str:
     """Название без состояния: «Гречка варёная» и «Гречка сырая» → «гречк»."""
     return stem(STATE_WORDS.sub(" ", norm(name)))
@@ -102,6 +251,7 @@ class Index:
         self.stems: dict[str, dict] = {}
         self.bases: dict[str, list[dict]] = {}
         self.fuzzy: list[str] = []          # нечёткое сравнение - без товаров из магазина (их 15 тыс., бренды не угадываем)
+        self.bags: list[tuple[frozenset, dict]] = []    # наборы основ слов названий и синонимов (тоже без магазина)
         for f in self.foods:
             for k in [f["name"], *f["aliases"], *([f"{f['brand']} {f['name']}"] if f.get("brand") else [])]:
                 nk = norm(k)
@@ -109,6 +259,10 @@ class Index:
                     self.fuzzy.append(nk)
                 self.keys.setdefault(nk, f)
                 self.stems.setdefault(stem(k), f)
+                if f.get("source") != "off":
+                    b = bag(k)
+                    if b:
+                        self.bags.append((b, f))
             self.bases.setdefault(base_name(f["name"]), []).append(f)
         self.usage = usage(uid, self) if uid else {}
 
@@ -117,8 +271,52 @@ class Index:
             return self.keys[name]
         if stem(name) in self.stems:
             return self.stems[stem(name)]
+        by_bag = self._bag_match(name)
+        if by_bag:
+            return by_bag
         close = difflib.get_close_matches(name, self.fuzzy, n=1, cutoff=0.86)
         return self.keys[close[0]] if close else None
+
+    def _bag_match(self, name: str) -> dict | None:
+        """Слова в любом порядке и падеже, лишние слова можно: «листья салата айсберг» → «Салат листовой».
+        Продукт засчитывается, если его названия покрывают не меньше половины слов запроса и нет равного соперника."""
+        q = bag(name)
+        if not q:
+            return None
+        cover: dict[int, set] = {}
+        foods: dict[int, dict] = {}
+        for b, f in self.bags:
+            if b <= q:
+                cover.setdefault(f["id"], set()).update(b)
+                foods[f["id"]] = f
+        if cover:
+            ranked = sorted(cover.items(), key=lambda kv: (-len(kv[1]), len(foods[kv[0]]["name"])))
+            best, n = ranked[0][0], len(ranked[0][1])
+            rival = len(ranked) > 1 and len(ranked[1][1]) == n and base_name(foods[ranked[1][0]]["name"]) != base_name(foods[best]["name"])
+            if n * 2 >= len(q) and not rival:
+                return foods[best]
+        # запрос короче названия: «салат из свежих овощей» → «Салат из свежих овощей с маслом» (одно лишнее слово)
+        if len(q) >= 2:
+            wider = {}
+            for bb, f in self.bags:
+                if q < bb and len(bb) - len(q) == 1:
+                    wider.setdefault(base_name(f["name"]), f)
+            if len(wider) == 1:
+                return next(iter(wider.values()))
+        return None
+
+    def exact(self, name: str) -> bool:
+        """Совпало название или синоним целиком (с точностью до окончаний) - тогда «с …» часть блюда: «кофе с молоком»."""
+        n = norm(name)
+        return n in self.keys or stem(n) in self.stems
+
+    def covered(self, name: str, f: dict) -> frozenset:
+        """Какие слова запроса покрыты названиями продукта."""
+        q, out = bag(name), set()
+        for b, g in self.bags:
+            if g["id"] == f["id"] and b <= q:
+                out |= b
+        return frozenset(out)
 
     def match(self, name: str) -> dict | None:
         name = norm(name)
@@ -202,19 +400,82 @@ def item_from(food: dict, grams: float, text: str, source: str = "db") -> dict:
     return out
 
 
-def quick_parse(text: str, idx: Index | None = None) -> tuple[list[dict], list[str]]:
-    """→ (распознанные позиции, нераспознанные куски)."""
+def quick_parse(text: str, idx: Index | None = None, uid: str | None = None) -> tuple[list[dict], list[str]]:
+    """→ (распознанные позиции, нераспознанные куски). Явные КБЖУ относятся к целому куску «между ;/переносами
+    строк» (split_strong) — так составное блюдо, у которого через запятую перечислены части («рис с креветками,
+    яйцом и луком»), не разваливается на отдельные продукты; запятая делит на блюда, только когда КБЖУ рядом нет."""
     idx = idx or Index()
     done, rest = [], []
-    for chunk in split(text):
-        name, n, unit = parse_chunk(chunk)
-        food = idx.match(name)
-        grams = grams_for(food, n, unit) if food else None
-        if food and grams:
-            done.append(item_from(food, grams, chunk))
-        else:
-            rest.append(chunk)
+    for seg, macro in macro_annotate(split_strong(text)):
+        if macro:
+            clean, small = prepare(seg)
+            name, n, unit = parse_chunk(clean)
+            food = idx.match(name)
+            # явные КБЖУ рядом с продуктом — они и идут в БЖУ приёма пищи, справочник тут не спрашиваем
+            done.append(_macro_item(seg, name, _macro_grams(n, unit, food), macro, idx, uid))
+            continue
+        for chunk in split_weak(seg):
+            clean, small = prepare(chunk)
+            name, n, unit = parse_chunk(clean)
+            food = idx.match(name)
+            grams = (food.get("portions") or {}).get("горсть", SMALL_G) if food and small else grams_for(food, n, unit) if food else None
+            if food and grams:
+                done.append(item_from(food, grams, chunk))
+                # ничего не теряем: «ножки запечённые с оливками» нашлись как ножки - оливки отдельной строкой
+                extra = with_extra(name, food, idx)
+                if extra:
+                    f2 = idx.match(extra)
+                    if f2:
+                        done.append(item_from(f2, (f2.get("portions") or {}).get("горсть", SMALL_G), extra))
+                    else:
+                        rest.append(extra)
+            else:
+                rest.append(chunk)
     return done, rest
+
+
+def _macro_grams(n: float | None, unit: str | None, food: dict | None) -> float:
+    """Вес, к которому относятся явные КБЖУ: указанный рядом (граммы/мл, штуки по порции продукта),
+    иначе — число без единицы (если похоже на граммы) или порция по умолчанию, иначе 100 г."""
+    if unit in ("g", "ml"):
+        return n
+    if unit in ("kg", "l"):
+        return n * 1000
+    if unit and food:
+        g = grams_for(food, n, unit)
+        if g:
+            return g
+    if n and unit is None and n > 20:
+        return n
+    if food:
+        g = grams_for(food, None, None)
+        if g:
+            return g
+    return 100.0
+
+
+def _macro_item(chunk: str, name: str, grams: float, macro: dict, idx: "Index", uid: str | None) -> dict:
+    """Позиция по явным КБЖУ, не по справочнику: числа - значения на 100 г продукта, итог считаем на реально
+    указанный вес. Продукта (или его синонима) ещё нет в справочнике - запоминаем его туда как есть (per_100),
+    как это делает разбор ИИ (idx.match, а не только точное имя: «курица» не задваивает «Курицу варёную»,
+    у которой это уже алиас)."""
+    title = re.sub(r"\s+", " ", name).strip()
+    title = (title[:1].upper() + title[1:]) if title else "Без названия"
+    if not idx.match(title):
+        db.learn_food(title, macro, source="manual", uid=uid)
+    k = grams / 100
+    item = {"kcal": round(macro["kcal"] * k), "p": round(macro["p"] * k, 1), "f": round(macro["f"] * k, 1), "c": round(macro["c"] * k, 1)}
+    return {"text": chunk, "name": title, "grams": round(grams), **item, "source": "manual"}
+
+
+def with_extra(name: str, food: dict, idx: "Index") -> str | None:
+    """Хвост «с …», который найденный продукт не покрывает (или None)."""
+    m = WITH_RE.search(norm(name))
+    if not m or idx.exact(name):
+        return None
+    tail = m.group(1).strip()
+    tb = bag(tail)
+    return tail if tb and not tb <= idx.covered(name, food) else None
 
 
 def totals(items: list[dict]) -> dict:

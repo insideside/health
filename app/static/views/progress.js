@@ -101,6 +101,8 @@ function viewProgress() {
         <b class="g-${LETTER_G[ws?.grade] || 'none'}-t">${ws ? `${gradeGlyph(ws.grade)} ${esc(ws.grade || '')}` : '-'}</b><span class="note">${ws?.score != null ? `${Math.round(ws.score)} из 100` : 'отчёт по дням'} →</span></a>
       <a class="raised pg-link" href="#body"><span class="smallcaps muted">Замеры</span>
         <b>${lastMeasureDate() ? esc(short(lastMeasureDate())) : '-'}</b><span class="note">${measureDue() ? 'пора обновить' : 'дневник и графики'} →</span></a>
+      <a class="raised pg-link" href="#report"><span class="smallcaps muted">Отчёт</span>
+        <b>PDF</b><span class="note">питание, сон, активности →</span></a>
       ${togetherLink()}
     </div>
 
@@ -399,7 +401,7 @@ function viewWeek(arg) {
         <td class="mono ${r.kc}">${r.has ? num(r.t.kcal) : ''}</td>
         <td class="mono"><span class="${r.pc}">${r.has ? Math.round(r.t.p) : ''}</span>${r.has ? ` / ${Math.round(r.t.f)} / ${Math.round(r.t.c)}` : ''}</td>
         <td class="mono">${r.wv != null && !r.future ? `${r.wv}/${r.wt}` : ''}</td>
-        <td class="mono">${r.cups?.tracked && !r.future && (r.cups.coffee || r.cups.tea) ? `${r.cups.coffee || 0} / ${r.cups.tea || 0}${r.cups.late ? ` (${r.cups.late})` : ''}` : ''}</td>
+        <td class="mono">${r.cups?.tracked && !r.future && (r.cups.coffee || r.cups.tea) ? `${C.cupNum(r.cups.coffee || 0)} / ${C.cupNum(r.cups.tea || 0)}${r.cups.late ? ` (${C.cupNum(r.cups.late)})` : ''}` : ''}</td>
         <td class="mono">${r.sv ? num(r.sv) : ''}</td>
         <td class="mono">${r.sinfo?.hours ? hm(r.sinfo.hours) : ''}</td>
         <td>${r.state?.wellbeing ? `<span title="${esc(MOOD[r.state.wellbeing]?.[1] || '')}">${MOOD[r.state.wellbeing]?.[0] || ''}</span>` : ''}</td></tr>`).join('')}</tbody>

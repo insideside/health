@@ -11,6 +11,7 @@
 // идёт синхронный код, и сбрасывается в ближайшей микрозадаче (после любого await данные уже свежие).
 import * as store from './store.js';
 import * as N from './names.js';
+import * as FD from './foods.js';
 // цели-показатели (goals.lines) — модуль импортирует нас в ответ; цикл безопасен, пока обращения только внутри функций
 import * as G from './goals.js';
 
@@ -130,9 +131,36 @@ export function itemTarget(item, date, uid = store.uid()) {
   return d.target || 1;
 }
 
-export function meals(date, uid = store.uid()) {
-  return new Set(recsOn('food', date, uid).map(r => r.data.meal)).size;
+// Приёмы пищи дня блоками: завтрак, обед, ужин - по одному; каждый перекус - свой блок (записи перекуса ближе
+// SNACK_GAP_MIN друг к другу - один перекус). Блоки по времени. Протеин из добавок (calc supp) - не приём пищи:
+// all: true - вместе с ним (для экрана «Питание»). → [{ meal, n (номер перекуса), time, entries }]
+export const SNACK_GAP_MIN = 45;
+const MEAL_DEFAULT_MIN = { breakfast: 8 * 60, lunch: 13 * 60, snack: 16 * 60, dinner: 19 * 60 };
+const recTime = r => toMin(r.data.time) ?? (r.data.created ? new Date(r.data.created).getHours() * 60 + new Date(r.data.created).getMinutes() : null);
+export function mealBlocks(date, uid = store.uid(), { all = false } = {}) {
+  const recs = recsOn('food', date, uid).filter(r => all || !['supp', 'drink'].includes(r.data.calc));
+  const main = new Map(), snacks = [];
+  for (const r of recs) {
+    const m = r.data.meal || 'snack';
+    if (m === 'snack') snacks.push(r);
+    else { if (!main.has(m)) main.set(m, []); main.get(m).push(r); }
+  }
+  const t = r => recTime(r) ?? MEAL_DEFAULT_MIN[r.data.meal || 'snack'];
+  const blocks = [...main].map(([meal, entries]) => ({ meal, entries, time: Math.min(...entries.map(t)) }));
+  let cur = null;
+  for (const r of snacks.sort((a, b) => t(a) - t(b))) {
+    if (cur && t(r) - cur.last <= SNACK_GAP_MIN) { cur.entries.push(r); cur.last = t(r); continue; }
+    cur = { meal: 'snack', entries: [r], time: t(r), last: t(r) };
+    blocks.push(cur);
+  }
+  blocks.sort((a, b) => a.time - b.time);
+  let n = 0;
+  for (const b of blocks) { if (b.meal === 'snack') b.n = ++n; b.entries.sort((x, y) => t(x) - t(y)); delete b.last; }
+  return blocks;
 }
+export function meals(date, uid = store.uid()) { return mealBlocks(date, uid).length; }
+// цель по приёмам: основные (по умолчанию 3) + каждый записанный перекус - «завтрак и перекус» = 2 из 4
+export function mealsTarget(date, base = 3, uid = store.uid()) { return base + mealBlocks(date, uid).filter(b => b.meal === 'snack').length; }
 
 export function workoutProgress(w) {
   if (!w) return 0;
@@ -156,6 +184,9 @@ export function cupList(date, kind, uid = store.uid()) {
     .sort((a, b) => (a.data.time || '').localeCompare(b.data.time || '') || (a.data.created || 0) - (b.data.created || 0));
 }
 // → { coffee, tea (null - не отслеживается), late - чашек после 14:00, last, lastCoffee, tracked }
+// размер чашки: 1 или ½ (amount: 0.5); старые записи без поля - целая
+export const cupAmount = r => (Number(r?.data?.amount) > 0 ? Number(r.data.amount) : 1);
+export const cupNum = v => String(Math.round(v * 10) / 10).replace('.', ',');
 export function cups(date, uid = store.uid()) {
   const out = { coffee: null, tea: null, late: 0, last: null, lastCoffee: null };
   const recs = cupList(date, null, uid);
@@ -163,17 +194,106 @@ export function cups(date, uid = store.uid()) {
     const it = store.get(cupItemId(kind, uid));
     const mine = recs.filter(r => r.data.kind === kind);
     if ((!it || it.data.active === false) && !mine.length) continue;
-    out[kind] = mine.length;
+    out[kind] = mine.reduce((a, r) => a + cupAmount(r), 0);
   }
   for (const r of recs) {
     const t = r.data.time;
     if (!t) continue;
-    if ((toMin(t) ?? 0) >= CUP_LATE_MIN) out.late++;
+    if ((toMin(t) ?? 0) >= CUP_LATE_MIN) out.late += cupAmount(r);
     if (!out.last || t > out.last) out.last = t;
     if (r.data.kind === 'coffee' && (!out.lastCoffee || t > out.lastCoffee)) out.lastCoffee = t;
   }
   out.tracked = out.coffee != null || out.tea != null;
   return out;
+}
+
+// ── курение и алкоголь: цель «бросить курить» / «меньше алкоголя» в profile-целях (goalOf().habits) включает
+// счётчик в чек-листе «Сегодня»; без цели - в интерфейсе этого нет вовсе. Каждый случай - отдельная запись
+// (smoke/alcohol) со временем и подтипом, как чашка кофе; сам счёт - track-пункт, в процент дня не входит. ──
+export const SMOKE_TYPES = [['cigarette', 'Сигареты'], ['vape', 'Вейп / HQD'], ['iqos', 'Системы нагревания (IQOS и похожие)'], ['hookah', 'Кальян'], ['other', 'Другое']];
+export const smokeLabel = type => SMOKE_TYPES.find(([k]) => k === type)?.[1] || 'Курение';
+export const smokingOn = (uid = store.uid()) => (goalOf(uid).habits || []).includes('quit_smoking');
+// что курит человек (выбрано в профиле) - если ничего не выбрано, предлагаем весь список
+export function smokeTypesOf(uid = store.uid()) {
+  const sel = goalOf(uid).smoking_types || [];
+  return sel.length ? SMOKE_TYPES.filter(([k]) => sel.includes(k)) : SMOKE_TYPES;
+}
+export function smokeList(date, uid = store.uid()) {
+  return store.byDate('smoke', date, uid).sort((a, b) => (a.data.time || '').localeCompare(b.data.time || '') || (a.data.created || 0) - (b.data.created || 0));
+}
+export const ALCOHOL_TYPES = [['beer', 'Пиво', '0,33 л, ~5%'], ['wine', 'Вино', '150 мл, ~12%'], ['spirits', 'Крепкое', '50 мл, ~40%'], ['other', 'Другое', '']];
+export const alcoholLabel = type => ALCOHOL_TYPES.find(([k]) => k === type)?.[1] || 'Алкоголь';
+export const alcoholOn = (uid = store.uid()) => (goalOf(uid).habits || []).includes('less_alcohol');
+export function alcoholList(date, uid = store.uid()) {
+  return store.byDate('alcohol', date, uid).sort((a, b) => (a.data.time || '').localeCompare(b.data.time || '') || (a.data.created || 0) - (b.data.created || 0));
+}
+// дней без единой записи - от последнего случая (включительно) до сегодня; записей никогда не было - null
+// (тогда хвалить пока не за что численно, просто «пока всё чисто»)
+function freeDays(kind, uid) {
+  const dates = [...index(kind, uid).keys()].sort();
+  if (!dates.length) return null;
+  return daysBetween(dates[dates.length - 1], today());
+}
+export const smokeFreeDays = (uid = store.uid()) => freeDays('smoke', uid);
+export const alcoholFreeDays = (uid = store.uid()) => freeDays('alcohol', uid);
+
+// ── группы (item 15): агрегированная веха «кто что делал» - без подробностей (какие именно упражнения,
+// что съедено), только тип, короткая подпись и минуты/метрика. Только если есть хоть одна группа и человек
+// не выключил «Делиться активностью в группе» в профиле (по умолчанию - включено). ──
+export function shareHighlights(uid = store.uid()) { return prof(uid).share_activity !== false; }
+export async function shareHighlight(type, label, minutes = null, date = today()) {
+  if (!store.groups().length || !shareHighlights()) return;
+  await store.put('highlight', store.newId(), { type, label, minutes, date, created: Date.now() }, date);
+}
+// сегодняшние (или за N последних дней) вехи всех, с кем есть общая группа - для ленты на «Вместе»
+export function groupHighlights(days = 1, uid = store.uid()) {
+  const mates = new Set();
+  for (const g of store.groups()) for (const m of g.members || []) if (m.id !== uid) mates.add(m.id);
+  const from = addDays(today(), -(days - 1));
+  const out = [];
+  for (const mid of mates) {
+    const name = store.groups().flatMap(g => g.members || []).find(m => m.id === mid)?.name || 'Участник';
+    for (let d = from; d <= today(); d = addDays(d, 1)) {
+      for (const r of store.byDate('highlight', d, mid)) out.push({ ...r.data, name, uid: mid });
+    }
+  }
+  return out.sort((a, b) => (b.created || 0) - (a.created || 0));
+}
+
+// ── молоко в кофе: считаем в БЖУ дня (drink.milk → связанная запись food, как протеин у добавок) ──
+// фиксированный список - точные названия из справочника, без нечёткого поиска
+export const MILK_TYPES = [
+  ['3.2', 'Молоко 3,2%', '3,2%'], ['2.5', 'Молоко 2,5%', '2,5%'], ['1.5', 'Молоко 1,5%', '1,5%'],
+  ['1', 'Молоко 1%', '1%'], ['0.5', 'Молоко 0,5%', 'обезжиренное'], ['lf', 'Молоко безлактозное 1,5%', 'безлактозное'],
+  ['oat', 'Молоко овсяное', 'овсяное'], ['almond', 'Молоко миндальное', 'миндальное'], ['soy', 'Молоко соевое', 'соевое'],
+];
+const milkFoodName = type => MILK_TYPES.find(([k]) => k === type)?.[1] || null;
+export const milkLabel = type => MILK_TYPES.find(([k]) => k === type)?.[2] || '';
+const mealAt = time => { const m = toMin(time) ?? 12 * 60; return m < 11 * 60 ? 'breakfast' : m < 16 * 60 ? 'lunch' : m < 21 * 60 ? 'dinner' : 'snack'; };
+function milkFor(milk, time) {
+  const name = milk?.type && Number(milk.ml) > 0 ? milkFoodName(milk.type) : null;
+  const f = name && FD.findByName(name);
+  if (!f) return null;
+  const it = FD.itemFor(f, milk.ml);
+  return { meal: mealAt(time), text: `молоко к кофе, ${milkLabel(milk.type)}, ${Math.round(milk.ml)} мл`, items: [it],
+    totals: { kcal: it.kcal, p: it.p, f: it.f, c: it.c }, status: 'calculated', calc: 'drink', time };
+}
+// поставить/снять молоко у чашки кофе: молока нет или ml=0 → связанная запись еды убирается
+export async function setCupMilk(id, milk) {
+  const r = store.get(id);
+  if (!r) return;
+  const f = milkFor(milk, r.data.time);
+  if (f && r.data.food_id && store.get(r.data.food_id)) {
+    await store.put('food', r.data.food_id, { ...store.get(r.data.food_id).data, ...f }, r.date);
+    await store.patch(id, { milk });
+  } else if (f) {
+    const fid = store.newId();
+    await store.put('food', fid, { ...f, drink_id: id, created: Date.now(), entered_at: Date.now() }, r.date);
+    await store.patch(id, { milk, food_id: fid });
+  } else {
+    if (r.data.food_id && store.get(r.data.food_id)) await store.remove(r.data.food_id);
+    await store.patch(id, { milk: null, food_id: null });
+  }
 }
 
 export function progress(item, date, uid = store.uid()) {
@@ -195,7 +315,7 @@ export function progress(item, date, uid = store.uid()) {
     return { applies: true, frac: ex.length ? n / ex.length : 0, value: n, target: ex.length, rec: r };
   }
   if (d.type === 'food') {
-    const n = meals(date, uid), t = d.target || 3;
+    const n = meals(date, uid), t = mealsTarget(date, d.target || 3, uid);
     return { applies: true, frac: Math.min(1, n / t), value: n, target: t };
   }
   const v = logVal(date, item.id, uid);
@@ -355,6 +475,9 @@ export async function refreshDsum(date) {
   s.grade = g.grade;
   s.score = g.score;
   Object.assign(s, dsumCompete(date, uid));     // соревнование: шаги, активность, сон — только с согласия
+  // порог серии на этот день (плавный старт меняет его) - публикуем вместе с pct, иначе партнёр видит серию
+  // по чужому порогу 80 % вместо реального (плавный старт даёт меньше) и она «не совпадает» с тем, что вижу я сам
+  s.min = streakMin(date, uid);
   const cur = store.get(`ds:${uid}:${date}`)?.data;
   if (cur?.cheer) s.cheer = cur.cheer;
   if (cur && stableJson(cur) === stableJson(s)) return;
@@ -399,12 +522,15 @@ export function streaks(uid = store.uid()) {
     const start = firstDay(uid), end = today();
     if (!start) return { current: 0, best: 0, frozen: false };
     const mine = uid === store.uid();
+    // порог: свой - считаем сами (профиль виден целиком), партнёра - берём тот, что он сам опубликовал с pct
+    // за этот день (refreshDsum), иначе увидим его серию по чужому фиксированному порогу и она не совпадёт с его
+    const minFor = d => mine ? streakMin(d, uid) : (store.get(`ds:${uid}:${d}`)?.data.min ?? STREAK_MIN);
     let run = 0, best = 0, frozenWeeks = new Set(), frozenNow = false;
     for (let d = start; d <= end; d = addDays(d, 1)) {
       const p = pctOf(d, uid);
-      if (p >= (mine ? streakMin(d, uid) : STREAK_MIN)) { run++; best = Math.max(best, run); continue; }
+      if (p >= minFor(d)) { run++; best = Math.max(best, run); continue; }
       if (d === end) break;
-      if (mine) { const t = dayType(d, uid); if (t === 'sick' || t === 'special') continue; }
+      { const t = dayType(d, uid); if (t === 'sick' || t === 'special') continue; }
       const w = isoWeek(d);
       if (!frozenWeeks.has(w)) { frozenWeeks.add(w); frozenNow = w === isoWeek(end); continue; }
       run = 0;
@@ -1185,7 +1311,7 @@ const LINES = {
   },
   yesterday_bad: {
     soft: ['Вчера получилось только {pct} %. Не переживай - сегодня новый день.'],
-    coach: ['Вчера {pct} %. Это мало. Сегодня минимум {min}.', 'Вчерашние {pct} % - не твой уровень. Исправляемся.'],
+    coach: ['Вчера {pct} %. Это мало. Сегодня набери хотя бы {min} %, чтобы день зачёлся в серию.', 'Вчерашние {pct} % - не твой уровень. Исправляемся.'],
     sergeant: ['Вчера {pct} %?! Это не тренировка, это санаторий. Сегодня отрабатываешь!', '{pct} % вчера. Моя бабушка делает больше, а у неё радикулит.'],
   },
   today_perfect: {
@@ -1474,16 +1600,16 @@ const PRIORITY = { setup: 0, sick_day: 5, today_perfect: 10, state_broken: 12, c
 // Экраны показывают их мелким примечанием рядом с цифрами; тренер — под своей репликой.
 export const SOURCE_NOTES = {
   stats: 'Рассчитано по статистике на этом устройстве - точнее с сервером.',
-  coach: 'Советы посчитаны на этом устройстве по вашим записям - индивидуальнее с сервером и ИИ.',
+  coach: 'Советы посчитаны на этом устройстве по твоим записям - индивидуальнее с сервером и ИИ.',
   norms: 'Нормы - по формулам; индивидуальную поправку даёт сервер с ИИ.',
   norms_default: 'Нормы пока примерные, по умолчанию - точные посчитает сервер, когда будет связь.',
-  sleep: 'Время отбоя - по вашим последним ночам на этом устройстве; точнее подскажет разбор с сервером.',
+  sleep: 'Время отбоя - по твоим последним ночам на этом устройстве; точнее подскажет разбор с сервером.',
   goals: 'Темп - средний по статистике для похожих людей; индивидуальный прогноз - с сервером.',
-  trend: 'Тренд посчитан на устройстве по вашим записям - разбор с ИИ на сервере точнее.',
+  trend: 'Тренд посчитан на устройстве по твоим записям - разбор с ИИ на сервере точнее.',
   food: 'БЖУ по справочнику на устройстве - ориентировочно; с сервером точнее.',
   activity: 'Минуты и калории активности - оценка по средним нормам; с сервером точнее.',
-  plan: 'План подобран на устройстве по правилам; с сервером ИИ подстроит его под вас.',
-  steps: 'Минуты ходьбы - из расчёта ~100 шагов в минуту; у вас может быть иначе.',
+  plan: 'План подобран на устройстве по правилам; с сервером ИИ подстроит его под тебя.',
+  steps: 'Минуты ходьбы - из расчёта ~100 шагов в минуту; у тебя может быть иначе.',
 };
 export function sourceNote(kind = 'stats') { return SOURCE_NOTES[kind] || SOURCE_NOTES.stats; }
 
@@ -1567,7 +1693,7 @@ const MLINES = {
   },
   y_late: {
     soft: ['Вчера последний раз ел{|а} в {time}. Сегодня попробуй закончить к {until} - сон будет спокойнее.'],
-    coach: ['Вчера еда в {time} - поздно. Сегодня кухня закрывается в {until}.'],
+    coach: ['Вчера последний приём был в {time} - поздновато. Сегодня постарайся закончить есть до {until}.'],
     sergeant: ['Вчера в {time} ты был{|а} на кухне. Сегодня кухня закрыта с {until}. Караул выставлен.'],
   },
   sleep_tonight: {
@@ -2086,6 +2212,59 @@ const RULES = {
   },
 };
 
+// похвала, когда снятое замечание (RESOLVABLE в chat.js) отмечено выполненным - помимо галочки «сделано»,
+// короткая реплика тренера в чате, тем же тоном; ключей меньше, чем в RULES - для workout уже есть woPraise() при
+// завершении тренировки в другом месте, второй раз хвалить не нужно
+const RESOLVED = {
+  sleep: {
+    soft: ['Отметил{|а} сон - спасибо, учту это в нагрузке.'],
+    coach: ['Сон записан. Учитываю при выборе нагрузки на сегодня.'],
+    sergeant: ['Сон в отчёте. Хорошо, что не забыл{|а}.'],
+  },
+  state: {
+    soft: ['Спасибо, что рассказал{|а} про самочувствие - подстрою план под это.'],
+    coach: ['Самочувствие отмечено. Так и планирую точнее.'],
+    sergeant: ['Доклад принят. Самочувствие в системе.'],
+  },
+  food: {
+    soft: ['Записал{|а} первый приём пищи - отлично, так и продолжай.'],
+    coach: ['Питание пошло в дневник. Хорошо.'],
+    sergeant: ['Есть первая запись в журнале питания. Принято.'],
+  },
+  food_evening: {
+    soft: ['Дописал{|а} остальные приёмы пищи - день теперь виден целиком.'],
+    coach: ['Дневник питания дополнен - вижу день полностью.'],
+    sergeant: ['Журнал питания дозаполнен. Хорошо.'],
+  },
+  water: {
+    soft: ['Первый стакан воды есть - дальше пойдёт легче.'],
+    coach: ['Вода пошла в счёт. Продолжай в течение дня.'],
+    sergeant: ['Вода в отчёте. Не останавливайся.'],
+  },
+  weight: {
+    soft: ['Взвесил{|а}ся - спасибо, вижу цифру.'],
+    coach: ['Вес записан. Учитываю тренд.'],
+    sergeant: ['Взвешивание выполнено. Принято.'],
+  },
+  measure: {
+    soft: ['Обновил{|а} замеры - так виден прогресс, даже если весы стоят на месте.'],
+    coach: ['Замеры обновлены. Хорошо, что не только вес.'],
+    sergeant: ['Замеры в отчёте. Обстановка ясна.'],
+  },
+  activity_unclear: {
+    soft: ['Уточнил{|а} интенсивность - теперь калории посчитаются точнее.'],
+    coach: ['Интенсивность указана. Считаю точнее.'],
+    sergeant: ['Уточнено. Принято к учёту.'],
+  },
+};
+// текст-похвала для только что закрытого замечания (или null, если для этого правила её нет) - тон из профиля
+export function resolvedPraise(rule) {
+  const set = RESOLVED[rule];
+  if (!set) return null;
+  const tone = prof().tone || 'coach';
+  return pick(set[tone] || set.coach, today() + rule + 'resolved', {});
+}
+
 // → [{ rule, text, mood }] — что тренеру стоит написать сейчас. Чат хранит их как chat:{uid}:{date}:{rule},
 // поэтому каждое правило срабатывает не чаще раза в день.
 export function ruleMessages(now = new Date()) {
@@ -2424,7 +2603,7 @@ export function duelScoreLine(d = duel()) {
   if (d.state !== 'ok') return '';
   const { me: a, them: b } = d.score;
   if (!d.cats.some(c => c.win !== null)) return 'Счёт недели 0:0 - всё впереди';
-  if (a > b) return `Счёт недели ${a}:${b} в вашу пользу`;
+  if (a > b) return `Счёт недели ${a}:${b} в твою пользу`;
   if (a < b) return `Счёт недели ${a}:${b} - ведёт ${d.partner.name}`;
   return `Счёт недели ${a}:${b} - ничья`;
 }

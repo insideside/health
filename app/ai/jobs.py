@@ -1,12 +1,12 @@
-"""ИИ-задачи: очередь, выполнение по одной, результаты — в записи (их забирает синхронизация).
+"""ИИ-задачи: очередь, выполнение по одной, результаты - в записи (их забирает синхронизация).
 
 Виды: food (БЖУ записи о еде), norms (пояснение к нормам), program (программа тренировок),
 weekly (разбор недели), mealplan (рацион), recipe (рецепт), analysis (разбор истории),
 chat (ответ тренера, обработчик в app/chat.py). Запускаются только по запросу пользователя
 (и комментарий к нормам после пересчёта, если ИИ у человека включена).
 
-Модель не запущена — задачи не отклоняются, а ждут в очереди (статус queued, в ответе waiting: true)
-и выполняются сами, когда она заработает. Проверка — раз в минуту и только пока есть ждущие задачи.
+Модель не запущена - задачи не отклоняются, а ждут в очереди (статус queued, в ответе waiting: true)
+и выполняются сами, когда она заработает. Проверка - раз в минуту и только пока есть ждущие задачи.
 """
 import asyncio
 import difflib
@@ -26,14 +26,14 @@ from .ollama import AIError, ask_json
 # виды, которые клиент может заказать через POST /api/ai/jobs
 USER_KINDS = ("program", "weekly", "mealplan", "recipe", "analysis", "foodlookup")
 
-WAIT_DAYS = 7          # столько задача ждёт спящую модель, потом — ошибка с объяснением
+WAIT_DAYS = 7          # столько задача ждёт спящую модель, потом - ошибка с объяснением
 
 _queue: asyncio.Queue | None = None
 _ai = {"ok": None, "reason": "", "at": 0.0}
 
 
 async def ai_state(max_age: float = 30) -> dict:
-    """Доступна ли модель — с кэшем: опрос /api/sync/head не должен каждый раз стучаться в Ollama."""
+    """Доступна ли модель - с кэшем: опрос /api/sync/head не должен каждый раз стучаться в Ollama."""
     now = time.monotonic()
     if _ai["ok"] is None or now - _ai["at"] > max_age:
         st = await ollama.status()
@@ -42,7 +42,7 @@ async def ai_state(max_age: float = 30) -> dict:
 
 
 def waiting() -> bool:
-    """Модель сейчас спит (по последней проверке) — новые задачи будут ждать."""
+    """Модель сейчас спит (по последней проверке) - новые задачи будут ждать."""
     return _ai["ok"] is False
 _loop: asyncio.AbstractEventLoop | None = None
 
@@ -53,14 +53,14 @@ async def start() -> None:
     global _queue, _loop
     _queue = asyncio.Queue()
     _loop = asyncio.get_running_loop()
-    # задачи, прерванные остановкой сервера, — заново
+    # задачи, прерванные остановкой сервера, - заново
     for r in db.q("SELECT id FROM ai_jobs WHERE status IN ('queued', 'running') ORDER BY created"):
         _queue.put_nowait(r["id"])
     asyncio.create_task(_worker())
 
 
 def submit(uid: str, kind: str, input_: dict, replace: bool = False) -> str:
-    """replace — прежние ещё не начатые задачи того же вида этого человека отменяются
+    """replace - прежние ещё не начатые задачи того же вида этого человека отменяются
     (комментарий к нормам нужен только к последнему пересчёту)."""
     job_id = uuid.uuid4().hex
     with db.tx() as c:
@@ -85,7 +85,7 @@ def get_job(job_id: str) -> dict | None:
 
 
 async def _await_model(created: int) -> bool:
-    """Ждём, пока модель заработает (проверка раз в минуту). False — задача ждала дольше WAIT_DAYS."""
+    """Ждём, пока модель заработает (проверка раз в минуту). False - задача ждала дольше WAIT_DAYS."""
     while not (await ai_state(max_age=5))["ok"]:
         if db.now_ms() - created > WAIT_DAYS * 86_400_000:
             return False
@@ -112,11 +112,11 @@ async def _worker() -> None:
                 result = await HANDLERS[job["kind"]](job["user_id"], json.loads(job["input"]))
                 _set(job_id, "done", result=result)
             except AIError as e:
-                if not (await ai_state(max_age=0))["ok"]:   # модель упала посреди задачи — подождём и повторим
+                if not (await ai_state(max_age=0))["ok"]:   # модель упала посреди задачи - подождём и повторим
                     _set(job_id, "queued")
                     continue
                 _set(job_id, "error", error=str(e))
-            except Exception as e:  # noqa: BLE001 — любая ошибка задачи должна дойти до пользователя
+            except Exception as e:  # noqa: BLE001 - любая ошибка задачи должна дойти до пользователя
                 traceback.print_exc()
                 _set(job_id, "error", error=f"{type(e).__name__}: {e}")
             break
@@ -146,13 +146,16 @@ FOOD_SCHEMA = {
 
 FOOD_SYSTEM = """Ты диетолог. Пользователь пишет, что съел, свободным текстом по-русски.
 Для каждого продукта или блюда верни:
-- text — исходный фрагмент;
-- name — каноническое название по-русски, как в таблицах калорийности, с состоянием (варёный, жареный, сырой).
-  Если среди подсказок есть подходящее название — используй его дословно;
-- grams — сколько съедено в граммах. Если вес не указан — оцени по типичной порции
+- text - исходный фрагмент;
+- name - каноническое название по-русски, как в таблицах калорийности, с состоянием (варёный, жареный, сырой).
+  Если среди подсказок есть подходящее название - используй его дословно;
+- grams - сколько съедено в граммах. Если вес не указан - оцени по типичной порции
   (яйцо 55 г, ломтик хлеба 30 г, тарелка супа 300 г, чашка кофе 200 мл ≈ 200 г);
-- kcal, p, f, c — калории, белки, жиры, углеводы НА 100 г продукта (не на порцию).
-Составное блюдо («кофе с молоком», «гречка с курицей») — одна позиция с усреднёнными значениями на 100 г.
+- kcal, p, f, c - калории, белки, жиры, углеводы НА 100 г продукта (не на порцию).
+Устоявшееся блюдо («кофе с молоком», «борщ со сметаной», «плов») - одна позиция с усреднёнными значениями на 100 г.
+Продукты, поданные вместе («курица с картошкой», «ножки с оливками», «омлет с сыром и помидорами», «гречка, котлета») -
+отдельные позиции: у каждой свои граммы (для добавки без веса - типичная небольшая порция).
+Ничего не пропускай: каждый продукт, упомянутый в тексте, должен попасть в ответ. «Без сахара», «без масла» - не продукт.
 Не выдумывай продукты, которых нет в тексте."""
 
 
@@ -160,9 +163,9 @@ async def job_food(uid: str, inp: dict) -> dict:
     rec = db.get(inp["record_id"])
     if not rec or rec["user_id"] != uid:
         raise AIError("Запись о еде не найдена")
-    idx = food.Index(uid)          # с историей: «гречка» без уточнения — в том состоянии, что человек ест обычно
-    done, rest = food.quick_parse(rec["data"].get("text", ""), idx)
-    if rest:                       # что ИИ уже разбирала раньше — из памяти «мозга», без модели
+    idx = food.Index(uid)          # с историей: «гречка» без уточнения - в том состоянии, что человек ест обычно
+    done, rest = food.quick_parse(rec["data"].get("text", ""), idx, uid=uid)
+    if rest:                       # что ИИ уже разбирала раньше - из памяти «мозга», без модели
         more, rest = brain.resolve(rest, idx)
         done += more
     used_ai = bool(rest)
@@ -172,7 +175,7 @@ async def job_food(uid: str, inp: dict) -> dict:
                                                            idx.fuzzy, n=4, cutoff=0.5)})
         user = "Съедено:\n" + "\n".join(f"- {c}" for c in rest)
         if hints:
-            user += "\n\nПодсказки — названия из справочника:\n" + ", ".join(hints)
+            user += "\n\nПодсказки - названия из справочника:\n" + ", ".join(hints)
         out = await ask_json(FOOD_SYSTEM, user, FOOD_SCHEMA, temperature=0.1)
         ai_items = []
         for it in out.get("items", []):
@@ -188,14 +191,14 @@ async def job_food(uid: str, inp: dict) -> dict:
                 learned = db.food_by_name(it["name"])      # id нужен, чтобы запомнить фразу для всех устройств
                 ai_items.append(food.item_from({**(learned or {}), "name": it["name"], **per100}, grams,
                                                it.get("text") or it["name"], source="ai"))
-        brain.learn_food_ai(rest, ai_items, idx)            # «мозг»: в следующий раз — без ИИ
+        brain.learn_food_ai(rest, ai_items, idx)            # «мозг»: в следующий раз - без ИИ
         done += ai_items
     return _save_food(rec, done, calc="ai" if used_ai else "db")
 
 
 def _save_food(rec: dict, items: list[dict], calc: str = "db") -> dict:
     items = food.apply_preferences(items, rec["user_id"])
-    # calc — чем посчитано: db (справочник и память) | ai (уточнено ИИ); клиент показывает пометку
+    # calc - чем посчитано: db (справочник и память) | ai (уточнено ИИ); клиент показывает пометку
     data = {**rec["data"], "items": items, "totals": food.totals(items), "status": "calculated", "calc": calc,
             "unresolved": None, "calc_error": None, "partial": None}
     saved = db.server_put(rec["user_id"], "food", rec["id"], data, rec["date"])
@@ -240,18 +243,18 @@ def metric_goal_text(g: dict, uid: str | None = None) -> str:
 
 
 def goals_text(goal: dict, uid: str | None = None) -> str:
-    """Цели человеческим текстом (v2 списком, v1 — через norms.goals_of, v3 — цели-показатели)."""
+    """Цели человеческим текстом (v2 списком, v1 - через norms.goals_of, v3 - цели-показатели)."""
     parts = []
     for g in sorted(norms.goals_of(goal), key=lambda g: g["priority"]):
         if g["type"] == "metric":
-            parts.append(f"{metric_goal_text(g, uid)} — {PRIORITY_LABEL.get(g['priority'], '')}")
+            parts.append(f"{metric_goal_text(g, uid)} - {PRIORITY_LABEL.get(g['priority'], '')}")
             continue
         s = GOAL_LABEL.get(g["type"], g["type"])
         if g.get("amount"):
             s += f" {g['amount']:g} кг"
         if g.get("zones"):
             s += " (зоны: " + ", ".join(ZONE_LABEL.get(z, z) for z in g["zones"]) + ")"
-        parts.append(f"{s} — {PRIORITY_LABEL.get(g['priority'], '')}")
+        parts.append(f"{s} - {PRIORITY_LABEL.get(g['priority'], '')}")
     out = "; ".join(parts) or "удержать форму"
     if goal.get("habits"):
         out += ". Привычки: " + ", ".join(HABIT_LABEL.get(h, h) for h in goal["habits"])
@@ -278,7 +281,7 @@ def system_for(uid: str, role: str, health: bool = True) -> str:
         notes = userdata.health_notes(prof, userdata.open_injuries(uid))
         if notes:
             s += ("\n\nОБЯЗАТЕЛЬНО учитывай о клиенте:\n" + notes +
-                  f"\nЕсли что-то из этого влияет на совет — скажи прямо. {userdata.NOT_MEDICAL}")
+                  f"\nЕсли что-то из этого влияет на совет - скажи прямо. {userdata.NOT_MEDICAL}")
         s += "\n\n" + userdata.SUPP_RULES
     return s
 
@@ -323,23 +326,23 @@ async def job_norms(uid: str, inp: dict) -> dict:
         raise AIError("Нормы не найдены")
     t = rec["data"]
     prof, goal = userdata.profile(uid), userdata.goal(uid)
-    system = system_for(uid, "Ты персональный тренер и нутрициолог. Цифры уже посчитаны по формулам — "
+    system = system_for(uid, "Ты персональный тренер и нутрициолог. Цифры уже посчитаны по формулам - "
                              "объясни, откуда они и как их выполнять. Честно оцени реалистичность цели и срока.")
     tl = t.get("timeline") or {}
     opts = "; ".join(f"{norms.LEVEL_LABEL[o['label']]}: {o['weeks']} нед. (до {o['deadline']})" for o in tl.get("options") or [])
     user = f"""Клиент: {person_text(uid, prof)}, ИМТ {t.get('bmi')}, {t.get('activity_label')}.
 Цели: {goals_text(goal)}.
-Режим: {t.get('mode')}, интенсивность: {(t.get('intensity') or {}).get('label', '—')}.
+Режим: {t.get('mode')}, интенсивность: {(t.get('intensity') or {}).get('label', '-')}.
 Базовый обмен {t.get('bmr')} ккал, расход {t.get('tdee')} ккал (из них плановые нагрузки ~{t.get('exercise_kcal', 0)} ккал/день).
-Нормы: {t.get('kcal')} ккал, белок {t.get('p')} г, жиры {t.get('f')} г, углеводы {t.get('c')} г, клетчатка {t.get('fiber', '—')} г,
-вода {t.get('water_glasses')} стаканов, шаги {t.get('steps')}, сон {t.get('sleep_hours', '—')} ч.
-Силовых в неделю: {(t.get('intensity') or {}).get('weekly_sessions', '—')}, кардио {(t.get('intensity') or {}).get('cardio_minutes', '—')} мин/нед.
-Реалистично нужно недель: {t.get('weeks_needed') or '—'}. Варианты срока: {opts or '—'}.
+Нормы: {t.get('kcal')} ккал, белок {t.get('p')} г, жиры {t.get('f')} г, углеводы {t.get('c')} г, клетчатка {t.get('fiber', '-')} г,
+вода {t.get('water_glasses')} стаканов, шаги {t.get('steps')}, сон {t.get('sleep_hours', '-')} ч.
+Силовых в неделю: {(t.get('intensity') or {}).get('weekly_sessions', '-')}, кардио {(t.get('intensity') or {}).get('cardio_minutes', '-')} мин/нед.
+Реалистично нужно недель: {t.get('weeks_needed') or '-'}. Варианты срока: {opts or '-'}.
 Предупреждения: {'; '.join(t.get('warnings') or []) or 'нет'}.
 Пояснения расчёта: {'; '.join(t.get('notes') or []) or 'нет'}.
 
-text — 3–6 предложений: что означают нормы и насколько реальна цель.
-tips — 3–5 конкретных советов на ближайшие две недели."""
+text - 3–6 предложений: что означают нормы и насколько реальна цель.
+tips - 3–5 конкретных советов на ближайшие две недели."""
     out = await ask_json(system, user, NORMS_SCHEMA, temperature=0.5, think=True)
     cur = db.get(rec["id"])["data"]
     db.server_put(uid, "target", rec["id"], {**cur, "explanation": out.get("text", ""), "tips": out.get("tips", [])})
@@ -394,7 +397,7 @@ def excluded_codes(uid: str, prof: dict) -> set[str]:
 
 def allowed_exercises(place: str, equipment: list[str], excluded: set[str] | None = None,
                       missing: set[str] | None = None, skip_ids: set[str] | None = None) -> list[dict]:
-    """missing — чего нет в зале (profile.gym_equipment.missing), skip_ids — «не предлагать» (profile.exercise_prefs)."""
+    """missing - чего нет в зале (profile.gym_equipment.missing), skip_ids - «не предлагать» (profile.exercise_prefs)."""
     have = set(equipment) | {"mat", "chair"} if place == "home" else None
     out = []
     for e in db.exercises():
@@ -421,7 +424,7 @@ def _reps_minutes(reps: str) -> float | None:
 
 
 def _est_minutes(day: dict) -> float:
-    """Грубая оценка длительности: подход ~45 с + отдых, плюс разминка и заминка; кардио-блок — его минуты."""
+    """Грубая оценка длительности: подход ~45 с + отдых, плюс разминка и заминка; кардио-блок - его минуты."""
     sec = sum((_reps_minutes(x["reps"]) or 0) * 60 * x["sets"] if _reps_minutes(x["reps"]) else x["sets"] * (45 + x["rest_sec"])
               for x in day["exercises"])
     return sec / 60 + 2 * len(day["warmup"]) + 1.5 * len(day["cooldown"])
@@ -477,7 +480,7 @@ def _program_days(out: dict, by_id: dict, weekdays: list[int], day_minutes: dict
             continue
         day = {"name": _day_name(d.get("name"), d.get("focus", ""), len(days)), "focus": d.get("focus", ""),
                "warmup": keep(d.get("warmup", [])), "exercises": exs, "cooldown": keep(d.get("cooldown", []))}
-        # бюджет времени — жёсткий: лишнее с конца (кроме последнего упражнения на кор), не меньше трёх упражнений
+        # бюджет времени - жёсткий: лишнее с конца (кроме последнего упражнения на кор), не меньше трёх упражнений
         limit = day_minutes[weekdays[min(n, n_days - 1)]] * 1.1
         while _est_minutes(day) > limit and len(day["exercises"]) > 3:
             drop = next((i for i in range(len(day["exercises"]) - 2, -1, -1)
@@ -493,12 +496,18 @@ def _program_days(out: dict, by_id: dict, weekdays: list[int], day_minutes: dict
 
 
 
+DAY_LABEL_RE = re.compile(r"^день\s*\d*\s*(\([^)]*\))?\s*:?\s*$", re.I)
+
+
 def _day_name(name: str | None, focus: str, i: int) -> str:
-    """Модель любит называть дни «A», «B» — в календаре это ни о чём не говорит."""
-    name = re.sub(r"\s*[—–]\s*", " - ", (name or "").strip())   # длинного тире в интерфейсе нет
-    if len(name) <= 3:
-        label = name or chr(ord("A") + i)
-        return f"День {label}: {focus}" if focus else f"День {label}"
+    """Модель любит называть дни «A», «B» или «День 2 (ср)» - в календаре (там уже есть день недели и дата
+    в шапке) это только повторяет то, что и так видно, и ничего не говорит о содержании. Название - по фокусу
+    дня («Ноги и кор»), «День X» - только если фокуса тоже нет."""
+    name = re.sub(r"\s*[—–-]\s*", " - ", (name or "").strip())   # модель любит длинное тире - в интерфейсе его не бывает
+    if len(name) <= 3 or DAY_LABEL_RE.match(name):
+        if focus:
+            return focus[:1].upper() + focus[1:]
+        return f"День {name if name and len(name) <= 3 else chr(ord('A') + i)}"
     return name
 
 
@@ -548,16 +557,19 @@ async def job_program(uid: str, inp: dict) -> dict:
     prof, goal = userdata.profile(uid), userdata.goal(uid)
     today = date.today()
     if inp.get("rebuild"):
-        # пересборка: параметры активной программы, недели — сколько осталось
+        # пересборка: параметры активной программы, недели - сколько осталось
         act = next((p["data"] for p in db.list_kind(uid, "program") if p["data"].get("active")), None)
         if not act:
             raise AIError("Нет активной программы для пересборки")
         end = date.fromisoformat(act.get("end") or (today + timedelta(weeks=6)).isoformat())
         inp = {"place": act.get("place"), "weekdays": act.get("weekdays"), "minutes": act.get("minutes"),
                "level": act.get("level"), "weeks": max(1, math.ceil((end - today).days / 7)),
-               "notes": act.get("notes") or "", "start": today.isoformat(),
+               "notes": inp.get("notes") or act.get("notes") or "", "start": today.isoformat(),
                "reason": inp.get("reason") or "", "rebuild": True}
     place = inp.get("place") or "home"
+    if place == "gym" and prof.get("gym_program") == "own":
+        raise AIError("В профиле отмечено, что в зале своя программа или личный тренер - составлять её не нужно. "
+                       "Можно записывать тренировки вручную в «Спорт»")
     weekdays = sorted({int(d) for d in inp.get("weekdays") or prof.get("weekdays") or [0, 2, 4]})
     cap = prof.get("max_sessions_week")
     if cap and len(weekdays) > int(cap):
@@ -567,13 +579,13 @@ async def job_program(uid: str, inp: dict) -> dict:
     minutes = int(inp.get("minutes") or budget or 60)
     if budget:
         minutes = min(minutes, budget)
-    # минуты по дням: рабочий график может оставлять меньше времени (slot «none» — лишь пометка для ИИ)
+    # минуты по дням: рабочий график может оставлять меньше времени (slot «none» - лишь пометка для ИИ)
     sched = (prof.get("schedule") or {}).get("days") or {}
     day_minutes = {wd: minutes for wd in weekdays}
     level = int(inp.get("level") or 1)
     equipment = prof.get("equipment") or ["mat", "dumbbells", "chair", "ab_wheel"]
     excluded = excluded_codes(uid, prof)
-    # «не предлагать» и чего нет в зале — из профиля (SPEC-v3 п. 17–18)
+    # «не предлагать» и чего нет в зале - из профиля (SPEC-v3 п. 17–18)
     ex_prefs = prof.get("exercise_prefs") or {}
     # «не предлагать» с учётом места: «нигде», «в зале»/«дома» - для программы этого места; «только в разминке» - не касается
     skip_ids = {k for k, v in (ex_prefs.get("exclude") or {}).items()
@@ -582,9 +594,9 @@ async def job_program(uid: str, inp: dict) -> dict:
     gym_missing = set(((prof.get("gym_equipment") or {}).get("missing")) or [])
     catalog = allowed_exercises(place, equipment, excluded, missing=gym_missing if place == "gym" else None, skip_ids=skip_ids)
     if not db.exercises():
-        raise AIError("Каталог упражнений пуст — нет app/seed/exercises.json")
+        raise AIError("Каталог упражнений пуст - нет app/seed/exercises.json")
     if len(catalog) < 8:
-        raise AIError("После фильтра по ограничениям и инвентарю почти не осталось упражнений — проверьте профиль")
+        raise AIError("После фильтра по ограничениям и инвентарю почти не осталось упражнений - проверьте профиль")
     by_id = {e["id"]: e for e in catalog}
 
     def cat_line(e):
@@ -602,7 +614,7 @@ async def job_program(uid: str, inp: dict) -> dict:
     n_days = len(weekdays)
     acts_text, considered = _activities_text(prof)
     act_days = _activity_days(prof)
-    # что будет на следующий день после каждой тренировки — чтобы не убить ноги перед сноубордом
+    # что будет на следующий день после каждой тренировки - чтобы не убить ноги перед сноубордом
     day_notes = []
     for i, wd in enumerate(weekdays):
         nxt = act_days.get((wd + 1) % 7, [])
@@ -626,7 +638,7 @@ async def job_program(uid: str, inp: dict) -> dict:
     focus_zones = {z: k for z, k in m_eff["zones"].items() if k >= 1.2}
     emphasis_text = ""
     if m_eff["zones"] or m_eff["patterns"]:
-        emphasis_text = ("\nАкценты от целей-показателей (множитель объёма, 1 — обычный): "
+        emphasis_text = ("\nАкценты от целей-показателей (множитель объёма, 1 - обычный): "
                          + ", ".join(f"{ZONE_LABEL.get(z, z)} ×{k:g}" for z, k in sorted(m_eff["zones"].items(), key=lambda kv: -kv[1]))
                          + ("; паттерны: " + ", ".join(f"{p} ×{k:g}" for p, k in m_eff["patterns"].items()) if m_eff["patterns"] else "")
                          + ". Зонам с множителем от 1,2 дай больше упражнений и подходов за неделю, чем остальным.")
@@ -637,46 +649,48 @@ async def job_program(uid: str, inp: dict) -> dict:
     if liked_names:
         prefs_text += "\nЛюбимые упражнения клиента (ставь их чаще, если подходят дню): " + ", ".join(liked_names[:12]) + "."
     if skip_ids:
-        prefs_text += f"\nКлиент попросил не предлагать {len(skip_ids)} упражн. — их уже нет в каталоге, не придумывай замену вне каталога."
+        prefs_text += f"\nКлиент попросил не предлагать {len(skip_ids)} упражн. - их уже нет в каталоге, не придумывай замену вне каталога."
     if place == "gym" and gym_missing:
         prefs_text += "\nВ зале клиента НЕТ: " + ", ".join(EQUIP_LABEL.get(x, x) for x in sorted(gym_missing)) + " (упражнения с этим уже убраны)."
     system = system_for(uid, "Ты опытный тренер по силовой и функциональной подготовке. Составляешь безопасную, "
-                             "реалистичную программу тренировок. Используй ТОЛЬКО id из каталога — дословно, "
+                             "реалистичную программу тренировок. Используй ТОЛЬКО id из каталога - дословно, "
                              "других упражнений не бывает. Каталог уже очищен от упражнений, противопоказанных клиенту.")
     user = f"""Клиент: {person_text(uid, prof)}, уровень подготовки: {LEVEL_LABEL.get(level, 'новичок')}.
 Цели (по приоритету): {goals_text(goal, uid)}.{emphasis_text}
-Темп: {dict(slower='медленнее', normal='обычный', faster='быстрее').get(prof.get('pace') or 'normal')}; интенсивность по нормам: {intensity.get('label', '—')}, кардио {intensity.get('cardio_minutes', '—')} мин/нед (активности засчитываются).
-Пожелания к программе: {inp.get('notes') or '—'}.{prefs_text}
+Темп: {dict(slower='медленнее', normal='обычный', faster='быстрее').get(prof.get('pace') or 'normal')}; интенсивность по нормам: {intensity.get('label', '-')}, кардио {intensity.get('cardio_minutes', '-')} мин/нед (активности засчитываются).
+Пожелания к программе: {inp.get('notes') or '-'}.{prefs_text}
 Кардио:
 {cardio_text}{chr(10) + 'Причина пересборки: ' + inp['reason'] if inp.get('reason') else ''}
 Место: {'тренажёрный зал' if place == 'gym' else 'дома, инвентарь: ' + ', '.join(EQUIP_LABEL.get(x, x) for x in equipment)}.
 Тренировок в неделю: {n_days}, программа на {weeks} нед., дни повторяются каждую неделю.
 {chr(10).join(day_notes)}
-Другие активности клиента (их не планируй — он делает их сам, но учитывай нагрузку и восстановление; строки «дополнить» — что программа должна подтянуть в поддержку этого спорта):
-{acts_text or '— нет'}
+Другие активности клиента (их не планируй - он делает их сам, но учитывай нагрузку и восстановление; строки «дополнить» - что программа должна подтянуть в поддержку этого спорта):
+{acts_text or '- нет'}
 
 Каталог (id | название | категория | зона | паттерн | уровень | единица | доп.):
 {lines}
 
 Требования:
-- days — ровно {n_days} разных тренировочных дней, в том же порядке, что «День 1…»; вместе покрывают всё тело
+- days - ровно {n_days} разных тренировочных дней, в том же порядке, что в списке дней выше; вместе покрывают всё тело
   с упором на главные цели и зоны клиента;
-- если на следующий день активность, нагружающая ноги (сноуборд, велосипед, бег, лыжи, танцы) — в этот день
-  НЕ ставь тяжёлые ноги, лучше верх/кор; если в тот же день активность — день короче и легче;
-- кардио-активности клиента засчитываются в недельное кардио; если их мало для недельной нормы кардио —
+- name у дня - по мышцам/фокусу («Ноги и кор», «Спина и бицепс»), НЕ «День 1», «День 2 (ср)» и не буквой A/B -
+  день недели и дата и так видны в календаре, повторять их в названии не нужно;
+- если на следующий день активность, нагружающая ноги (сноуборд, велосипед, бег, лыжи, танцы) - в этот день
+  НЕ ставь тяжёлые ноги, лучше верх/кор; если в тот же день активность - день короче и легче;
+- кардио-активности клиента засчитываются в недельное кардио; если их мало для недельной нормы кардио -
   добавь в конце 1–2 дней кардио-блок 10–20 мин из кардио-упражнений каталога (лучше любимое клиента):
   sets 1, reps «15-20 мин», rest_sec 0; не ставь интенсивное кардио в день тяжёлых ног;
-- warmup — 3–5 упражнений категорий warmup/mobility; cooldown — 2–3 упражнения mobility;
-- exercises — {n_ex_lo}–{n_ex_hi} основных упражнений в день, 3–4 подхода, чтобы занять указанные минуты; сначала
+- warmup - 3–5 упражнений категорий warmup/mobility; cooldown - 2–3 упражнения mobility;
+- exercises - {n_ex_lo}–{n_ex_hi} основных упражнений в день, 3–4 подхода, чтобы занять указанные минуты; сначала
   базовые многосуставные, потом изолирующие, в конце кор;
-- за неделю — минимум 3 силовых упражнения на ноги и ягодицы (region lower): велосипед и сноуборд не заменяют силовую
+- за неделю - минимум 3 силовых упражнения на ноги и ягодицы (region lower): велосипед и сноуборд не заменяют силовую
   работу ног, просто не ставь ноги накануне этих активностей;
 - подходы пиши для полной нагрузки: плавный вход в первые недели приложение сделает само;
 - уровень упражнений не выше уровня клиента + 1;
-- reps — строка: «8-12» для повторений или «30-45 с» для упражнений на время;
-- rest_sec — отдых между подходами; note — 1 короткий совет именно этому клиенту (с учётом ограничений и особенностей);
-- progression — как прибавлять нагрузку от недели к неделе, 2–4 предложения{'; упомяни, что первые 2 недели на подход меньше (плавный вход)' if smooth else ''};
-- summary — 2–4 предложения: логика программы, как учтены активности и ограничения."""
+- reps - строка: «8-12» для повторений или «30-45 с» для упражнений на время;
+- rest_sec - отдых между подходами; note - 1 короткий совет именно этому клиенту (с учётом ограничений и особенностей);
+- progression - как прибавлять нагрузку от недели к неделе, 2–4 предложения{'; упомяни, что первые 2 недели на подход меньше (плавный вход)' if smooth else ''};
+- summary - 2–4 предложения: логика программы, как учтены активности и ограничения."""
     feedback = ""
     for attempt in range(2):
         out = await ask_json(system, user + feedback, PROGRAM_SCHEMA, temperature=0.4)
@@ -715,7 +729,7 @@ async def job_program(uid: str, inp: dict) -> dict:
                "goal_emphasis": m_eff["zones"], "cardio": cardio_info,
                "skipped_exercises": sorted(skip_ids), "gym_missing": sorted(gym_missing)}
 
-    # старые программы и их будущие тренировки без отметок снимаем; с отметками — не трогаем
+    # старые программы и их будущие тренировки без отметок снимаем; с отметками - не трогаем
     keep_dates = set()
     for p in db.list_kind(uid, "program"):
         if p["data"].get("active"):
@@ -729,7 +743,7 @@ async def job_program(uid: str, inp: dict) -> dict:
     db.server_put(uid, "program", program_id, program)
 
     monday = start - timedelta(days=start.weekday())
-    # отсчёт плавного старта — от profile.start_date (при пересборке тоже), иначе от начала программы
+    # отсчёт плавного старта - от profile.start_date (при пересборке тоже), иначе от начала программы
     try:
         ramp_from = date.fromisoformat(prof.get("start_date") or "")
     except ValueError:
@@ -747,7 +761,7 @@ async def job_program(uid: str, inp: dict) -> dict:
             tpl = days[weekdays.index(wd) % len(days)]
             i += 1
             wk = (day - monday).days // 7 + 1
-            # плавный старт: первые 2 недели от начала занятий на подход меньше (исходное число — в sets_base)
+            # плавный старт: первые 2 недели от начала занятий на подход меньше (исходное число - в sets_base)
             rw = (day - ramp_from).days // 7 + 1
             delta = -1 if smooth and rw <= 2 else 0
             exercises = [{**x, "sets": max(1, x["sets"] + delta), "sets_base": x["sets"], "log": []} for x in tpl["exercises"]]
@@ -796,11 +810,12 @@ def week_stats(uid: str, end: date) -> dict:
     for r in db.list_kind(uid, "drink", a, b):
         c = cups.setdefault(r["date"], {"coffee": 0, "tea": 0, "after_14": 0, "last": None})
         k = r["data"].get("kind")
+        amt = float(r["data"].get("amount") or 1)          # половинка чашки - 0.5
         if k in ("coffee", "tea"):
-            c[k] += 1
+            c[k] += amt
         t = r["data"].get("time") or ""
         if t >= "14:00":
-            c["after_14"] += 1
+            c["after_14"] += amt
         if t and (not c["last"] or t > c["last"]):
             c["last"] = t
     # добавки: приёмы по дням и регулярность против плана из профиля
@@ -856,11 +871,11 @@ def week_stats(uid: str, end: date) -> dict:
     if len(measures) >= 2:
         f0, f1 = measures[0]["data"], measures[-1]["data"]
         mdelta = {k: round(f1[k] - f0[k], 1) for k in MEASURES if f0.get(k) and f1.get(k)}
-        mdelta["period"] = f"{measures[0]['date']} — {measures[-1]['date']}"
+        mdelta["period"] = f"{measures[0]['date']} - {measures[-1]['date']}"
     steps = [x["steps"] for x in days if isinstance(x["steps"], (int, float))]
     water = [x["water"] for x in days if isinstance(x["water"], (int, float))]
     st = {
-        "period": f"{a} — {b}", "days": days,
+        "period": f"{a} - {b}", "days": days,
         "avg_pct": round(sum(x["pct"] or 0 for x in days) / 7),
         "workouts_planned": len(workouts), "workouts_done": sum(1 for w in workouts if w["data"].get("done")),
         "workouts_light": sum(1 for w in workouts if w["data"].get("variant") in ("light", "recovery")),
@@ -915,14 +930,14 @@ async def job_weekly(uid: str, inp: dict) -> dict:
     goal = userdata.goal(uid)
     system = system_for(uid, "Ты персональный тренер. Разбираешь неделю клиента по фактическим цифрам: хвалишь "
                              "за конкретные успехи, ругаешь за конкретные провалы. Дни с типом cheat/special/sick/rest "
-                             "не ругай. Не знаешь — не выдумывай: null значит «не записано».")
+                             "не ругай. Не знаешь - не выдумывай: null значит «не записано».")
     user = (f"Цели: {goals_text(goal)}.\nОценка недели (посчитана кодом): {st['grade']}.\n"
-            f"Статистика недели (pct — % чек-листа; food — съедено и оценка 0–100; sleep_h — часы сна (дрёма после будильника засчитана наполовину), snooze_min — минуты дрёмы между первым будильником и подъёмом, alarms — сколько было будильников; state — самочувствие; "
-            f"water — стаканы; cups — чашки кофе/чая, after_14 — из них после 14:00, last — время последней; supplements — принятые добавки со временем, supplements_plan — план и сколько приёмов за неделю; steps — шаги; activities_min — минуты по видам; measures_delta — изменение замеров, см):\n"
+            f"Статистика недели (pct - % чек-листа; food - съедено и оценка 0–100; sleep_h - часы сна (дрёма после будильника засчитана наполовину), snooze_min - минуты дрёмы между первым будильником и подъёмом, alarms - сколько было будильников; state - самочувствие; "
+            f"water - стаканы; cups - чашки кофе/чая, after_14 - из них после 14:00, last - время последней; supplements - принятые добавки со временем, supplements_plan - план и сколько приёмов за неделю; steps - шаги; activities_min - минуты по видам; measures_delta - изменение замеров, см):\n"
             f"{json.dumps(st, ensure_ascii=False)}\n\n"
-            "title — заголовок в 3–6 слов; text — разбор 5–8 предложений: питание (БЖУ к норме), сон, активность, "
-            "самочувствие, вода и шаги — только то, по чему есть данные; next — 3 конкретные задачи на следующую неделю; "
-            "day_tip — одна короткая рекомендация на завтра.")
+            "title - заголовок в 3–6 слов; text - разбор 5–8 предложений: питание (БЖУ к норме), сон, активность, "
+            "самочувствие, вода и шаги - только то, по чему есть данные; next - 3 конкретные задачи на следующую неделю; "
+            "day_tip - одна короткая рекомендация на завтра.")
     out = await ask_json(system, user, WEEKLY_SCHEMA, temperature=0.6, think=True)
     rec_id = uuid.uuid4().hex
     db.server_put(uid, "coach", rec_id, {"kind": "weekly", "title": out.get("title", "Разбор недели"),
@@ -951,7 +966,7 @@ MEALPLAN_SCHEMA = {
     },
     "required": ["days", "note"],
 }
-# простые продукты для рациона: модель выбирает из короткого списка — так быстрее и без экзотики
+# простые продукты для рациона: модель выбирает из короткого списка - так быстрее и без экзотики
 CLASSIC_FOODS = sorted({n for tpls in nutrition.TEMPLATES.values() for t in tpls for _, names, *_ in t["slots"] for n in names} | {
     "Овсянка на молоке", "Макароны варёные", "Картофель запечённый", "Картофельное пюре", "Фасоль варёная",
     "Говяжий фарш", "Куриное бедро варёное", "Тунец консервированный", "Сыр лёгкий 17%", "Сыр Российский",
@@ -987,7 +1002,7 @@ def _meal_rows(items: list[dict], idx: food.Index) -> list[list]:
         g = float(it.get("grams") or 0)
         if f and g > 0:
             dens = f["p"] * 4 / f["kcal"] if f["kcal"] else 0
-            # гарниром (им подгоняются калории) считаем только крупы, макароны, хлеб и картофель — не фрукты и мёд
+            # гарниром (им подгоняются калории) считаем только крупы, макароны, хлеб и картофель - не фрукты и мёд
             starch = f.get("group") in ("крупы", "макароны", "хлеб и выпечка", "бобовые") or f["name"].startswith(("Картоф", "Батат"))
             role = "p" if dens >= 0.3 else "c" if starch else "x"
             rows.append([f, g, g * 0.5, max(g, 150 if role != "x" else g), role])
@@ -1043,23 +1058,23 @@ async def job_mealplan_day(uid: str, inp: dict) -> dict:
     w = inp.get("workout") or {}
     acts = ", ".join(f"{a.get('name')} {a.get('minutes')} мин" for a in (inp.get("activities") or [])[:5] if isinstance(a, dict)) or "нет"
     slot_txt = "\n".join(
-        f"- key={s['key']}: {s.get('time', '')} {s.get('label', '')} — цель {round(_num_or((s.get('target') or {}).get('kcal')))} ккал, "
+        f"- key={s['key']}: {s.get('time', '')} {s.get('label', '')} - цель {round(_num_or((s.get('target') or {}).get('kcal')))} ккал, "
         f"белок {round(_num_or((s.get('target') or {}).get('p')))} г, жиры {round(_num_or((s.get('target') or {}).get('f')))} г, "
         f"углеводы {round(_num_or((s.get('target') or {}).get('c')))} г. Смысл: {s.get('reason', '')}" for s in slots_in)
     system = system_for(uid, "Ты спортивный нутрициолог. Составляешь рацион на один день из обычных продуктов с простыми домашними "
                              "рецептами: здоровое питание, не только калории.")
     user = f"""Клиент: {person_text(uid, prof)}. Цели: {goals_text(goal, uid)}.
-Норма на день: {t.get('kcal', '—')} ккал, белок {t.get('p', '—')} г. Тренировка сегодня: {f"{w.get('title')} в {w.get('time')}, {w.get('minutes')} мин" if w else 'нет'}. Активности: {acts}.
+Норма на день: {t.get('kcal', '-')} ккал, белок {t.get('p', '-')} г. Тренировка сегодня: {f"{w.get('title')} в {w.get('time')}, {w.get('minutes')} мин" if w else 'нет'}. Активности: {acts}.
 
-Приёмы пищи (время и цели уже рассчитаны — не меняй их, верни ровно эти key):
+Приёмы пищи (время и цели уже рассчитаны - не меняй их, верни ровно эти key):
 {slot_txt}
 
-Правила: в каждом приёме 2–4 продукта; до тренировки — быстрые углеводы и немного белка, мало жира; после — белок и углеводы;
-на обед и ужин — белок, гарнир и овощи. Без сладкого, фастфуда, колбас, жареного. Спортпит — только если он есть в списке.
+Правила: в каждом приёме 2–4 продукта; до тренировки - быстрые углеводы и немного белка, мало жира; после - белок и углеводы;
+на обед и ужин - белок, гарнир и овощи. Без сладкого, фастфуда, колбас, жареного. Спортпит - только если он есть в списке.
 {('Дома есть: ' + '; '.join(home) + '. Строй приёмы в первую очередь из этого.') if home else ''}
-name — СТРОГО дословно из списка ниже; grams — в том виде, как в названии (сухая крупа — сухой вес).
-title — короткое название блюда; steps — 2–4 коротких шага приготовления (для перекусов можно 1); time_min — минуты на готовку.
-note — одно-два предложения: чем этот день хорош под цель. Без рассуждений.
+name - СТРОГО дословно из списка ниже; grams - в том виде, как в названии (сухая крупа - сухой вес).
+title - короткое название блюда; steps - 2–4 коротких шага приготовления (для перекусов можно 1); time_min - минуты на готовку.
+note - одно-два предложения: чем этот день хорош под цель. Без рассуждений.
 
 Продукты: {'; '.join(names[:140])}"""
     out = await ask_json(system, user, MEALDAY_SCHEMA, temperature=0.5)
@@ -1070,7 +1085,7 @@ note — одно-два предложения: чем этот день хор
         rows, dropped = nutrition.check_slot_items(ai.get("items") or [], idx, diet, allergy, exclude)
         dropped_all += dropped
         from_ai = bool(rows)
-        if not rows:                          # модель потеряла приём или всё выбросили — берём проверенный локальный вариант
+        if not rows:                          # модель потеряла приём или всё выбросили - берём проверенный локальный вариант
             rows, _ = nutrition.check_slot_items(s.get("items") or [], idx, diet, allergy, exclude)
         tgt = {k: _num_or((s.get("target") or {}).get(k)) for k in ("kcal", "p", "f", "c")}
         nutrition.fit_slot(rows, tgt)
@@ -1115,15 +1130,15 @@ async def job_mealplan(uid: str, inp: dict) -> dict:
     win = prof.get("eating_window") or {}
     window = f"с {win.get('from')} до {win.get('to')}" if win.get("enabled") else "не задано"
     system = system_for(uid, "Ты нутрициолог. Составляешь простой домашний рацион из обычных продуктов. "
-                             "Граммы — готового продукта.")
+                             "Граммы - готового продукта.")
     user = f"""Клиент: {person_text(uid, prof)}. Цели: {goals_text(goal)}.
 Норма на день: {t.get('kcal')} ккал, белок {t.get('p')} г, жиры {t.get('f')} г, углеводы {t.get('c')} г.
-Окно питания: {window}. Пожелания: {inp.get('notes') or '—'}.
+Окно питания: {window}. Пожелания: {inp.get('notes') or '-'}.
 
 Составь рацион на {n} дн., дни не повторяются. На день: {'обед, перекус и ужин (интервальное голодание)' if diet in ('if_16_8', 'if_18_6') else 'завтрак, обед, ужин и перекус'}.
-В каждом приёме 2–4 продукта; белок в каждом основном приёме. Граммы подбирай под норму — точную подгонку сделает приложение.
-name — СТРОГО дословно из списка; title — короткое название блюда («Гречка с курицей и огурцом»).
-note — ОДНО короткое предложение: что можно заменять. Без рассуждений.
+В каждом приёме 2–4 продукта; белок в каждом основном приёме. Граммы подбирай под норму - точную подгонку сделает приложение.
+name - СТРОГО дословно из списка; title - короткое название блюда («Гречка с курицей и огурцом»).
+note - ОДНО короткое предложение: что можно заменять. Без рассуждений.
 
 Продукты: {'; '.join(names)}"""
     out = await ask_json(system, user, MEALPLAN_SCHEMA, temperature=0.5)
@@ -1136,7 +1151,7 @@ note — ОДНО короткое предложение: что можно з�
             rows = _meal_rows(m.get("items") or [], idx)
             if rows and m.get("meal") not in {x[0] for x in plan}:
                 plan.append((m.get("meal") or "snack", m.get("title") or "", rows))
-        # модель иногда теряет приёмы пищи — недостающие берём из плана-по-шаблонам (nutrition.build_day)
+        # модель иногда теряет приёмы пищи - недостающие берём из плана-по-шаблонам (nutrition.build_day)
         want = ("lunch", "snack", "dinner") if diet in ("if_16_8", "if_18_6") else ("breakfast", "lunch", "dinner", "snack")
         missing = [w for w in want if w not in {x[0] for x in plan}]
         if missing:
@@ -1147,7 +1162,7 @@ note — ОДНО короткое предложение: что можно з�
         plan.sort(key=lambda x: want.index(x[0]) if x[0] in want else 9)
         if not plan:
             continue
-        # модель плохо считает — подгоняем граммы кодом: белковые продукты под белок, гарниры под калории
+        # модель плохо считает - подгоняем граммы кодом: белковые продукты под белок, гарниры под калории
         nutrition.fit_day(plan, t, idx, diet, allergy, 2.5)
         meals = []
         for meal, title, rs in plan:
@@ -1164,7 +1179,7 @@ note — ОДНО короткое предложение: что можно з�
     if not days_out:
         raise AIError("Модель не составила рацион. Попробуйте ещё раз.")
     note = (out.get("note") or "").strip()
-    if len(note) > 300:                       # модель иногда сливает сюда рассуждения — не показываем
+    if len(note) > 300:                       # модель иногда сливает сюда рассуждения - не показываем
         note = ""
     rec_id = uuid.uuid4().hex
     db.server_put(uid, "coach", rec_id, {"kind": "mealplan", "title": f"Рацион на {n} дн.", "text": note,
@@ -1201,10 +1216,10 @@ async def job_recipe(uid: str, inp: dict) -> dict:
     system = system_for(uid, "Ты повар и нутрициолог. Даёшь простые домашние рецепты: понятные шаги, обычная кухня, "
                              "без редких ингредиентов.")
     user = f"""{'Блюдо: ' + ask if ask else ''}{chr(10) + 'Есть продукты: ' + ingr if ingr else ''}
-Норма клиента в день: {t.get('kcal', '—')} ккал, белок {t.get('p', '—')} г.
-Ингредиенты — в граммах НА ВЕСЬ РЕЦЕПТ, в том виде, в каком кладёшь (сырые крупы, сырое мясо);
-kcal, p, f, c — на 100 г ингредиента; name — обычное название с состоянием («Гречка сырая», «Куриная грудка сырая»).
-steps — 4–8 коротких шагов; time_min — общее время; portions — порций; tip — один совет, как сделать блюдо полезнее под цель."""
+Норма клиента в день: {t.get('kcal', '-')} ккал, белок {t.get('p', '-')} г.
+Ингредиенты - в граммах НА ВЕСЬ РЕЦЕПТ, в том виде, в каком кладёшь (сырые крупы, сырое мясо);
+kcal, p, f, c - на 100 г ингредиента; name - обычное название с состоянием («Гречка сырая», «Куриная грудка сырая»).
+steps - 4–8 коротких шагов; time_min - общее время; portions - порций; tip - один совет, как сделать блюдо полезнее под цель."""
     out = await ask_json(system, user, RECIPE_SCHEMA, temperature=0.5)
     idx = food.Index()
     rows = _food_rows(out.get("ingredients") or [], idx)
@@ -1288,22 +1303,22 @@ def history_stats(uid: str, months: int = 6) -> dict:
 
 
 async def job_analysis(uid: str, inp: dict) -> dict:
-    scope = inp.get("scope") or "all"            # body — упор на замеры и вес
+    scope = inp.get("scope") or "all"            # body - упор на замеры и вес
     st = history_stats(uid, int(inp.get("months") or 6))
     if not st["months"] and not st["measurements"]:
-        raise AIError("Пока мало данных для анализа — внесите хотя бы несколько недель веса, замеров и тренировок")
+        raise AIError("Пока мало данных для анализа - внесите хотя бы несколько недель веса, замеров и тренировок")
     goal = userdata.goal(uid)
     t = (userdata.latest_target(uid) or {}).get("data") or {}
     system = system_for(uid, "Ты тренер-аналитик. По истории клиента находишь, что реально сработало, а что нет, "
                              "и связываешь изменения веса и замеров с тренировками, активностями, сном и питанием. "
-                             "Корреляция — не доказательство: где данных мало, так и говори.")
-    user = (f"Клиент: {person_text(uid)}. Цели: {goals_text(goal)}.\nНорма: {t.get('kcal', '—')} ккал, белок {t.get('p', '—')} г.\n"
-            f"История (по месяцам; measurements — замеры в см, weight — кг; workouts — сделано/запланировано):\n"
+                             "Корреляция - не доказательство: где данных мало, так и говори.")
+    user = (f"Клиент: {person_text(uid)}. Цели: {goals_text(goal)}.\nНорма: {t.get('kcal', '-')} ккал, белок {t.get('p', '-')} г.\n"
+            f"История (по месяцам; measurements - замеры в см, weight - кг; workouts - сделано/запланировано):\n"
             f"{json.dumps(st, ensure_ascii=False)}\n\n"
-            + ("Фокус разбора: замеры тела и вес — как меняются объёмы по зонам и что на это повлияло.\n"
+            + ("Фокус разбора: замеры тела и вес - как меняются объёмы по зонам и что на это повлияло.\n"
                if scope == "body" else "")
-            + "title — 3–6 слов; text — 4–7 предложений: общая картина и тренд; worked — что сработало (2–4 пункта, с цифрами); "
-            "didnt — что не сработало или мешает (1–4 пункта); recommendations — 3–5 конкретных шагов на следующий месяц.")
+            + "title - 3–6 слов; text - 4–7 предложений: общая картина и тренд; worked - что сработало (2–4 пункта, с цифрами); "
+            "didnt - что не сработало или мешает (1–4 пункта); recommendations - 3–5 конкретных шагов на следующий месяц.")
     out = await ask_json(system, user, ANALYSIS_SCHEMA, temperature=0.5, think=True)
     rec_id = uuid.uuid4().hex
     db.server_put(uid, "coach", rec_id, {"kind": "analysis", "title": out.get("title", "Анализ истории"),
@@ -1335,25 +1350,25 @@ LOOKUP_SCHEMA = {
 }
 
 LOOKUP_SYSTEM = """Ты нутрициолог и аккуратный проверяющий. Нужно определить калорийность и БЖУ продукта НА 100 г
-в ЗАПРОШЕННОМ СОСТОЯНИИ: dry — сухой до варки (крупы, макароны, бобовые), raw — сырой (мясо, рыба, овощи до готовки),
-cooked — готовый (варёный, жареный, запечённый), as_sold — как продаётся (творог, йогурт, батончик, хлеб), fresh — свежий (фрукты, овощи).
+в ЗАПРОШЕННОМ СОСТОЯНИИ: dry - сухой до варки (крупы, макароны, бобовые), raw - сырой (мясо, рыба, овощи до готовки),
+cooked - готовый (варёный, жареный, запечённый), as_sold - как продаётся (творог, йогурт, батончик, хлеб), fresh - свежий (фрукты, овощи).
 Тебе дают кандидатов из локального справочника и из базы Open Food Facts (данные вносят люди, бывают ошибки).
 Правила проверки:
-- состояние: у круп и макарон сухие ≈ 300–380 ккал, варёные ≈ 80–180; 110 ккал у гречки — это варёная, сухая ≈ 310–340;
+- состояние: у круп и макарон сухие ≈ 300–380 ккал, варёные ≈ 80–180; 110 ккал у гречки - это варёная, сухая ≈ 310–340;
   у мяса сырое и готовое тоже различаются (готовое калорийнее на 100 г из-за потери воды);
 - энергия должна сходиться с БЖУ: 4·Б + 4·У + 9·Ж ≈ ккал (±15 %);
-- значения на порцию/батончик/упаковку часто по ошибке выдают за 100 г — сумма Б+Ж+У не может быть больше 100 г;
+- значения на порцию/батончик/упаковку часто по ошибке выдают за 100 г - сумма Б+Ж+У не может быть больше 100 г;
 - отбрасывай кандидатов, которые явно про другой продукт или другое состояние; бренд важен, если он указан в запросе;
-- у батончиков и продуктов с клетчаткой/подсластителями энергия ниже 4·Б + 4·У + 9·Ж: клетчатка ≈ 2 ккал/г, полиолы ещё меньше — это не ошибка;
-- если в запросе бренд и нашлись товары этого бренда — опирайся на них (на типичный вкус или середину по вкусам), а не на усреднённый продукт;
-- если источники расходятся — возьми правдоподобную середину и снизь уверенность.
-Ответ: name — каноническое русское название с состоянием (например «Гречка сухая (ядрица)») и брендом, если он в запросе;
-state — запрошенное состояние (или подходящее, если не указано); group — одна из групп: крупы, макароны, бобовые, овощи,
+- у батончиков и продуктов с клетчаткой/подсластителями энергия ниже 4·Б + 4·У + 9·Ж: клетчатка ≈ 2 ккал/г, полиолы ещё меньше - это не ошибка;
+- если в запросе бренд и нашлись товары этого бренда - опирайся на них (на типичный вкус или середину по вкусам), а не на усреднённый продукт;
+- если источники расходятся - возьми правдоподобную середину и снизь уверенность.
+Ответ: name - каноническое русское название с состоянием (например «Гречка сухая (ядрица)») и брендом, если он в запросе;
+state - запрошенное состояние (или подходящее, если не указано); group - одна из групп: крупы, макароны, бобовые, овощи,
 фрукты и ягоды, мясо, птица, рыба и морепродукты, молочные, сыры, яйца, хлеб и выпечка, сладости, орехи и семена,
 жиры и масла, напитки, соусы и приправы, спортпит, готовые блюда, фастфуд, колбасы и полуфабрикаты;
-kcal, p, f, c — на 100 г; confidence — high, если источники согласны и проверки сходятся, mid — если есть расхождения,
-low — если данных мало или пришлось оценивать самому; used_sources — какие кандидаты использованы (их метки);
-reasoning_short — 1–2 предложения, почему такие цифры; warnings — несоответствия, найденные в источниках
+kcal, p, f, c - на 100 г; confidence - high, если источники согласны и проверки сходятся, mid - если есть расхождения,
+low - если данных мало или пришлось оценивать самому; used_sources - какие кандидаты использованы (их метки);
+reasoning_short - 1–2 предложения, почему такие цифры; warnings - несоответствия, найденные в источниках
 (например «в Open Food Facts у одного товара значения на батончик 40 г, а не на 100 г»).
 В warnings и reasoning_short называй источники словами («справочник», «Open Food Facts», название товара), без меток."""
 
@@ -1367,7 +1382,7 @@ def _num(v) -> float | None:
 
 
 async def off_search(query: str, n: int = 10) -> tuple[list[dict], str | None]:
-    """Open Food Facts: до n товаров с БЖУ на 100 г. Без сети — ([], причина).
+    """Open Food Facts: до n товаров с БЖУ на 100 г. Без сети - ([], причина).
     Единственный выход сервера в интернет: уходит только название продукта (см. docs/PRIVACY.md)."""
     import httpx
     if not brain.web_allowed():
@@ -1382,7 +1397,7 @@ async def off_search(query: str, n: int = 10) -> tuple[list[dict], str | None]:
         except (httpx.HTTPError, ValueError) as e:
             err = e
         if products is None and not isinstance(err, httpx.ConnectError):
-            # старый поиск часто отвечает 503 под нагрузкой — тогда новый (search-a-licious)
+            # старый поиск часто отвечает 503 под нагрузкой - тогда новый (search-a-licious)
             try:
                 r = await c.get(OFF_SEARCH2, params={"q": query, "page_size": n, "fields": OFF_FIELDS})
                 r.raise_for_status()
@@ -1455,7 +1470,7 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
     # в OFF ищем без слов состояния: «гречка сухая» там почти не встречается
     off_q = food.STATE_WORDS.sub(" ", food.norm(query)).strip() or query
     web, web_err = await off_search(off_q)
-    # бренд латиницей («Bombbar»): если общий поиск его не нашёл — ищем по бренду отдельно
+    # бренд латиницей («Bombbar»): если общий поиск его не нашёл - ищем по бренду отдельно
     brand_words = [w for w in re.findall(r"[a-z][a-z0-9-]{2,}", query.lower())]
     has_brand = lambda x: any(b in f"{x['title']} {x.get('brand') or ''}".lower() for b in brand_words)
     if brand_words and not web_err and not any(map(has_brand, web)):
@@ -1470,22 +1485,22 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
         if w["per"] not in ("100g", "100 g", ""):
             notes.append(f"{w['label']}: в карточке значения на порцию ({w['serving'] or w['per']})")
         if w["p"] + w["f"] + w["c"] > 102:
-            notes.append(f"{w['label']}: Б+Ж+У больше 100 г — не на 100 г")
+            notes.append(f"{w['label']}: Б+Ж+У больше 100 г - не на 100 г")
         mm = food.energy_mismatch(w["kcal"], w["p"], w["f"], w["c"], w.get("fiber") or 0)
         if mm is not None and mm > 0.25:
             notes.append(f"{w['label']}: калории не сходятся с БЖУ")
     line = lambda x: (f"[{x['label']}] {x['title']}" + (f" ({x['brand']})" if x.get("brand") else "")
                       + (f", состояние {x['state']}" if x.get("state") else "") + (f", {x['quantity']}" if x.get("quantity") else "")
-                      + f": {x['kcal']:g} ккал, Б {x['p']:g}, Ж {x['f']:g}, У {x['c']:g}" + (f", клетчатка {x['fiber']:g}" if x.get("fiber") else "") + (f" — {x['note']}" if x.get("note") else ""))
-    user = (f"Запрос: «{query}». Нужное состояние: {state + ' — ' + food.STATE_RU[state] if state else 'не указано, выбери подходящее'}.\n\n"
-            "Локальный справочник:\n" + ("\n".join(map(line, local)) or "— ничего") +
-            "\n\nOpen Food Facts (на 100 г, по данным карточек):\n" + ("\n".join(map(line, web)) or f"— нет данных{': ' + web_err if web_err else ''}") +
+                      + f": {x['kcal']:g} ккал, Б {x['p']:g}, Ж {x['f']:g}, У {x['c']:g}" + (f", клетчатка {x['fiber']:g}" if x.get("fiber") else "") + (f" - {x['note']}" if x.get("note") else ""))
+    user = (f"Запрос: «{query}». Нужное состояние: {state + ' - ' + food.STATE_RU[state] if state else 'не указано, выбери подходящее'}.\n\n"
+            "Локальный справочник:\n" + ("\n".join(map(line, local)) or "- ничего") +
+            "\n\nOpen Food Facts (на 100 г, по данным карточек):\n" + ("\n".join(map(line, web)) or f"- нет данных{': ' + web_err if web_err else ''}") +
             ("\n\nАвтоматические замечания:\n" + "\n".join(notes) if notes else ""))
     model_ok = True
     try:
         out = await ask_json(LOOKUP_SYSTEM, user, LOOKUP_SCHEMA, temperature=0.1, think=True)
     except AIError as e:
-        # без модели — середина по источникам в нужном состоянии, с честной низкой уверенностью
+        # без модели - середина по источникам в нужном состоянии, с честной низкой уверенностью
         model_ok = False
         pool = [x for x in local if not state or x.get("state") in (state, None)] or web
         if not pool:
@@ -1495,7 +1510,7 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
                "used_sources": [x["label"] for x in pool], "reasoning_short": f"ИИ недоступна ({e}); медиана по источникам.",
                "warnings": []}
     by_label = {x["label"]: x for x in [*local, *web]}
-    # метки источников (db2, off3) человеку ничего не скажут — подставляем названия
+    # метки источников (db2, off3) человеку ничего не скажут - подставляем названия
     unlabel = lambda t: re.sub(r"\[?\b(db|off)\d+\b\]?", lambda m: "«" + by_label[m.group(0).strip("[]")]["title"] + "»"
                                 if m.group(0).strip("[]") in by_label else m.group(0), t)
     out["warnings"] = [unlabel(w) for w in out.get("warnings") or [] if isinstance(w, str)]
@@ -1511,12 +1526,12 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
     # сверка со справочником в том же состоянии
     same = [x for x in local if res_state and x.get("state") == res_state and x["source"] == "seed"]
     if same and same[0]["kcal"] and abs(vals["kcal"] - same[0]["kcal"]) / same[0]["kcal"] > 0.35:
-        warnings.append(f"В справочнике «{same[0]['title']}» — {same[0]['kcal']:g} ккал: расхождение больше трети.")
+        warnings.append(f"В справочнике «{same[0]['title']}» - {same[0]['kcal']:g} ккал: расхождение больше трети.")
     conf = out.get("confidence") if out.get("confidence") in ("low", "mid", "high") else "low"
     if brand_words and not any(has_brand(by_label[l]) for l in {str(x).strip("[] ") for x in out.get("used_sources") or []} if l in by_label):
         n_brand = sum(map(has_brand, web))
-        warnings.append(f"Карточки этого бренда в Open Food Facts есть ({n_brand}), но значения взяты типичные — у конкретного вкуса они другие; сверьте с этикеткой."
-                        if n_brand else "Товар этого бренда в источниках не найден — значения типичные для такого продукта; сверьте с этикеткой.")
+        warnings.append(f"Карточки этого бренда в Open Food Facts есть ({n_brand}), но значения взяты типичные - у конкретного вкуса они другие; сверьте с этикеткой."
+                        if n_brand else "Товар этого бренда в источниках не найден - значения типичные для такого продукта; сверьте с этикеткой.")
         conf = "low" if conf == "low" else "mid"
     if checks:
         conf = "low" if conf != "high" or len(checks) > 1 else "mid"
@@ -1524,7 +1539,7 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
     sources = [{k: x.get(k) for k in ("label", "kind", "title", "brand", "url", "kcal", "p", "f", "c", "state", "id")}
                | {"used": x["label"] in used} for x in by_label.values()]
     name = re.sub(r"\s*\(?\b(dry|raw|cooked|as_sold|fresh)\b\)?", "", out.get("name") or query).strip(" ,") or query
-    brain.note_lookup(uid, query, name[:80])   # если человек сохранит этот продукт — запрос станет синонимом
+    brain.note_lookup(uid, query, name[:80])   # если человек сохранит этот продукт - запрос станет синонимом
     return {"query": query, "name": name[:80], "state": res_state or "as_sold", "group": group,
             **vals, "confidence": conf, "sources": sources, "web": bool(web), "web_error": web_err, "model": model_ok,
             "source": "web" if any(by_label.get(l, {}).get("kind") == "off" for l in used) else "ai",

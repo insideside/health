@@ -18,6 +18,11 @@
 .chips .chip[aria-pressed] { cursor: pointer; }
 .a-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
 .a-times input.control { width: 100%; }
+/* часы/минуты сна - два отдельных числовых поля вместо <input type="time"> (см. timeBox в today.js) */
+.a-hm { display: flex; align-items: center; gap: 4px; }
+.a-hm input.control { width: 100%; min-width: 0; text-align: center; -moz-appearance: textfield; }
+.a-hm input.control::-webkit-outer-spin-button, .a-hm input.control::-webkit-inner-spin-button { margin: 0; }
+.a-hm-sep { color: var(--ink-3); }
 .a-groove { margin: 8px 0 4px; }
 .a-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
 .a-two .a-card + .a-card { margin-top: 0; }

@@ -26,9 +26,10 @@ from .userdata import COOKIE, bearer, current_user
 
 STATIC = Path(__file__).resolve().parent / "static"
 HTTPS_PORT = int(os.environ.get("TRAINER_PORT", 8790))
-MAX_USERS = 4
+MAX_USERS = 20
 KINDS = {"profile", "goal", "target", "item", "log", "food", "body", "program", "workout", "dsum", "ach", "coach",
-         "sleep", "state", "daytype", "activity", "injury", "routine", "favfood", "chat", "wsum", "mtest", "vitals", "period", "drink", "supp"}
+         "sleep", "state", "daytype", "activity", "injury", "routine", "favfood", "chat", "wsum", "mtest", "vitals",
+         "period", "drink", "supp", "pairwarm", "smoke", "alcohol", "highlight"}
 SYNC_LIMIT = 2000
 
 
@@ -161,7 +162,9 @@ async def register(request: Request):
         raise HTTPException(409, "Такой логин уже есть")
     uid = uuid.uuid4().hex[:12]
     with db.tx() as c:
-        c.execute("INSERT INTO users VALUES (?,?,?,?,?)", (uid, login, name, db.hash_pw(pw), db.now_ms()))
+        is_first = c.execute("SELECT COUNT(*) n FROM users").fetchone()["n"] == 0
+        c.execute("INSERT INTO users (id, login, name, pw_hash, created, is_admin) VALUES (?,?,?,?,?,?)",
+                   (uid, login, name, db.hash_pw(pw), db.now_ms(), 1 if is_first else 0))
     create_defaults(uid, name)
     resp = JSONResponse({"user": {"id": uid, "login": login, "name": name},
                          "device_token": db.new_device_token(uid, device_label(request, body))})
@@ -248,10 +251,67 @@ async def device_prove(request: Request):
 
 @app.get("/api/me")
 def me(u=Depends(current_user)):
-    # пол партнёра нужен тренеру для окончаний («Маша сделала», «подбодри её»); остальной профиль — приватный
+    # пол партнёра нужен тренеру для окончаний («Маша сделала», «подбодри её»); остальной профиль — приватный.
+    # Видимость - та же, что и для dsum/ach (db.partner_ids): пока нет групп - все остальные, как раньше.
+    ids = set(db.partner_ids(u["id"]))
     partners = [{**user_json(r), "sex": (db.get(f"profile:{r['id']}") or {}).get("data", {}).get("sex")}
-                for r in db.q("SELECT * FROM users WHERE id != ? ORDER BY created", (u["id"],))]
-    return {"user": user_json(u), "partners": partners}
+                for r in db.q("SELECT * FROM users WHERE id != ? ORDER BY created", (u["id"],)) if r["id"] in ids]
+    return {"user": user_json(u), "partners": partners, "is_admin": db.is_admin(u["id"])}
+
+
+# ── группы (соревновательные/социальные - item 15): создаёт и правит только админ; свои группы видит любой ──
+
+def _require_admin(u):
+    if not db.is_admin(u["id"]):
+        raise HTTPException(403, "Только админ может управлять группами")
+
+
+@app.get("/api/groups/mine")
+def groups_mine(u=Depends(current_user)):
+    """Группы, в которых состоит текущий пользователь - с именами участников (для экрана «Вместе»)."""
+    names = {r["id"]: r["name"] for r in db.q("SELECT id, name FROM users")}
+    out = []
+    for g in db.user_groups(u["id"]):
+        out.append({"id": g["id"], "name": g["name"], "members": [{"id": m, "name": names.get(m, m)} for m in g.get("member_ids") or []]})
+    return {"groups": out}
+
+
+@app.get("/api/admin/users")
+def admin_users(u=Depends(current_user)):
+    _require_admin(u)
+    return {"users": [user_json(r) for r in db.q("SELECT * FROM users ORDER BY created")]}
+
+
+@app.get("/api/admin/groups")
+def admin_groups(u=Depends(current_user)):
+    _require_admin(u)
+    return {"groups": db.groups()}
+
+
+@app.post("/api/admin/groups")
+async def admin_group_save(request: Request, u=Depends(current_user)):
+    _require_admin(u)
+    body = await _body(request)
+    name = (body.get("name") or "").strip()
+    member_ids = [str(x) for x in (body.get("member_ids") or []) if isinstance(x, str)]
+    if not name:
+        raise HTTPException(400, "Название группы не может быть пустым")
+    valid = {r["id"] for r in db.q("SELECT id FROM users")}
+    member_ids = [m for m in member_ids if m in valid]
+    gid = body.get("id") or uuid.uuid4().hex
+    db.server_put(u["id"], "group", gid, {"name": name, "member_ids": member_ids})
+    return {"id": gid}
+
+
+@app.delete("/api/admin/groups/{gid}")
+def admin_group_delete(gid: str, u=Depends(current_user)):
+    _require_admin(u)
+    rec = db.get(gid)
+    if not rec or rec["kind"] != "group":
+        raise HTTPException(404, "Группа не найдена")
+    with db.tx() as c:
+        c.execute("UPDATE records SET deleted = 1, updated_at = ? WHERE id = ?", (db.now_ms(), gid))
+    return {"ok": True}
 
 
 # ── начальные данные нового пользователя ──
@@ -378,7 +438,7 @@ async def food_calc(request: Request, u=Depends(current_user)):
     with db.tx() as c:
         db.put(c, {**rec, "updated_at": int(rec.get("updated_at") or db.now_ms())})
     saved = db.get(rec["id"])
-    done, rest = food.quick_parse(saved["data"].get("text", ""))
+    done, rest = food.quick_parse(saved["data"].get("text", ""), uid=u["id"])
     if rest:                                   # то, что ИИ уже однажды разобрала, — из памяти, без ИИ
         more, rest = brain.resolve(rest)
         done += more
@@ -456,7 +516,9 @@ async def program_rebuild(request: Request, u=Depends(current_user)):
     """Пересобрать будущий план с параметрами активной программы и текущим профилем."""
     body = await _body(request)
     if not any(p["data"].get("active") for p in db.list_kind(u["id"], "program")):
-        raise HTTPException(400, "Нет активной программы — составьте её в разделе «Тренировки»")
+        raise HTTPException(400, "Нет активной программы - составь её в разделе «Тренировки»")
+    if userdata.profile(u["id"]).get("gym_program") == "own":
+        raise HTTPException(403, "В профиле отмечено, что в зале своя программа - пересобирать нечего")
     _ai_on(u["id"])
     await jobs.ai_state()
     return {"job_id": jobs.submit(u["id"], "program", {"rebuild": True, "reason": body.get("reason") or ""}),

@@ -19,10 +19,11 @@ import * as connect from './views/connect.js';
 import * as fit from './views/fit.js';
 import * as supp from './views/supp.js';
 import * as advice from './views/advice.js';
+import * as report from './views/report.js';
 
 const BUILD = document.querySelector('meta[name=build]').content;
 const $app = document.getElementById('app');
-const VIEWS = [today, calendar, food, workout, chat, progress, profile, together, health, connect, about, install, fit, supp, advice];
+const VIEWS = [today, calendar, food, workout, chat, progress, profile, together, health, connect, about, install, fit, supp, advice, report];
 
 const NAV = [['today', 'Сегодня'], ['calendar', 'Календарь'], ['food', 'Питание'], ['workout', 'Спорт'],
   ['chat', 'Тренер'], ['progress', 'Прогресс'], ['profile', 'Профиль']];
@@ -234,6 +235,8 @@ async function refreshMe() {
   const me = await store.api('/api/me');
   await store.setMeta('me', me.user);
   await store.setMeta('partners', me.partners);
+  await store.setMeta('is_admin', !!me.is_admin);
+  try { await store.setMeta('groups', (await store.api('/api/groups/mine')).groups || []); } catch (e) { /* офлайн - оставим прошлые группы */ }
 }
 
 // ── общие действия ──
@@ -423,7 +426,11 @@ async function poll() {
             toast(`ИИ: ${s.error}`, 6000);
             if (j.kind === 'food' && store.get(j.ref)) await store.patch(j.ref, { calc_error: s.error });
           } else {
-            toast(j.kind === 'program' ? `Программа готова: ${s.result?.workouts || 0} тренировок в календаре` : JOB_DONE[j.kind] || 'Готово', 4000);
+            const done = j.kind === 'program' ? `Программа обновлена: ${s.result?.workouts || 0} тренировок в календаре` : JOB_DONE[j.kind] || 'Готово';
+            toast(done, 4000);
+            // тост живёт секунды, а в чате остаётся видно, что тренер закончил и что сделал - не только для
+            // разбора недели/программы, туда и так заглянут за текстом, а чтобы не пропустить сам факт завершения
+            if (['program', 'weekly', 'mealplan', 'analysis'].includes(j.kind)) chat.announce(done);
           }
         }
       } catch (e) {

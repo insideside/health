@@ -147,9 +147,21 @@ export function openModal(html) {
 export function closeModal() { const m = $modal(); m.hidden = true; m.innerHTML = ''; }
 export function isModalOpen() { return !$modal().hidden; }
 
+// ── раскрывающиеся <details> переживают перерисовку ──
+// render() целиком заменяет innerHTML - без этого любой <details> открытый вручную (не через data-act)
+// схлопывается на следующей же перерисовке (сихронизация, таймер, фоновая задача). Ключ - что угодно
+// стабильное для этого конкретного <details> (id упражнения, дата, индекс...).
+const openDetails = new Set();
+document.addEventListener('toggle', e => {
+  const d = e.target;
+  if (!(d instanceof HTMLDetailsElement) || !d.dataset.key) return;
+  if (d.open) openDetails.add(d.dataset.key); else openDetails.delete(d.dataset.key);
+}, true);
+export const detailsOpen = key => openDetails.has(key);
+
 // ── упражнения ──
 // Подробное описание: краткие шаги видны сразу, остальное - в раскрывающихся блоках.
-export function techHtml(e, { open = false } = {}) {
+export function techHtml(e, { open = false, key } = {}) {
   if (!e) return '<p class="empty">Нет описания</p>';
   const list = (title, arr, tag = 'ul') => arr?.length ? `<div class="smallcaps muted tech-h">${title}</div><${tag}>${arr.map(s => `<li>${esc(s)}</li>`).join('')}</${tag}>` : '';
   const d = e.details || {};
@@ -163,9 +175,10 @@ export function techHtml(e, { open = false } = {}) {
     e.easier && S.exMap.get(e.easier) ? `<p class="note">Проще: ${esc(S.exMap.get(e.easier).name)}</p>` : '',
     e.harder && S.exMap.get(e.harder) ? `<p class="note">Сложнее: ${esc(S.exMap.get(e.harder).name)}</p>` : '',
   ].join('');
+  const isOpen = key ? detailsOpen(key) : open;
   return `${d.summary ? `<p class="small">${esc(d.summary)}</p>` : ''}
     <ol>${(e.technique || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol>
-    ${more ? `<details class="tech-more" ${open ? 'open' : ''}><summary>Подробнее о методике</summary>${more}</details>` : ''}`;
+    ${more ? `<details class="tech-more" ${key ? `data-key="${esc(key)}"` : ''} ${isOpen ? 'open' : ''}><summary>Подробнее о методике</summary>${more}</details>` : ''}`;
 }
 // контекст упражнения на экране (разминка, тренировка) — для «Заменить сейчас»; см. plan.ctxInfo
 export function exCtx(el) {

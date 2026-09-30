@@ -2,7 +2,7 @@
 // Сравниваем дни и недели за последние 4–8 недель: сон → оценка следующего дня, поздняя еда → сон,
 // белок и шаги → изменение веса и талии, тренировки → замеры, читмилы → оценка недели.
 // Честно: это совпадения в ваших данных, а не доказанная причина; при малом числе наблюдений так и говорим.
-// Точнее — с сервером: полгода истории и сравнение с людьми вашего типа (GET /api/brain/insights).
+// Точнее — с сервером: полгода истории и сравнение с людьми твоего типа (GET /api/brain/insights).
 import * as store from './store.js';
 import * as SP from './supps.js';
 import * as C from './coach.js';
@@ -150,8 +150,8 @@ function sleepVsGrade(ds) {
   if (c.nHi < 3 || c.nLo < 3) return { title, text: `За ${daysWord(n)} почти все ночи ${c.nHi < 3 ? 'короче' : 'не короче'} 7 часов - сравнить не с чем.`, strength: 'few', n };
   const diff = c.hi - c.lo, r = pearson(pairs);
   return { title, n, strength: strengthOf(r, n, MIN_DAYS),
-    text: `По вашим данным за ${daysWord(n)}: после сна от 7 часов оценка дня в среднем ${num(c.hi)}, после короткого - ${num(c.lo)}`
-      + ` (${c.nHi} и ${c.nLo} ночей). ${Math.abs(diff) < 4 ? 'Разница небольшая.' : diff > 0 ? 'Выспавшись, вы проводите день лучше.' : 'Любопытно: после короткого сна дни у вас не хуже.'}` };
+    text: `По твоим данным за ${daysWord(n)}: после сна от 7 часов оценка дня в среднем ${num(c.hi)}, после короткого - ${num(c.lo)}`
+      + ` (${c.nHi} и ${c.nLo} ночей). ${Math.abs(diff) < 4 ? 'Разница небольшая.' : diff > 0 ? 'Выспавшись, ты проводишь день лучше.' : 'Любопытно: после короткого сна дни у тебя не хуже.'}` };
 }
 
 // сон прошедшей ночи (записан на день пробуждения) → сонливость в этот же день: доля дней «клонит в сон»
@@ -166,12 +166,12 @@ function sleepVsSleepy(ds) {
   if (hi.length < 3 || lo.length < 3) {
     const all = share(pairs.map(p => p[1]));
     return { title, n, strength: 'few', text: `Сонливость днём - ${all} % дней из ${n}. Сравнить короткие и длинные ночи пока не с чем: почти все ночи ${hi.length < 3 ? 'короче' : 'не короче'} 7 часов.`
-      + (hi.length >= 3 && all >= 50 ? ' Сна хватает, а в сон клонит часто - посмотрите на качество сна, кофе после обеда и тяжёлый обед; если так неделями, стоит обсудить с врачом.' : '') };
+      + (hi.length >= 3 && all >= 50 ? ' Сна хватает, а в сон клонит часто - посмотри на качество сна, кофе после обеда и тяжёлый обед; если так неделями, стоит обсудить с врачом.' : '') };
   }
   const a = share(hi), b = share(lo), d = b - a;
   return { title, n, strength: d >= 30 ? 'moderate' : d >= 15 ? 'weak' : 'none',
     text: `После ночей от 7 часов в сон днём клонило в ${a} % дней, после коротких - в ${b} % (${hi.length} и ${lo.length} дней). `
-      + (d >= 15 ? 'Дневная сонливость у вас идёт от недосыпа - лучшее средство ложиться раньше, а не ещё кофе.'
+      + (d >= 15 ? 'Дневная сонливость у тебя идёт от недосыпа - лучшее средство ложиться раньше, а не ещё кофе.'
         : a >= 50 ? 'Сонливость бывает и после нормального сна - дело может быть в качестве сна, еде или кофеине; если так неделями, стоит обсудить с врачом.'
         : 'Заметной связи с длиной сна нет.') };
 }
@@ -183,18 +183,18 @@ function lateVsSleep(ds) {
   const n = pairs.length;
   const late = pairs.filter(p => p[0]).map(p => p[1]), early = pairs.filter(p => !p[0]).map(p => p[1]);
   if (n < MIN_DAYS || late.length < 2 || early.length < 2) return { title, n, strength: 'few',
-    text: late.length < 2 && n >= MIN_DAYS ? `${late.length ? 'Поздно вы ели всего один раз' : 'Поздно вы не ели ни разу'} за ${daysWord(n)} - сравнивать не с чем. Хорошая привычка.`
+    text: late.length < 2 && n >= MIN_DAYS ? `${late.length ? 'Поздняя еда была всего один раз' : 'Поздней еды не было ни разу'} за ${daysWord(n)} - сравнивать не с чем. Хорошая привычка.`
       : `Мало данных: нужны дни и с поздней едой, и без неё, со сном на следующую ночь (сейчас ${n}).` };
   const d = avg(late) - avg(early);
   return { title, n, strength: Math.abs(d) >= 0.5 ? 'moderate' : Math.abs(d) >= 0.25 ? 'weak' : 'none',
-    text: `После поздней еды вы спали в среднем ${dec(avg(late))} ч, в остальные ночи - ${dec(avg(early))} ч (${late.length} и ${early.length} ночей). `
-      + (Math.abs(d) < 0.25 ? 'Заметной разницы нет.' : d < 0 ? 'Поздний ужин, похоже, крадёт сон.' : 'На сон поздняя еда у вас не влияет.') };
+    text: `После поздней еды сон в среднем ${dec(avg(late))} ч, в остальные ночи - ${dec(avg(early))} ч (${late.length} и ${early.length} ночей). `
+      + (Math.abs(d) < 0.25 ? 'Заметной разницы нет.' : d < 0 ? 'Поздний ужин, похоже, крадёт сон.' : 'На сон поздняя еда у тебя не влияет.') };
 }
 
 // Кофе после 14:00 / алкоголь → сон следующей ночи: длительность и качество (0–100).
 // Сон записан на день пробуждения, поэтому «следующая ночь» для дня i — запись сна дня i+1.
 // добавки, которые могут влиять на сон (магний, мелатонин, глицин…): ночи после дней с приёмом и без.
-// Честно: это наблюдение по вашим дням, а не доказательство - в тексте так и сказано.
+// Честно: это наблюдение по твоим дням, а не доказательство - в тексте так и сказано.
 function suppVsSleep(ds, uid) {
   const out = [];
   for (const s of SP.plan(uid)) {
@@ -203,7 +203,7 @@ function suppVsSleep(ds, uid) {
     const rows = ds.map(x => ({ ...x, [key]: x.supps ? (x.supps.has(s.key) ? 1 : 0) : null }));
     const r = substanceVsSleep(rows, key, `${s.name} и сон`, `с приёмом «${s.name}»`,
       { bad: 'После дней с приёмом сон хуже - стоит обсудить с врачом, нужна ли добавка.',
-        good: 'После дней с приёмом сон лучше. Это ваше наблюдение, а не доказательство: влиять могло и другое (нагрузка, стресс, время отбоя).', ok: 'Заметной разницы по вашим данным нет - это нормально: у многих добавок эффект небольшой.' });
+        good: 'После дней с приёмом сон лучше. Это твоё наблюдение, а не доказательство: влиять могло и другое (нагрузка, стресс, время отбоя).', ok: 'Заметной разницы по твоим данным нет - это нормально: у многих добавок эффект небольшой.' });
     if (r) out.push(r);
   }
   return out;
@@ -226,7 +226,7 @@ function substanceVsSleep(ds, key, title, what, verdicts) {
   const strength = good ? (dh >= 0.5 || (dq != null && dq >= 10) ? 'moderate' : 'weak')
     : dh <= -0.5 || (dq != null && dq <= -10) ? 'moderate' : bad ? 'weak' : 'none';
   return { title, n, strength,
-    text: `После дней ${what} вы спали в среднем ${dec(avg(yes.map(p => p[1])))} ч`
+    text: `После дней ${what} сон в среднем ${dec(avg(yes.map(p => p[1])))} ч`
       + (dq != null ? ` (качество ${num(avg(ys))})` : '') + `, в остальные ночи - ${dec(avg(no.map(p => p[1])))} ч`
       + (dq != null ? ` (${num(avg(ns))})` : '') + ` - ${yes.length} и ${no.length} ночей. ` + (bad ? verdicts.bad : good ? verdicts.good : verdicts.ok) };
 }
@@ -250,8 +250,8 @@ function weekly(ws) {
     const rr = pearson(pts);
     const st = strengthOf(rr, n);
     out.push({ title, n, strength: st, r: rr,
-      text: st === 'none' || rr == null ? `По вашим данным за ${weeksWord(n)} связи не видно.`
-        : `По вашим данным за ${weeksWord(n)}: ${effectText({ feature: f, result: r, r: rr })}.` });
+      text: st === 'none' || rr == null ? `По твоим данным за ${weeksWord(n)} связи не видно.`
+        : `По твоим данным за ${weeksWord(n)}: ${effectText({ feature: f, result: r, r: rr })}.` });
   }
   return out;
 }
@@ -265,7 +265,7 @@ function cheatVsGrade(ws) {
   const d = avg(w1) - avg(w0);
   return { title, n: pts.length, strength: Math.abs(d) >= 10 ? 'moderate' : Math.abs(d) >= 5 ? 'weak' : 'none',
     text: `Недели с читмилом: оценка в среднем ${num(avg(w1))}, без - ${num(avg(w0))} (${w1.length} и ${w0.length}). `
-      + (Math.abs(d) < 5 ? 'Один читмил неделю не портит.' : d < 0 ? 'Читмил тянет за собой всю неделю - может, делать его реже.' : 'Читмилы вам не мешают.') };
+      + (Math.abs(d) < 5 ? 'Один читмил неделю не портит.' : d < 0 ? 'Читмил тянет за собой всю неделю - может, делать его реже.' : 'Читмилы тебе не мешают.') };
 }
 
 // → [{ title, text, strength: strong|moderate|weak|none|few, n }], сначала самые заметные
@@ -273,11 +273,11 @@ export function insights(uid = store.uid()) {
   const ds = days(uid), ws = weeks(uid);
   const list = [sleepVsGrade(ds), sleepVsSleepy(ds), lateVsSleep(ds),
     substanceVsSleep(ds, 'coffeeLate', 'Кофе и чай после обеда и сон', 'с кофе или чаем после 14:00',
-      { bad: 'Похоже, дневной кофеин мешает вам спать - попробуйте последнюю чашку до 14:00.', ok: 'На сон это у вас заметно не влияет.' }),
+      { bad: 'Похоже, дневной кофеин мешает тебе спать - попробуй последнюю чашку до 14:00.', ok: 'На сон это у тебя заметно не влияет.' }),
     substanceVsSleep(ds, 'coffeeMany', 'Сколько кофе и сон', 'с 3 и более чашками кофе',
-      { bad: 'В дни с тремя и больше чашками кофе вы спите хуже - попробуйте остановиться на двух.', ok: 'Количество кофе на сон у вас заметно не влияет.' }),
+      { bad: 'В дни с тремя и больше чашками кофе ты спишь хуже - попробуй остановиться на двух.', ok: 'Количество кофе на сон у тебя заметно не влияет.' }),
     substanceVsSleep(ds, 'alcohol', 'Алкоголь и сон', 'с алкоголем',
-      { bad: 'Алкоголь съедает сон - даже если заснуть легче, восстанавливаетесь хуже.', ok: 'Заметной разницы по вашим данным нет.' }),
+      { bad: 'Алкоголь съедает сон - даже если заснуть легче, восстанавливаешься хуже.', ok: 'Заметной разницы по твоим данным нет.' }),
     ...suppVsSleep(ds, uid),
     ...weekly(ws), cheatVsGrade(ws)].filter(Boolean);
   const rank = { strong: 0, moderate: 1, weak: 2, none: 3, few: 4 };
@@ -300,15 +300,15 @@ export async function compare() {
 function serverBlock() {
   const r = store.getMeta('brain_insights', null);
   const btn = `<button class="btn quiet" data-act="an-compare" ${loading ? 'disabled' : ''}>${loading ? 'Считаю…' : r ? 'Обновить с сервера' : 'Точнее с сервером'}</button>`;
-  if (!r) return `<div class="actions an-actions">${btn}<span class="note">полгода истории и сравнение с людьми вашего типа</span></div>`;
+  if (!r) return `<div class="actions an-actions">${btn}<span class="note">полгода истории и сравнение с людьми твоего типа</span></div>`;
   const eff = (e, i) => `<li class="an-e an-${strengthOf(e.r, e.n)}"><span>${esc(effectText(e))}</span><span class="mono muted">r ${dec(e.r, 2)} · ${e.n} нед.</span></li>`;
   const own = (r.own?.effects || []).filter(e => strengthOf(e.r, e.n) !== 'none').slice(0, 4);
   const avgLine = g => ['sleep_h', 'steps', 'protein_gkg', 'workouts'].filter(k => g.avg?.[k] != null && r.own?.avg?.[k] != null)
-    .map(k => `${FEATURE_NAME[k]}: у вас ${k === 'steps' ? num(r.own.avg[k]) : dec(r.own.avg[k])}, в группе ${k === 'steps' ? num(g.avg[k]) : dec(g.avg[k])}`).join(' · ');
+    .map(k => `${FEATURE_NAME[k]}: у тебя ${k === 'steps' ? num(r.own.avg[k]) : dec(r.own.avg[k])}, в группе ${k === 'steps' ? num(g.avg[k]) : dec(g.avg[k])}`).join(' · ');
   return `<div class="an-server">
     <div class="smallcaps muted">С сервера · ${esc(new Date(r.at).toLocaleDateString('ru', { day: 'numeric', month: 'short' }))}</div>
-    ${r.own?.weeks ? `<p class="note">Ваша история: ${weeksWord(r.own.weeks)}.</p>` : ''}
-    ${own.length ? `<ul class="an-list">${own.map(eff).join('')}</ul>` : '<p class="note">Заметных связей в вашей истории пока нет.</p>'}
+    ${r.own?.weeks ? `<p class="note">Твоя история: ${weeksWord(r.own.weeks)}.</p>` : ''}
+    ${own.length ? `<ul class="an-list">${own.map(eff).join('')}</ul>` : '<p class="note">Заметных связей в твоей истории пока нет.</p>'}
     ${(r.groups || []).map(g => `<div class="an-group"><div class="an-gt"><b>${esc(g.label)}</b> <span class="mono muted">${g.users} чел. · ${g.weeks} нед.</span></div>
       ${avgLine(g) ? `<p class="note">${esc(avgLine(g))}</p>` : ''}
       <ul class="an-list">${g.effects.filter(e => strengthOf(e.r, e.n) !== 'none').slice(0, 4).map(eff).join('') || '<li class="note">Заметных связей нет.</li>'}</ul></div>`).join('')}
@@ -325,7 +325,7 @@ export function renderInsights(uid = store.uid()) {
   const card = x => `<li class="an-i an-${x.strength}"><div class="an-h"><b>${esc(x.title)}</b><span class="smallcaps muted">${STRENGTH_RU[x.strength]}</span></div><p>${esc(x.text)}</p></li>`;
   const fewCard = few.length ? `<li class="an-i an-few"><div class="an-h"><b>Пока мало данных</b><span class="smallcaps muted">${few.length}</span></div>
     <ul class="an-few-l">${few.map(x => `<li><b>${esc(x.title)}.</b> ${esc(x.text.replace(/^Мало данных:?\s*/, ''))}</li>`).join('')}</ul></li>` : '';
-  return `<div class="section an-block"><div class="section-title"><span class="smallcaps">Что на что влияет</span><span class="note">по вашим данным, без сети</span></div>
+  return `<div class="section an-block"><div class="section-title"><span class="smallcaps">Что на что влияет</span><span class="note">по твоим данным, без сети</span></div>
     ${shown.length || few.length ? `<ul class="an-list">${shown.map(card).join('')}${fewCard}</ul>`
       : '<p class="note">Пока нечего сравнивать - записывайте сон, еду и вес, и через пару недель здесь появятся выводы.</p>'}
     <p class="note">Это совпадения в ваших данных, а не доказанная причина: на результат влияет многое сразу.</p>

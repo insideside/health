@@ -37,9 +37,134 @@ export function unitCode(u) {
 
 // точка после количества или слова - конец продукта: «хлеб 25 гр. форель 50 г», «кофе. молоко» (но не «1 ст. л.»)
 const QTY_DOT_RE = /(\d\s*(?:г|гр|грамм\p{L}*|кг|мл|л|шт|штук\p{L}*)?|\p{L}{3,})\.\s+(?=[\p{L}\d])/giu;
+// продолжение предыдущего продукта после запятой: «2 куриных ножки, запечённых с оливками», «кофе, на молоке»
+const CONT_RE = /^(?:(?:с|со|в|во|на|под|без|из|по)\s|[а-яё]+(?:нн|енн|анн|ённ)[а-яё]{1,3}(?:\s|$))/iu;
+// границы между заведомо разными блюдами: «;», перенос строки, «+». Запятая внутри — слабая граница (см. split):
+// у составного блюда через запятую часто перечислены его части («рис с креветками, яйцом и луком»), а не отдельные блюда.
+export function splitStrong(text) {
+  // запятая внутри числа («молоко 1,5%») уже защищена этой заменой
+  return String(text || '').replace(QTY_DOT_RE, '$1, ').split(/[;\n+]/).map(p => (p || '').trim()).filter(Boolean);
+}
 export function split(text) {
-  // запятая внутри числа («молоко 1,5%») — не разделитель
-  return String(text || '').replace(QTY_DOT_RE, '$1, ').split(/(?<!\d),|,(?!\d)|[;\n+]|\s+и\s+(?=\d)/).map(p => (p || '').trim()).filter(Boolean);
+  return splitStrong(text).flatMap(splitWeak);
+}
+// один кусок «между ;/переносами строк» → отдельные продукты: по запятой и «и» перед числом
+export function splitWeak(text) {
+  const parts = String(text || '').split(/(?<!\d),|,(?!\d)|\s+и\s+(?=\d)/).map(p => (p || '').trim()).filter(Boolean);
+  const out = [];
+  for (const p of parts) {
+    // кусок без количества, который начинается с предлога или причастия, - уточнение предыдущего продукта
+    if (out.length && !QTY_RE.test(p) && !BARE_UNIT_RE.test(p) && CONT_RE.test(p)) out[out.length - 1] += ' ' + p;
+    else out.push(p);
+  }
+  return out.flatMap(splitTwo);
+}
+// два количества с единицами в одном куске: «творог 200 г со сметаной 20 г» → два продукта (как food.split_two)
+function splitTwo(p) {
+  const re = new RegExp(QTY_RE.source, 'giu');
+  const ms = [...p.matchAll(re)].filter(m => m.groups.u);
+  if (ms.length < 2) return [p];
+  const end0 = ms[0].index + ms[0][0].length, gap = p.slice(end0, ms[1].index);
+  const js = [...gap.matchAll(/\s(?:с|со|и|плюс)\s/giu)];
+  if (!js.length) return [p];
+  const j = js[js.length - 1];
+  return [p.slice(0, end0 + j.index).trim(), ...splitTwo(p.slice(end0 + j.index + j[0].length).trim())];
+}
+
+// ── явные КБЖУ/БЖУ в тексте: «курица 200г 250/30/5/10», «250/30/5/10 курица 200г», «кбжу: 250/30/5/10» (как food.py) ──
+// 4 числа — калории/белки/жиры/углеводы по порядку; 3 — белки/жиры/углеводы (калории считаем). Числа относятся
+// к продукту рядом (в том же куске или в соседнем, если написаны отдельной строкой), и это значения на 100 г
+// продукта (как в справочниках питания) — итог в БЖУ приёма пищи считаем на реально указанный вес; если продукта
+// ещё нет в справочнике — он запоминается там как есть (per100).
+const NUM = '\\d+(?:[.,]\\d+)?';
+// число, за которым сразу (без разделителя-цифры) не идёт единица веса - иначе это не значение КБЖУ, а вес
+// продукта: «…17.9, 170г» (запятая перед весом как ещё один разделитель списка) не должно принять «170» за
+// 4-е число КБЖУ. JS не умеет possessive-квантификаторы/атомарные группы (в отличие от re в Python) - тот же
+// эффект (число не может «сжаться» при бэктрекинге на пути к проверке единицы) даёт связка lookahead+backref:
+// число один раз жадно захватывается в именованную группу, затем сопоставляется с ней же буквально.
+let _macroTag = 0;
+function numStrict() {
+  const g = `mn${_macroTag++}`;
+  // \b в JS не видит кириллицу словом даже с флагом 'u' - граница берётся через (?!W), как везде в этом файле
+  return `(?=(?<${g}>${NUM}))\\k<${g}>(?!\\s*(?:кг|км|г|гр|грамм${W}*|мл|л|литр${W}*)(?!${W}))`;
+}
+const MACRO_LABEL_RE = /(?:^|\s)(?:кбжу|бжу)\s*:?(?=\s|$)/giu;
+// числа КБЖУ подряд: через / \ (пробелы вокруг не обязательны) или через запятую с пробелом после -
+// «191, 12.5, 11.83, 8.97»; запятая без пробела после («12,5») — десятичная, не разделитель, её не трогаем
+const SEP = '(?:\\s*[/\\\\]\\s*|,\\s+)';
+const MACRO_SLASH_RE = new RegExp(
+  `(?<![\\d.,/\\\\])(?<v1>${numStrict()})${SEP}(?<v2>${numStrict()})${SEP}(?<v3>${numStrict()})(?:${SEP}(?<v4>${numStrict()}))?`
+  + `(?!\\d|\\.)(?!${SEP}${numStrict()})`, 'gu');
+// кусок целиком — только числа через пробел (после разбиения по ;/переносам строк так остаётся, если КБЖУ
+// написаны отдельной строкой без названия рядом, «Курица\n250 30 5 10»)
+const MACRO_WHOLE_RE = new RegExp(
+  `^\\s*(?:кбжу|бжу)?\\s*:?\\s*(?<v1>${numStrict()})[\\s/\\\\]+(?<v2>${numStrict()})[\\s/\\\\]+(?<v3>${numStrict()})`
+  + `(?:[\\s/\\\\]+(?<v4>${numStrict()}))?\\s*$`, 'iu');
+const nums = m => [m.groups.v1, m.groups.v2, m.groups.v3, m.groups.v4].filter(Boolean).map(x => parseFloat(x.replace(',', '.')));
+function macroFrom(ns) {
+  let kcal, p, f, c;
+  if (ns.length === 4) [kcal, p, f, c] = ns; else { [p, f, c] = ns; kcal = 4 * p + 9 * f + 4 * c; }
+  return { kcal: Math.round(kcal), p: r1(p), f: r1(f), c: r1(c) };
+}
+// кусок текста (между ;/переносами строк) с одним или несколькими КБЖУ → [[кусок без этих чисел, КБЖУ], …],
+// по одной паре на каждое вхождение — так «курица кбжу А, В кбжу Б» не сливает два блюда в одно. Между двумя
+// вхождениями режем по первой запятой: то, что до неё, — хвост (обычно вес) текущего блюда, после — начало
+// следующего. Нет чисел вовсе — null (кусок обрабатывается как обычно, по справочнику) — как food.split_macro_segment.
+function splitMacroSegment(seg) {
+  const whole = MACRO_WHOLE_RE.exec(seg);
+  if (whole) return [['', macroFrom(nums(whole))]];
+  const re = new RegExp(MACRO_SLASH_RE.source, 'gu');
+  const ms = [...seg.matchAll(re)];
+  if (!ms.length) return null;
+  const out = [];
+  let prevEnd = 0;
+  ms.forEach((m, i) => {
+    const nextStart = i + 1 < ms.length ? ms[i + 1].index : seg.length;
+    const between = seg.slice(m.index + m[0].length, nextStart);
+    const cut = i + 1 < ms.length ? between.indexOf(',') : -1;
+    const tail = cut < 0 ? between : between.slice(0, cut);
+    const macro = macroFrom(nums(m));
+    const name = (seg.slice(prevEnd, m.index) + ' ' + tail).replace(MACRO_LABEL_RE, ' ').replace(/\s+/g, ' ').trim();
+    out.push([name, macro]);
+    prevEnd = m.index + m[0].length + tail.length + (cut >= 0 ? 1 : 0);
+  });
+  return out;
+}
+// куски → [[кусок без КБЖУ, КБЖУ | null], …], по одной паре на каждое найденное КБЖУ - один кусок может дать
+// и несколько пар (см. splitMacroSegment). КБЖУ без названия рядом (своя строка, цифры отдельно) приклеиваются
+// к соседней паре — сначала к предыдущей, иначе к следующей — как food.macro_annotate.
+export function macroAnnotate(chunks) {
+  const parsed = chunks.flatMap(c => splitMacroSegment(c) ?? [[c, null]]);
+  const out = parsed.map(([name, macro]) => [name, macro]);
+  parsed.forEach(([name, macro], i) => {
+    if (name || macro == null) return;
+    for (const j of [i - 1, i + 1]) {
+      if (j >= 0 && j < out.length && out[j][0] && out[j][1] == null) { out[j][1] = macro; break; }
+    }
+  });
+  return out.filter(([name]) => name);
+}
+
+// уточнения, которые мешают найти продукт: «(это в сухом виде)», «сорта богатырь», «марки …» (как food.prepare)
+const QUALIFIER_RE = new RegExp(`(?<!${W})(?:сорта|сорт|марки|фирмы|бренда|производства)\\s+[\\p{L}\\p{N}-]+`, 'giu');
+const WITHOUT_RE = new RegExp(`(?<!${W})без\\s+[\\p{L}\\p{N}-]+`, 'giu');
+// «… с оливками»: добавка к блюду без своего количества - отдельный продукт, если блюдо её не покрывает
+const WITH_RE = /\s(?:с|со|плюс)\s+(.+)$/iu;
+const SMALL_RE = new RegExp(`(?<!${W})(?:немного|немножко|чуть-чуть|чуть|щепотк${W}*|несколько листьев|пар[ау] листьев)(?!${W})`, 'giu');
+const STATE_HINT = [[/сух/i, 'сухой'], [/сыр(ой|ая|ое|ом)/i, 'сырой'], [/вар[её]н|отварн/i, 'варёный'], [/запеч/i, 'запечённый'], [/жарен/i, 'жареный'], [/готов/i, 'готовый']];
+export const SMALL_G = 20;          // «немного» без числа - горсть или 20 г
+export function prepare(chunk) {
+  let hint = null;
+  for (const m of String(chunk).matchAll(/\(([^)]*)\)/g)) {
+    for (const [re, w] of STATE_HINT) if (re.test(m[1])) { hint = w; break; }
+  }
+  let text = String(chunk).replace(/\([^)]*\)/g, ' ');
+  if (hint) text = text.replace(new RegExp(STATE_WORDS.source, 'giu'), ' ') + ' ' + hint;
+  text = text.replace(QUALIFIER_RE, ' ').replace(WITHOUT_RE, ' ');     // «без сахара» - не продукт
+  SMALL_RE.lastIndex = 0;
+  const small = SMALL_RE.test(text) && !QTY_RE.test(text);
+  if (small) text = text.replace(SMALL_RE, ' ');
+  return [text.replace(/\s+/g, ' ').trim(), small];
 }
 
 // → [название, количество | null, единица | null]
@@ -56,7 +181,7 @@ export function parseChunk(chunk) {
   return [norm(chunk.slice(0, m.index) + ' ' + chunk.slice(m.index + m[0].length)), n, unitCode(m.groups.u)];
 }
 
-const ENDINGS = ['ами', 'ями', 'ого', 'его', 'ому', 'ему', 'ыми', 'ими', 'ой', 'ей', 'ий', 'ый', 'ая', 'яя', 'ое', 'ее',
+const ENDINGS = ['ами', 'ями', 'ого', 'его', 'ому', 'ему', 'ыми', 'ими', 'ой', 'ей', 'ий', 'ый', 'ая', 'яя', 'ое', 'ее', 'ых', 'их', 'ые', 'ие', 'ым', 'им',
   'ую', 'юю', 'ом', 'ем', 'ам', 'ям', 'ах', 'ях', 'ов', 'ев', 'а', 'я', 'ы', 'и', 'у', 'ю', 'е', 'о', 'ь'].sort((a, b) => b.length - a.length);
 export function stem(name) {
   return norm(name).split(' ').filter(Boolean).map(w => {
@@ -65,6 +190,9 @@ export function stem(name) {
   }).join(' ');
 }
 const baseName = name => stem(norm(name).replace(new RegExp(STATE_WORDS.source, 'giu'), ' '));
+const STOP = new Set(['с', 'со', 'и', 'в', 'во', 'на', 'из', 'по', 'под', 'без', 'для', 'к', 'это', 'вид', 'виде', 'шт', 'г', 'гр', 'мл']);
+const bagOf = name => new Set(stem(name).split(' ').filter(w => w && !STOP.has(w) && !/^\d+$/.test(w)));
+const subset = (a, b) => [...a].every(x => b.has(x));
 
 // ── индекс справочника (перестраивается, когда меняется кэш foods.js) ──
 let idx = null, idxKey = '';
@@ -73,7 +201,7 @@ function index() {
   const key = `${cache?.ts || 0}:${cache?.items?.length || 0}:${pending.length}`;
   if (idx && key === idxKey) return idx;
   const list = [...(cache?.items || []), ...pending];
-  const keys = new Map(), stems = new Map(), bases = new Map(), byId = new Map();
+  const keys = new Map(), stems = new Map(), bases = new Map(), byId = new Map(), bags = [];
   for (const f of list) {
     byId.set(f.id, f);
     for (const k of [f.name, ...(f.aliases || [])]) {
@@ -81,12 +209,13 @@ function index() {
       if (!keys.has(nk)) keys.set(nk, f);
       const sk = stem(k);
       if (!stems.has(sk)) stems.set(sk, f);
+      if (f.source !== 'off') { const b = bagOf(k); if (b.size) bags.push([b, f]); }   // товары из магазина - только точно
     }
     const b = baseName(f.name);
     if (!bases.has(b)) bases.set(b, []);
     bases.get(b).push(f);
   }
-  idx = { keys, stems, bases, byId, size: list.length };
+  idx = { keys, stems, bases, byId, bags, size: list.length };
   idxKey = key;
   return idx;
 }
@@ -128,6 +257,42 @@ function preferUsed(f) {
   return best && cnt(best) > cnt(f) ? best : f;
 }
 
+// слова в любом порядке и падеже, лишние можно (как Index._bag_match на сервере): покрыто не меньше половины слов
+// запроса и нет равного соперника; иначе - одно лишнее слово в названии («салат из свежих овощей» → «… с маслом»)
+function bagMatch(name) {
+  const I = index(), q = bagOf(name);
+  if (!q.size) return null;
+  const cover = new Map();
+  for (const [b, f] of I.bags) if (subset(b, q)) { const c = cover.get(f.id) || { f, w: new Set() }; b.forEach(x => c.w.add(x)); cover.set(f.id, c); }
+  if (cover.size) {
+    const ranked = [...cover.values()].sort((a, b) => b.w.size - a.w.size || a.f.name.length - b.f.name.length);
+    const [best, second] = ranked, n = best.w.size;
+    const rival = second && second.w.size === n && baseName(second.f.name) !== baseName(best.f.name);
+    if (n * 2 >= q.size && !rival) return best.f;
+  }
+  if (q.size >= 2) {
+    const wider = new Map();
+    for (const [b, f] of I.bags) if (b.size - q.size === 1 && subset(q, b)) { const k = baseName(f.name); if (!wider.has(k)) wider.set(k, f); }
+    if (wider.size === 1) return [...wider.values()][0];
+  }
+  return null;
+}
+
+// совпало название или синоним целиком - тогда «с …» часть блюда («кофе с молоком»)
+function isExact(name) { const I = index(), n = norm(name); return I.keys.has(n) || I.stems.has(stem(n)); }
+function coveredBy(name, f) {
+  const q = bagOf(name), out = new Set();
+  for (const [b, g] of index().bags) if (g.id === f.id && subset(b, q)) b.forEach(x => out.add(x));
+  return out;
+}
+// хвост «с …», который найденный продукт не покрывает (как food.with_extra)
+export function withExtra(name, f) {
+  const m = WITH_RE.exec(norm(name));
+  if (!m || isExact(name)) return null;
+  const tail = m[1].trim(), tb = bagOf(tail);
+  return tb.size && !subset(tb, coveredBy(name, f)) ? tail : null;
+}
+
 // alias: искать и в синонимах из памяти («гречневая каша с маслом» → продукт); onlyAlias — только в них
 export function match(name, { raw = false, alias = true, onlyAlias = false } = {}) {
   const I = index();
@@ -138,7 +303,7 @@ export function match(name, { raw = false, alias = true, onlyAlias = false } = {
     const fid = brain.alias(stem(n));
     f = fid != null ? I.byId.get(fid) || null : null;
   }
-  if (!f && !onlyAlias) f = close(n, I.keys);
+  if (!f && !onlyAlias) f = bagMatch(n) || close(n, I.keys);
   if (f && !raw && !STATE_WORDS.test(n)) f = preferUsed(f);
   return f;
 }
@@ -183,20 +348,56 @@ export function phraseParts(chunk) {
 }
 
 // одна часть текста → позиции или null
-function parsePiece(chunk) {
+// вес, к которому относятся явные КБЖУ: указанный рядом (граммы/мл, штуки по порции продукта), иначе — число
+// без единицы, похожее на граммы, или порция продукта по умолчанию, иначе 100 г (как food._macro_grams)
+function macroGrams(n, unit, food) {
+  if (unit === 'g' || unit === 'ml') return n;
+  if (unit === 'kg' || unit === 'l') return n * 1000;
+  if (unit && food) { const g = gramsFor(food, n, unit); if (g) return g; }
+  if (n != null && unit == null && n > 20) return n;
+  if (food) { const g = gramsFor(food, null, null); if (g) return g; }
+  return 100;
+}
+// позиция по явным КБЖУ, не по справочнику: числа - значения на 100 г продукта, итог считаем на реально
+// указанный вес. Продукта ещё нет в справочнике - запоминаем его там как есть (per100) в фоне (не мешает
+// записи, если не получится сразу — ничего страшного).
+function macroItem(chunk, name, grams, macro) {
+  const t = name.replace(/\s+/g, ' ').trim();
+  const title = t ? t[0].toUpperCase() + t.slice(1) : 'Без названия';
+  // «уже есть в справочнике» — как на сервере (idx.match: с учётом синонимов), не только точное имя:
+  // «курица» не задваивает «Курицу варёную», у которой это уже алиас
+  if (!match(title, { alias: false })) {
+    foods.save({ name: title, kcal: macro.kcal, p: macro.p, f: macro.f, c: macro.c, source: 'manual' }, { force: true }).catch(() => {});
+  }
+  const k = grams / 100;
+  return { text: chunk, name: title, grams: Math.round(grams), kcal: Math.round(macro.kcal * k), p: r1(macro.p * k), f: r1(macro.f * k), c: r1(macro.c * k), source: 'manual' };
+}
+
+function parsePiece(chunk, macro) {
   const I = index();
-  const [name, n, unit] = parseChunk(chunk);
+  const [clean, small] = prepare(chunk);
+  const [name, n, unit] = parseChunk(clean);
+  if (macro) return [macroItem(chunk, name, macroGrams(n, unit, match(name, { alias: false })), macro)];
   const byFood = (f, source) => {
-    const g = f ? gramsFor(f, n, unit) : null;
+    const g = f ? (small ? f.portions?.['горсть'] || SMALL_G : gramsFor(f, n, unit)) : null;
     if (!g) return null;
     const it = itemFrom(f, g, chunk, source);
     const pu = unit && !(unit in MASS) ? unit : n != null && unit == null && n <= 20 ? 'шт' : null;
     if (pu) Object.assign(it, { pu, pn: n || 1 });
     return [it];
   };
-  // 1) справочник (как quick_parse на сервере)
-  const hit = byFood(match(name, { alias: false }), 'db');
-  if (hit) return hit;
+  // 1) справочник (как quick_parse на сервере); ничего не теряем: «ножки … с оливками» - оливки отдельной строкой
+  const f0 = match(name, { alias: false });
+  const hit = byFood(f0, 'db');
+  if (hit) {
+    const extra = withExtra(name, f0);
+    if (extra) {
+      const f2 = match(extra, { alias: false });
+      if (!f2) return { items: hit, rest: extra };
+      hit.push(itemFrom(f2, f2.portions?.['горсть'] || SMALL_G, extra, 'db'));
+    }
+    return hit;
+  }
   // 2) память: фраза целиком, которую уже разбирала ИИ («кружка какао с зефирками»), — с её граммами
   const pp = phraseParts(chunk);
   const ph = pp && pp.n ? brain.phrase(pp.key) : null;
@@ -211,9 +412,19 @@ function parsePiece(chunk) {
 // Разбор текста → { items, rest }: rest — куски, которые без ИИ не понять
 export function parse(text) {
   const items = [], rest = [];
-  for (const chunk of split(text)) {
-    const got = ready() ? parsePiece(chunk) : null;
-    if (got) items.push(...got); else rest.push(chunk);
+  // явные КБЖУ относятся к целому куску «между ;/переносами строк» - составное блюдо с перечислением через
+  // запятую в названии («рис с креветками, яйцом и луком») не разваливается; запятая делит на блюда, только
+  // когда КБЖУ рядом нет (splitWeak) - см. food.quick_parse
+  for (const [seg, macro] of macroAnnotate(splitStrong(text))) {
+    if (macro) {
+      const got = ready() ? parsePiece(seg, macro) : null;
+      if (got) items.push(...got); else rest.push(seg);
+      continue;
+    }
+    for (const chunk of splitWeak(seg)) {
+      const got = ready() ? parsePiece(chunk) : null;
+      if (got?.rest) { items.push(...got.items); rest.push(got.rest); } else if (got) items.push(...got); else rest.push(chunk);
+    }
   }
   return { items, rest };
 }
