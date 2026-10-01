@@ -8,6 +8,7 @@ data/
 CLAUDE.md
 docs/SPEC-v2.md
 docs/SPEC-v3.md
+docs/SERVER-REQUIREMENTS.md
 # сертификаты, база, резервные копии - в data/ (выше); на всякий случай
 *.pem
 *.db
