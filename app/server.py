@@ -635,6 +635,10 @@ NO_CACHE = {"Cache-Control": "no-cache"}
 @app.get("/sw.js")
 def sw():
     code = (STATIC / "sw.js").read_text("utf-8").replace("BUILD_HASH", build_hash())
+    # все модули и стили оболочки - в офлайн-кэш при установке воркера (иконки и манифест воркер не трогает)
+    files = sorted("/" + p.relative_to(STATIC).as_posix() for p in STATIC.rglob("*")
+                   if p.is_file() and p.suffix in (".js", ".css") and p.name != "sw.js")
+    code = code.replace("/*STATIC_FILES*/[]", json.dumps(files))
     return Response(code, media_type="application/javascript", headers=NO_CACHE)
 
 

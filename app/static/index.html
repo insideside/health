@@ -33,5 +33,15 @@
 <div class="toast" id="toast"></div>
 <div class="modal-backdrop" id="modal" hidden></div>
 <script type="module" src="/app.js"></script>
+<script>
+// приложение не запустилось (нет файла в офлайн-кэше, сбой загрузки модуля) - не висим на «Загрузка…» молча
+setTimeout(function () {
+  if (!document.querySelector('#app .boot')) return;
+  document.getElementById('app').innerHTML = '<div class="boot note" style="max-width:420px;margin:15vh auto 0;padding:0 20px;text-align:center">' +
+    '<p>Приложение не загрузилось.</p><p>' + (navigator.onLine ? 'Попробуйте обновить страницу.' :
+    'Нет связи с сервером, а в памяти телефона не хватает части приложения. Подключитесь к домашней сети и откройте его один раз - дальше оно будет работать и без сети.') +
+    '</p><p><button class="btn" onclick="location.reload()">Обновить</button></p></div>';
+}, 12000);
+</script>
 </body>
 </html>
