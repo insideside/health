@@ -304,6 +304,23 @@ def snooze_min(d: dict) -> int | None:
     return s if 0 < s <= 240 else None
 
 
+def naps_of(d: dict | None) -> list[dict]:
+    """Дневной сон дня: [{from, to, min}] (записи sleep.naps; от и до - в один день)."""
+    def mins(t):
+        m = re.fullmatch(r"(\d{1,2}):(\d{2})", str(t or ""))
+        return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+    out = []
+    for n in (d or {}).get("naps") or []:
+        a, b = mins(n.get("from")), mins(n.get("to"))
+        if a is not None and b is not None and 0 < b - a <= 300:
+            out.append({"from": n["from"], "to": n["to"], "min": b - a})
+    return out
+
+
+def nap_min_of(d: dict | None) -> int:
+    return sum(n["min"] for n in naps_of(d))
+
+
 def sleep_hours_of(d: dict) -> float | None:
     """Часы сна. Дрёма после первого будильника (рваный лёгкий сон) засчитывается наполовину - как на устройстве."""
     h = d.get("hours") or _hours(d.get("bed"), d.get("wake"))
@@ -413,6 +430,51 @@ def allowed_exercises(place: str, equipment: list[str], excluded: set[str] | Non
             continue
         out.append(e)
     return out
+
+
+MYEX_PATTERN = {"cardio": "cardio", "mobility": "mobility", "warmup": "mobility", "core": "core_anti", "strength": "isolation"}
+
+
+def own_exercises(uid: str, place: str | None = None) -> list[dict]:
+    """Свои упражнения человека (записи myex, static/myex.js) в формате каталога; place - только для этого места."""
+    out = []
+    for r in db.list_kind(uid, "myex"):
+        d = r["data"] or {}
+        if not d.get("ex_id") or not d.get("name"):
+            continue
+        pl = d.get("place") or ["home"]
+        if place and place not in pl:
+            continue
+        cat = d.get("category") or "strength"
+        out.append({"id": d["ex_id"], "name": d["name"], "category": cat, "region": "full",
+                    "pattern": MYEX_PATTERN.get(cat, "isolation"), "level": 1, "place": pl,
+                    "unit": d.get("unit") or "reps", "equipment": d.get("equipment") or [], "own": True,
+                    "how": d.get("how") or "", "tags": [cat], "zones": d.get("zones") or []})
+    return out
+
+
+def exercise_names(uid: str) -> dict[str, str]:
+    """id → название: каталог и свои упражнения человека."""
+    return {**{e["id"]: e["name"] for e in db.exercises()}, **{e["id"]: e["name"] for e in own_exercises(uid)}}
+
+
+def swaps_text(uid: str, prof: dict | None = None, place: str | None = None) -> str:
+    """Ручные замены упражнений (profile.exercise_prefs.swaps) строкой для ИИ: «X → Y (в зале, 3 раза, всегда)»."""
+    prof = prof if prof is not None else userdata.profile(uid)
+    sw = ((prof.get("exercise_prefs") or {}).get("swaps")) or {}
+    names = exercise_names(uid)
+    where = {"gym": "в зале", "home": "дома", "morning": "в разминке"}
+    rows = []
+    for frm, v in sorted(sw.items(), key=lambda kv: -((kv[1] or {}).get("at") or 0)):
+        if not v or not v.get("to") or (place and v.get("place") not in (None, place)):
+            continue
+        bits = [where.get(v.get("place"), v.get("place") or "")]
+        if (v.get("n") or 1) > 1:
+            bits.append(f"{v['n']} раза")
+        if v.get("always"):
+            bits.append("просит ставить так всегда")
+        rows.append(f"{names.get(frm, frm)} → {names.get(v['to'], v['to'])} ({', '.join(b for b in bits if b)})")
+    return "; ".join(rows[:12])
 
 
 def _reps_minutes(reps: str) -> float | None:
@@ -592,7 +654,15 @@ async def job_program(uid: str, inp: dict) -> dict:
                 if (v or {}).get("scope", "all") in ("all", "gym" if place == "gym" else "home")}
     liked_ex = [i for i in ex_prefs.get("like") or [] if i not in skip_ids]
     gym_missing = set(((prof.get("gym_equipment") or {}).get("missing")) or [])
-    catalog = allowed_exercises(place, equipment, excluded, missing=gym_missing if place == "gym" else None, skip_ids=skip_ids)
+    # ручные замены «всегда так» этого места: прежнее упражнение не предлагаем, выбранное - как любимое
+    swaps = {k: v for k, v in (ex_prefs.get("swaps") or {}).items()
+             if (v or {}).get("always") and v.get("to") and (v.get("place") in (None, place))}
+    own = [e for e in own_exercises(uid, place) if e["id"] not in skip_ids]
+    own_ids = {e["id"] for e in own}
+    known = {e["id"] for e in db.exercises()} | own_ids
+    skip_ids = skip_ids | {k for k, v in swaps.items() if v["to"] in known}
+    liked_ex = [i for i in liked_ex if i not in skip_ids] + [v["to"] for v in swaps.values() if v["to"] in known]
+    catalog = allowed_exercises(place, equipment, excluded, missing=gym_missing if place == "gym" else None, skip_ids=skip_ids) + own
     if not db.exercises():
         raise AIError("Каталог упражнений пуст - нет app/seed/exercises.json")
     if len(catalog) < 8:
@@ -650,6 +720,12 @@ async def job_program(uid: str, inp: dict) -> dict:
         prefs_text += "\nЛюбимые упражнения клиента (ставь их чаще, если подходят дню): " + ", ".join(liked_names[:12]) + "."
     if skip_ids:
         prefs_text += f"\nКлиент попросил не предлагать {len(skip_ids)} упражн. - их уже нет в каталоге, не придумывай замену вне каталога."
+    if own:
+        prefs_text += ("\nСвои упражнения клиента (он добавил их сам - они в каталоге, ставь по смыслу дня): "
+                       + ", ".join(f"{e['name']}{' (' + e['how'] + ')' if e.get('how') else ''}" for e in own[:12]) + ".")
+    sw_text = swaps_text(uid, prof, place)
+    if sw_text:
+        prefs_text += "\nКлиент сам менял упражнения (было → стало): " + sw_text + ". Учитывай его выбор."
     if place == "gym" and gym_missing:
         prefs_text += "\nВ зале клиента НЕТ: " + ", ".join(EQUIP_LABEL.get(x, x) for x in sorted(gym_missing)) + " (упражнения с этим уже убраны)."
     system = system_for(uid, "Ты опытный тренер по силовой и функциональной подготовке. Составляешь безопасную, "
@@ -797,6 +873,7 @@ def week_stats(uid: str, end: date) -> dict:
     a, b = start.isoformat(), end.isoformat()
     dsum = {r["date"]: r["data"] for r in db.list_kind(uid, "dsum", a, b)}
     workouts = db.list_kind(uid, "workout", a, b)
+    names = exercise_names(uid)
     bodies = [r for r in db.list_kind(uid, "body", None, b) if r["data"].get("weight")]
     target = (userdata.latest_target(uid) or {}).get("data", {})
     sleeps = {r["date"]: r["data"] for r in db.list_kind(uid, "sleep", a, b)}
@@ -841,6 +918,7 @@ def week_stats(uid: str, end: date) -> dict:
             "sleep_h": sleep_hours_of(sl) if sl else None,
             "snooze_min": snooze_min(sl) if sl else None,
             "alarms": sl.get("alarms") if sl else None,
+            "nap_min": nap_min_of(sl) or None,
             "state": ", ".join(filter(None, (WELLBEING_LABEL.get((states.get(d) or {}).get("wellbeing")),
                                              SORENESS_LABEL.get((states.get(d) or {}).get("soreness")),
                                              STRESS_LABEL.get((states.get(d) or {}).get("stress")),
@@ -879,12 +957,17 @@ def week_stats(uid: str, end: date) -> dict:
         "avg_pct": round(sum(x["pct"] or 0 for x in days) / 7),
         "workouts_planned": len(workouts), "workouts_done": sum(1 for w in workouts if w["data"].get("done")),
         "workouts_light": sum(1 for w in workouts if w["data"].get("variant") in ("light", "recovery")),
+        # замены упражнений руками за неделю (было → стало): тренер видит, что клиенту не подошло
+        "exercise_swaps": [f"{names.get(x['swapped_from'], x['swapped_from'])} → {names.get(x.get('id'), x.get('name') or x.get('id'))}"
+                           for w in workouts for x in w["data"].get("exercises") or [] if x.get("swapped_from")][:10],
         "target": {k: target.get(k) for k in ("kcal", "p", "f", "c", "water_glasses", "steps", "sleep_hours")},
         "food_days_logged": len(food_days),
         "food_avg": {k: round(sum(f[k] for f in food_days) / len(food_days)) for k in ("kcal", "p", "f", "c")} if food_days else None,
         "food_avg_score": round(sum(f["score"] for f in food_days) / len(food_days)) if food_days else None,
         "sleep": {"nights": len(sl_hours), "avg_hours": round(sum(sl_hours) / len(sl_hours), 1) if sl_hours else None,
                   "short_nights": sum(1 for h in sl_hours if h < 7),
+                  "nap_days": sum(1 for x in days if x.get("nap_min")),
+                  "nap_avg_min": round(sum(x["nap_min"] for x in days if x.get("nap_min")) / max(1, sum(1 for x in days if x.get("nap_min")))) or None,
                   "avg_score": round(sum(sl_scores) / len(sl_scores)) if sl_scores else None},
         "state": state_dist,
         "activities_min": act_min, "massages": massages,
@@ -933,7 +1016,7 @@ async def job_weekly(uid: str, inp: dict) -> dict:
                              "не ругай. Не знаешь - не выдумывай: null значит «не записано».")
     user = (f"Цели: {goals_text(goal)}.\nОценка недели (посчитана кодом): {st['grade']}.\n"
             f"Статистика недели (pct - % чек-листа; food - съедено и оценка 0–100; sleep_h - часы сна (дрёма после будильника засчитана наполовину), snooze_min - минуты дрёмы между первым будильником и подъёмом, alarms - сколько было будильников; state - самочувствие; "
-            f"water - стаканы; cups - чашки кофе/чая, after_14 - из них после 14:00, last - время последней; supplements - принятые добавки со временем, supplements_plan - план и сколько приёмов за неделю; steps - шаги; activities_min - минуты по видам; measures_delta - изменение замеров, см):\n"
+            f"water - стаканы; cups - чашки кофе/чая, after_14 - из них после 14:00, last - время последней; supplements - принятые добавки со временем, supplements_plan - план и сколько приёмов за неделю; steps - шаги; activities_min - минуты по видам; exercise_swaps - упражнения, которые клиент сам заменил в тренировках (было → стало, отметь, если видишь закономерность); measures_delta - изменение замеров, см):\n"
             f"{json.dumps(st, ensure_ascii=False)}\n\n"
             "title - заголовок в 3–6 слов; text - разбор 5–8 предложений: питание (БЖУ к норме), сон, активность, "
             "самочувствие, вода и шаги - только то, по чему есть данные; next - 3 конкретные задачи на следующую неделю; "

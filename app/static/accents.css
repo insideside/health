@@ -17,6 +17,10 @@
   --goal:  #b590ff;   /* цели, уровни, опыт — фиалка */
   --prot:  #7ab4ff;   /* белки — синий */
   --carb:  #6fdcb4;   /* углеводы — мята */
+  --m-breakfast: #f5cf52;  /* приёмы пищи: завтрак — утреннее солнце, обед — оранжевый, ужин — вечерний синий, перекус — салат */
+  --m-lunch: #ff8a55;
+  --m-dinner: #5a9bff;
+  --m-snack: #a8d25e;
   --good:  #86d46a;   /* оценки */
   --okay:  #e8c547;
   --bad:   #ff6b6b;
@@ -33,6 +37,10 @@
   --goal:  #6f45c8;
   --prot:  #2c63bd;
   --carb:  #177252;
+  --m-breakfast: #7a5a00;
+  --m-lunch: #b0450f;
+  --m-dinner: #1f55b5;
+  --m-snack: #4d6d10;
   --good:  #35731d;
   --okay:  #7a5d00;
   --bad:   #bb2d2d;
@@ -73,6 +81,11 @@
 [data-dom="prot"]  { --dom: var(--prot); }
 [data-dom="fat"]   { --dom: var(--fat); }
 [data-dom="carb"]  { --dom: var(--carb); }
+/* приём пищи уточняет цвет «питания»: точка у заголовка, кромка записи и слота рациона — своим цветом */
+[data-meal="breakfast"] { --dom: var(--m-breakfast); }
+[data-meal="lunch"]     { --dom: var(--m-lunch); }
+[data-meal="dinner"]    { --dom: var(--m-dinner); }
+[data-meal="snack"]     { --dom: var(--m-snack); }
 [data-dom] { --dom-soft: color-mix(in srgb, var(--dom) var(--soft-k), transparent); --dom-ink: color-mix(in srgb, var(--dom) 72%, var(--ink-2)); }
 
 /* ───────── заголовки разделов: цветная точка перед капителью ───────── */
@@ -141,6 +154,7 @@
 }
 .glasses i { border-color: color-mix(in srgb, var(--water) 35%, var(--rule-2)); }
 .glasses i.on { background: var(--water); border-color: transparent; }
+.glasses i.half { background: linear-gradient(to top, var(--water) 50%, transparent 50%); }
 /* «открыть →» у разминки — кнопка: без серой подложки браузера */
 button.go { background: none; border: 0; padding-inline: 0; cursor: pointer; }
 /* «+ моё» у упражнения разминки — справа в строке, а не в узкой колонке галочки */
@@ -244,3 +258,6 @@ button.go { background: none; border: 0; padding-inline: 0; cursor: pointer; }
 
 /* пульс тренировки из «Здоровья» */
 .a-hr { color: var(--bad); white-space: normal; }
+/* «Вместе»: точка у категории не отрывается от длинного слова на узком экране - текст переносится рядом с ней */
+.t-row[data-dom] > .t-cat { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.t-row[data-dom] > .t-cat::before { flex: none; margin-right: 0; align-self: center; }

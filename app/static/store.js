@@ -194,6 +194,8 @@ async function save(rec) {
   emit();
   clearTimeout(syncTimer);
   syncTimer = setTimeout(sync, 800);
+  // настройки профиля меняют производное (общие комплексы, чашки, привычки) - пересчитать, не дожидаясь цикла
+  if (rec.kind === 'profile') window.dispatchEvent(new Event('trainer:poll'));
 }
 
 export function pendingCount() { let n = 0; for (const e of outbox.values()) if (!e.held) n++; return n; }
@@ -225,6 +227,20 @@ function special(kind, id, b, l, s) {
     }
     if (type === 'number' && typeof lv === 'number' && typeof sv === 'number') return { ...s, ...l, v: Math.max(lv, sv) };
     if (type === 'bool' || typeof lv === 'boolean') return { ...s, ...l, v: !!(lv || sv) };
+  }
+  // Комплекс (разминка и др.) собирается сам - в полночь его могут собрать оба устройства, не видя друг друга.
+  // Список упражнений - не ввод человека, ввод - только отметки: собранный, но не начатый вариант уступает
+  // начатому (а если не начат ни один - серверному, его уже видят другие устройства и партнёр).
+  if (kind === 'routine' && isObj(l) && isObj(s)) {
+    const exs = d => (Array.isArray(d.exercises) ? d.exercises : []);
+    const marks = d => exs(d).filter(x => x && x.done).length + (d.done ? 1 : 0);
+    const ids = d => exs(d).map(x => x && x.id).join('|');
+    if (ids(l) === ids(s)) {
+      const exercises = exs(s).map((x, i) => ({ ...x, ...exs(l)[i], done: !!(x.done || exs(l)[i].done) }));
+      return { ...s, ...l, exercises, done: !!(l.done || s.done) || (exercises.length > 0 && exercises.every(x => x.done)) };
+    }
+    if (!marks(l)) return s;
+    if (!marks(s)) return l;
   }
   return undefined;
 }
@@ -283,9 +299,33 @@ function resolveMarkers(v, conf, pick) {
   return v;
 }
 
+// Служебное не спрашиваем - берём более свежую правку: записи, которые приложение пересчитывает само (итоги дня и
+// недели, общий комплекс, вехи ленты, достижения, сообщения), и служебные поля любой записи (версии, отметки времени,
+// связи, посчитанные итоги). Спрашиваем только о том, что человек ввёл сам.
+const SERVICE_KINDS = new Set(['dsum', 'wsum', 'pairwarm', 'highlight', 'ach', 'chat', 'coach']);
+const TECH_KEYS = new Set(['v', 'created', 'updated', 'entered_at', 'done_at', 'finished_at', 'at', 'rev', 'seed', 'seed_n', 'rounds',
+  'pair_v', 'pair_with', 'pair_note', 'edited', 'calc', 'calc_pending', 'calc_error', 'status', 'partial', 'unresolved', 'totals',
+  'food_id', 'supp_id', 'drink_id', 'food_checked', 'via', 'source', 'swapped_from', 'original', 'resolved_at']);
+function neutralizeTech(l, s, localNewer) {
+  if (!isObj(l) || !isObj(s)) return;
+  for (const k of Object.keys(l)) {
+    if (!(k in s)) continue;
+    if (TECH_KEYS.has(k)) { if (!eq(l[k], s[k])) { const v = clone(localNewer ? l[k] : s[k]); l[k] = v; s[k] = clone(v); } }
+    else if (isObj(l[k]) && isObj(s[k])) neutralizeTech(l[k], s[k], localNewer);
+    else if (Array.isArray(l[k]) && Array.isArray(s[k])) l[k].forEach((x, i) => neutralizeTech(x, s[k][i], localNewer));
+  }
+}
 function mergeRecord(entry, server) {
-  const l = entry.rec, conf = [];
-  if (l.deleted !== !!server.deleted) {
+  const localNewer = (entry.rec.updated_at || 0) >= (server.updated_at || 0);
+  if (SERVICE_KINDS.has(entry.rec.kind)) {
+    // служебная запись: целиком более свежая версия (удаление - тоже по свежести)
+    const src = localNewer ? entry.rec : server;
+    return { data: clone(src.data), deleted: !!src.deleted, conflicts: [] };
+  }
+  const l = { ...entry.rec, data: clone(entry.rec.data) }, srv = { ...server, data: clone(server.data) }, conf = [];
+  neutralizeTech(l.data, srv.data, localNewer);
+  server = srv;
+  if (!!l.deleted !== !!server.deleted) {
     const other = l.deleted ? server : l;
     const baseData = entry.base;
     // удалили с одной стороны, а с другой не трогали — удаление побеждает; правили — спросим
@@ -590,7 +630,27 @@ function opOf(e) {
   return op;
 }
 
+// Отложенные раньше споры перепроверяем: служебные записи и поля теперь решаются сами (свежее побеждает).
+async function settleHeld() {
+  const held = [...outbox.values()].filter(e => e.held && e.conflict);
+  if (!held.length) return;
+  const t = tx(['records', 'outbox'], 'readwrite');
+  const put = [];
+  for (const e of held) {
+    const server = e.conflict.server;
+    const m = mergeRecord(e, server);
+    if (m.conflicts.length) continue;
+    const rec = { ...e.rec, data: m.data, deleted: m.deleted, updated_at: Date.now() };
+    const ne = { id: e.id, rec, base_rev: server.rev, base: clone(server.data), base_deleted: !!server.deleted, held: false };
+    outbox.set(e.id, ne); mem.set(e.id, rec); put.push(ne);
+    t.objectStore('outbox').put(ne); t.objectStore('records').put(rec);
+  }
+  await done(t);
+  if (put.length) broadcast({ t: 'outbox', put, del: [] });
+}
+
 async function syncOnce() {
+  await settleHeld();
   let rounds = 0, more = true;
   while (more && rounds++ < 20) {
     const entries = [...outbox.values()].filter(e => !e.held);
@@ -622,11 +682,16 @@ async function syncOnce() {
 
     // конфликты: сливаем сами, спорное — откладываем до решения пользователя
     let again = false;
+    const fresh = [];
     for (const { id, server } of res.conflicts || []) {
       const e = outbox.get(id);
       if (!e) continue;
       const m = mergeRecord(e, server);
-      if (!m.conflicts.length) {
+      if (!m.conflicts.length && eq(m.data, server.data) && !!m.deleted === !!server.deleted) {
+        // итог совпал с сервером - отправлять нечего, просто принимаем серверную версию
+        outbox.delete(id); t.objectStore('outbox').delete(id); bDel.push(id);
+        mem.set(id, server); t.objectStore('records').put(server); bRecs.push(server); fresh.push(server);
+      } else if (!m.conflicts.length) {
         const rec = { ...e.rec, data: m.data, deleted: m.deleted, updated_at: Date.now() };
         const ne = { id, rec, base_rev: server.rev, base: clone(server.data), base_deleted: !!server.deleted, held: false };
         outbox.set(id, ne); mem.set(id, rec);
@@ -640,10 +705,19 @@ async function syncOnce() {
 
     for (const r of res.changes || []) {
       if (outbox.has(r.id)) continue;           // своя неотправленная правка важнее — её сольёт следующий обмен
+      const prev = mem.get(r.id);
+      // эхо своей же отправленной правки (та же версия уже на устройстве) - не новость
+      if (!prev || prev.updated_at !== r.updated_at || !!prev.deleted !== !!r.deleted) fresh.push(r);
       mem.set(r.id, r); t.objectStore('records').put(r); bRecs.push(r);
     }
     await done(t);
     if (bRecs.length) broadcast({ t: 'recs', recs: bRecs });
+    // пришло новое с сервера (с другого устройства, от партнёра): пусть экраны сразу пересчитают своё
+    // (общие комплексы, досчёт еды, сообщения тренера…), а не ждут фонового цикла
+    if (fresh.length) window.dispatchEvent(new CustomEvent('trainer:remote', { detail: {
+      kinds: [...new Set(fresh.map(r => r.kind))],
+      // свои записи, изменённые не здесь (другое устройство, отметка тренера из чата): за эти даты пересчитать итог дня
+      dates: [...new Set(fresh.filter(r => r.user_id === uid() && r.date).map(r => r.date))] } }));
     if (bPut.length || bDel.length) broadcast({ t: 'outbox', put: bPut, del: bDel });
     await setMeta('cursor', res.cursor);
     more = res.more || again;

@@ -26,7 +26,8 @@ function reportData(dates, uid = store.uid()) {
   const nutrition = dates.map(d => { const f = C.foodDay(d, uid); return f ? { date: d, kcal: f.kcal, p: f.p, f: f.f, c: f.c } : null; }).filter(Boolean);
   const sleepRows = dates.map(d => {
     const rec = C.sleep(d, uid), info = rec && C.sleepInfo(rec, uid);
-    return info && !info.nap ? { date: d, hours: info.hours, label: info.label } : null;
+    const nap = C.napMinutes?.(d, uid) || 0;
+    return (info && !info.nap) || nap ? { date: d, hours: info && !info.nap ? info.hours : null, label: info && !info.nap ? info.label : '', nap } : null;
   }).filter(Boolean);
   const activities = dates.flatMap(d => store.byDate('activity', d, uid).map(r => ({ date: d, type: r.data.type, minutes: r.data.minutes, intensity: r.data.intensity })));
   return { nutrition, sleepRows, activities };
@@ -50,9 +51,9 @@ function reportBody(f) {
       ${nutrition.length > 1 ? `<tr class="report-avg"><td>В среднем</td><td>${num(avg(nutrition.map(r => r.kcal)))}</td><td>${dec(avg(nutrition.map(r => r.p)))}</td><td>${dec(avg(nutrition.map(r => r.f)))}</td><td>${dec(avg(nutrition.map(r => r.c)))}</td></tr>` : ''}</tbody></table>`
       : '<p class="note">Питание за этот период не записано.</p>'}
     <h2>Сон</h2>
-    ${sleepRows.length ? `<table class="report-tbl"><thead><tr><th>Ночь</th><th>Часы</th><th>Оценка</th></tr></thead>
-      <tbody>${sleepRows.map(r => `<tr><td>${dayName(r.date)}</td><td>${dec(r.hours)}</td><td>${esc(r.label)}</td></tr>`).join('')}
-      ${sleepRows.length > 1 ? `<tr class="report-avg"><td>В среднем</td><td>${dec(avg(sleepRows.map(r => r.hours)))}</td><td></td></tr>` : ''}</tbody></table>`
+    ${sleepRows.length ? `<table class="report-tbl"><thead><tr><th>Ночь</th><th>Часы</th><th>Оценка</th><th>Днём, мин</th></tr></thead>
+      <tbody>${sleepRows.map(r => `<tr><td>${dayName(r.date)}</td><td>${r.hours != null ? dec(r.hours) : '-'}</td><td>${esc(r.label)}</td><td>${r.nap || '-'}</td></tr>`).join('')}
+      ${sleepRows.length > 1 ? `<tr class="report-avg"><td>В среднем</td><td>${sleepRows.some(r => r.hours != null) ? dec(avg(sleepRows.filter(r => r.hours != null).map(r => r.hours))) : '-'}</td><td></td><td>${sleepRows.some(r => r.nap) ? Math.round(avg(sleepRows.filter(r => r.nap).map(r => r.nap))) : '-'}</td></tr>` : ''}</tbody></table>`
       : '<p class="note">Сон за этот период не записан.</p>'}
     <h2>Активности</h2>
     ${activities.length ? `<table class="report-tbl"><thead><tr><th>День</th><th>Что</th><th>Минут</th><th>Интенсивность</th></tr></thead>

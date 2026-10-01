@@ -70,7 +70,7 @@ PUBLIC_KINDS = ("dsum", "ach", "wsum", "pairwarm", "highlight")
 # сам включил. Оценки питания/самочувствия (wsum.parts) и всё, что появится в сводках потом, - только себе.
 PUBLIC_FIELDS = {
     "dsum": {"pct", "done", "total", "xp", "workout", "grade", "score", "min", "cheer",
-             "compete", "share", "duel", "steps", "activity_min", "sleep_h"},
+             "compete", "share", "duel", "thanks", "cheers", "steps", "activity_min", "sleep_h"},
     "wsum": {"score", "grade", "emoji", "xp", "compete", "share", "duel", "steps_total", "activity_min",
              "workouts_done", "sleep_avg", "sleep_n", "streak"},
 }
@@ -264,11 +264,11 @@ def put(c: sqlite3.Connection, rec: dict, force: bool = False) -> dict | None:
     return {**rec, "rev": rev}
 
 
-def server_put(user_id: str, kind: str, id_: str, data: dict, date: str | None = None) -> dict:
-    """Запись, созданная сервером (результат ИИ, начальные данные): всегда новее."""
+def server_put(user_id: str, kind: str, id_: str, data: dict, date: str | None = None, deleted: bool = False) -> dict:
+    """Запись, созданная сервером (результат ИИ, начальные данные, отметка из чата): всегда новее."""
     with tx() as c:
         return put(c, {"id": id_, "user_id": user_id, "kind": kind, "date": date,
-                       "data": data, "updated_at": now_ms()}, force=True)
+                       "data": data, "updated_at": now_ms(), "deleted": deleted}, force=True)
 
 
 def row_to_rec(r: sqlite3.Row) -> dict:

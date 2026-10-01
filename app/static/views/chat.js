@@ -2,6 +2,7 @@ import * as store from '../store.js';
 import * as C from '../coach.js';
 import * as P from '../plan.js';
 import * as PF from '../prefs.js';
+import { setPain } from './today.js';
 import { S, esc, fmt, WD, profile, toast, field, input, chips, openModal, closeModal, jobFor, addJob, afterChange, glyph, aiOff, aiOffHint } from '../ui.js';
 
 // Чат с тренером (#chat). Свободные вопросы уходят в ИИ на сервере (только онлайн);
@@ -16,7 +17,7 @@ const wdName = d => ['понедельник', 'вторник', 'среду', '
 const gx = t => t.replace(/\{([^|}]*)\|([^}]*)\}/g, (_, m, f) => (store.get(`profile:${store.uid()}`)?.data?.sex === 'f' ? f : m));
 const QUICK = [['cant', 'Сегодня не могу тренироваться'], ['short', 'Есть только 15 минут'], ['tired', 'Устал{|а} / плохо спал{|а}'],
   ['pain', 'Болит…'], ['move', 'Перенеси тренировку на завтра'], ['cheat', 'Хочу читмил']];
-const PAIN_ZONES = [['knees', 'колени'], ['lower_back', 'поясница'], ['back', 'спина'], ['neck', 'шея'], ['shoulders', 'плечи'], ['arms', 'руки'],
+const PAIN_ZONES = [['head', 'голова'], ['stomach', 'живот'], ['knees', 'колени'], ['lower_back', 'поясница'], ['back', 'спина'], ['neck', 'шея'], ['shoulders', 'плечи'], ['arms', 'руки'],
   ['wrists', 'запястья'], ['chest', 'грудь'], ['abs', 'пресс'], ['hips', 'таз'], ['glutes', 'ягодицы'], ['legs', 'ноги'], ['ankles', 'голеностоп']];
 const ZONE_NAME = Object.fromEntries(PAIN_ZONES);
 
@@ -73,6 +74,7 @@ function viewChat() {
 // Пока в поле ввода фокус, app.js откладывает перерисовку — список сообщений обновляем сами.
 function refreshList() {
   const el = document.getElementById('chat-list');
+  if (S.pressing) { setTimeout(refreshList, 400); return; }
   if (!el || !location.hash.startsWith('#chat')) return;
   const stick = nearBottom(el);
   el.innerHTML = listHtml();
@@ -95,7 +97,8 @@ function msgHtml(m) {
   const src = role === 'coach' ? (d.source || 'ai') : '';
   const tag = src === 'rule' ? (d.rule && /remind|^r_|reminder/.test(d.rule) ? 'напоминание' : 'тренер заметил') : src === 'quick' ? 'быстрый ответ' : '';
   const acts = (d.actions || []);
-  const offered = acts.filter(a => (a.status || 'offered') === 'offered');
+  // «Отменить» у уже сделанной отметки - одна кнопка, без «Не надо» (отменять отмену нечего)
+  const offered = acts.filter(a => (a.status || 'offered') === 'offered' && !a.undo_of);
   const actHtml = acts.length ? `<div class="msg-acts">${acts.map(a => {
     const st = a.status || 'offered';
     const key = `${m.id}|${a.id}`;
@@ -262,7 +265,7 @@ function openPain() {
   openModal(`<div class="modal-head"><div class="kicker smallcaps">Тренер</div><h2>Что болит?</h2></div>
     <div class="modal-body">${chips('pain', 'zone', 'knees', PAIN_ZONES)}
       <div style="margin-top:14px">${field('Как болит', input('pain', 'note', '', 'placeholder="например: тянет при приседе"'))}</div>
-      <p class="note">Упражнения на эту зону уберу из плана, пока не отметите в профиле «прошло». Острая боль или больше 3–5 дней - повод к врачу.</p></div>
+      <p class="note">Упражнения на эту зону уберу из плана, пока не отметите в профиле «прошло». При головной боли - предложу облегчить или перенести тренировку. Острая боль или больше 3–5 дней - повод к врачу.</p></div>
     <div class="modal-foot"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="chat-pain">Записать</button></div>`);
 }
 
@@ -302,10 +305,24 @@ export const actions = {
     const f = S.forms.pain || {};
     const zone = f.zone || 'knees', note = (f.note || '').trim();
     closeModal();
+    // то же, что «Что-то болит» в самочувствии на «Сегодня»: отметка там и подстройка плана дня
+    const pain = { head: 'head', stomach: 'stomach', back: 'back', lower_back: 'back', knees: 'knees' }[zone];
+    const did = pain ? await setPain(C.today(), pain, true) : '';
+    const w = workoutToday(), tail = did ? ` План на сегодня подстроил: ${did}.` : '';
+    if (zone === 'head' || zone === 'stomach') {
+      // голова и живот - не травма зоны: обычно проходит за день - без записи «до отметки прошло»
+      const what = zone === 'head' ? 'голова' : 'живот';
+      await say('user', `Болит ${what}${note ? ` - ${note}` : ''}`, { source: 'quick' });
+      const advice = zone === 'head' ? 'Попей воды, проветри, отдохни от экрана.' : 'Сегодня без пресса и тяжёлых нагрузок, еда - попроще.';
+      await coach(`Понял, болит ${what}. Отметил в самочувствии на сегодня.${tail} ${w && !did.includes('облегчил') ? 'Если через силу - лучше облегчить или перенести тренировку.' : ''} ${advice} Если боль сильная, внезапная или повторяется - к врачу.`.replace(/\s+/g, ' ').trim(),
+        w ? [{ label: 'Облегчить сегодняшнюю', kind: 'local_light' }, { label: 'Перенести на завтра', kind: 'local_move' }] : null);
+      await afterChange(C.today());
+      return;
+    }
     await store.put('injury', store.newId(), { zone, note, since: C.today(), resolved: null }, C.today());
     await say('user', `Болит: ${ZONE_NAME[zone] || zone}${note ? ` - ${note}` : ''}`, { source: 'quick' });
-    const w = workoutToday();
-    await coach(`Записал: ${ZONE_NAME[zone] || zone}. Пока не отметишь «прошло» в профиле, упражнения на эту зону уберу из плана. Если боль острая или не проходит 3–5 дней - покажись врачу.`,
+    if (!pain) await P.adaptToday?.(C.today());
+    await coach(`Записал: ${ZONE_NAME[zone] || zone}. Пока не отметишь «прошло» в профиле, упражнения на эту зону уберу из плана.${tail} Если боль острая или не проходит 3–5 дней - покажись врачу.`,
       w ? [{ label: 'Облегчить сегодняшнюю', kind: 'local_light' }] : null);
     await afterChange(C.today());
   },
@@ -357,14 +374,21 @@ function fitList() {
   const tab = document.querySelector('.tabbar');
   const mobile = tab && getComputedStyle(tab).display !== 'none';
   comp.style.bottom = mobile ? `${tab.offsetHeight}px` : '';
-  const top = list.getBoundingClientRect().top + window.scrollY;
-  const below = mobile ? comp.offsetHeight + tab.offsetHeight + 8 : comp.offsetHeight + 24;
   const stick = !list.style.height || nearBottom(list);
-  let h = Math.max(220, window.innerHeight - top - below);
-  list.style.height = `${h}px`;
-  // отступы листа и раскладки под полем ввода: убираем то, на что страница всё ещё длиннее окна
-  const extra = document.documentElement.scrollHeight - window.innerHeight;
-  if (extra > 0 && h > 220) list.style.height = `${Math.max(220, h - extra)}px`;
+  if (mobile) {
+    // телефон: поле ввода закреплено над вкладками - низ списка (и листа под ним) ставим прямо к его верхнему краю.
+    // Считаем по фактическому положению на экране, а не по innerHeight: в приложении на iOS высота окна
+    // и отступы страницы не совпадают с видимой областью, и список получался короче на пару сантиметров.
+    const sheetPad = parseFloat(getComputedStyle(list.closest('.sheet') || list).paddingBottom) || 0;
+    list.style.height = `${Math.max(220, comp.getBoundingClientRect().top - sheetPad - 6 - list.getBoundingClientRect().top)}px`;
+  } else {
+    const top = list.getBoundingClientRect().top + window.scrollY;
+    const h = Math.max(220, window.innerHeight - top - comp.offsetHeight - 24);
+    list.style.height = `${h}px`;
+    // отступы листа и раскладки под полем ввода: убираем то, на что страница всё ещё длиннее окна
+    const extra = document.documentElement.scrollHeight - window.innerHeight;
+    if (extra > 0 && h > 220) list.style.height = `${Math.max(220, h - extra)}px`;
+  }
   if (stick) list.scrollTop = list.scrollHeight;
 }
 const refit = () => { if (location.hash.startsWith('#chat')) fitList(); };
@@ -373,6 +397,8 @@ window.visualViewport?.addEventListener('resize', refit);     // iOS: клави
 
 export function afterRender() {
   fitList();
+  // шрифты и шапка могут догрузиться/сдвинуться после первой раскладки - подогнать ещё раз
+  requestAnimationFrame(refit); setTimeout(refit, 350); document.fonts?.ready.then(refit);
   const list = document.getElementById('chat-list');
   const count = messages().length + (jobFor('chat') ? 1 : 0);
   if (list && (entered || count !== lastCount)) list.scrollTop = list.scrollHeight;

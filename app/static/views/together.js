@@ -4,7 +4,7 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
 import * as P from '../plan.js';
-import { S, esc, num, fmt, WD, profile, toast, plural, todayMark } from '../ui.js';
+import { S, esc, num, fmt, WD, profile, toast, plural, todayMark, glyph } from '../ui.js';
 
 const short = d => fmt(d, { day: 'numeric', month: 'short' });
 const GRADE = { good: 'хороший', ok: 'средний', bad: 'слабый', none: 'нет данных' };
@@ -40,7 +40,24 @@ export async function setCompete(fields) {
 }
 
 // ════════════ экран ════════════
+// «Мой прогресс | Вместе» - вверху «Прогресса» и «Вместе» (только если есть с кем сравнивать)
+export function modeSwitch(active) {
+  if (!store.partners().length) return '';
+  const tab = (k, href, l) => `<a href="${href}" class="${active === k ? 'on' : ''}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`;
+  return `<nav class="a-tabs pg-mode" aria-label="Чей прогресс">${tab('me', '#progress', 'Мой прогресс')}${tab('together', '#together', 'Вместе')}${tab('feed', '#feed', 'Лента')}</nav>`;
+}
+// людей несколько (группа) - выбор, с кем сравнивать; экран один на двоих, так что сравнение всегда попарное
+function whoPicker() {
+  const ps = store.partners();
+  if (ps.length < 2) return '';
+  const cur = C.partner()?.id;
+  return `<div class="t-who"><span class="smallcaps muted">Сравнить с</span><div class="chips">${ps.map(p => `<button type="button" class="chip ${p.id === cur ? 'on' : ''}" aria-pressed="${p.id === cur}" data-act="together-pick" data-id="${esc(p.id)}">${esc(p.name)}</button>`).join('')}</div></div>`;
+}
+
 function viewTogether(arg) {
+  return modeSwitch('together') + whoPicker() + togetherBody(arg);
+}
+function togetherBody(arg) {
   const mon = /^\d{4}-\d{2}-\d{2}$/.test(arg || '') ? C.mondayOf(arg) : C.mondayOf();
   const d = C.duel(mon);
   const p = d.partner;
@@ -152,6 +169,12 @@ function historyBlock(p) {
     ${ach.length ? `<div class="chips t-ach">${ach.slice(0, 12).map(a => `<span class="chip" title="${esc(short(a.data.monday || a.date || C.today()))}">${esc(a.data.title || a.data.code)}</span>`).join('')}</div>` : ''}</div>`;
 }
 
+// метка у своей фразы: партнёр нажал «Спасибо» (людей несколько - с именами)
+function thx(mine) {
+  const who = C.cheerThanks(mine);
+  if (!who.length) return '';
+  return ` <span class="chip t-thx">спасибо${store.partners().length > 1 ? ` от ${esc(who.join(', '))}` : ''}</span>`;
+}
 // ── «Подбодрить» ──
 function cheerBlock(p) {
   const tone = profile().tone || 'coach';
@@ -162,7 +185,7 @@ function cheerBlock(p) {
     <div class="chips t-presets">${presets.map((t, i) => `<button type="button" class="chip" data-act="cheer-preset" data-i="${i}">${esc(t)}</button>`).join('')}</div>
     <div class="t-cheer"><input class="control" id="cheer-text" data-form="cheer" data-key="text" maxlength="80" placeholder="Своими словами, до 80 знаков" value="${esc(text)}" aria-label="Текст">
       <button class="btn solid" data-act="cheer-send">Подбодрить</button></div>
-    ${mine ? `<p class="note">Последнее: «${esc(mine.text)}» · ${esc(new Date(mine.at).toLocaleString('ru', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}</p>` : ''}</div>`;
+    ${mine ? `<p class="note">Последнее: «${esc(mine.text)}» · ${esc(new Date(mine.at).toLocaleString('ru', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}${thx(mine)}</p>` : ''}</div>`;
 }
 
 // полученная фраза партнёра (здесь и на «Сегодня»)
@@ -170,8 +193,17 @@ export function cheerNotice(p = C.partner()) {
   if (!p) return '';
   const c = C.unseenCheer(p.id);
   if (!c) return '';
-  return `<div class="notice t-cheer-in"><span class="t-cheer-txt"><span class="smallcaps">${esc(p.name)} подбадривает:</span> «${esc(c.text)}»</span>
-    <button class="btn quiet" data-act="cheer-seen">Спасибо</button></div>`;
+  // несколько фраз одного человека до «Спасибо» - одним блоком, каждая со временем
+  const at = t => new Date(t).toLocaleString('ru', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  const body = c.list.length > 1
+    ? `<ul class="t-cheer-list">${c.list.map(x => `<li>«${esc(x.text)}» <span class="note mono">${esc(at(x.at))}</span></li>`).join('')}</ul>`
+    : ` «${esc(c.text)}»`;
+  return `<div class="notice t-cheer-in"><span class="t-cheer-txt"><span class="smallcaps">${esc(p.name)} подбадривает:</span>${body}</span>
+    <button class="btn quiet" data-act="cheer-seen" data-pid="${esc(p.id)}" title="${esc(p.name)} увидит, что вы сказали спасибо">Спасибо</button></div>`;
+}
+// все непрочитанные фразы (от каждого, с кем виден прогресс) - на «Сегодня» отдельным блоком под тренером
+export function cheersBlock() {
+  return C.unseenCheers().map(({ p }) => cheerNotice(p)).join('');
 }
 
 // ── раздел профиля «Соревнование с партнёром» (сохраняется сразу, без кнопки «Сохранить») ──
@@ -193,8 +225,11 @@ export function competeBody() {
     <div class="field"><span class="smallcaps">Что показывать</span>
       <div class="chips">${C.COMPETE_CATS.map(c => `<button type="button" class="chip ${cp.show.includes(c.key) ? 'on' : ''}" data-act="pf-compete-show" data-k="${c.key}" title="${esc(SHOW_HINT[c.key])}">${esc(c.label)}</button>`).join('')}</div></div>
     <p class="note">Выключение сразу убирает шаги, сон и активность из ваших сводок за последние 8 недель. Оценка дня и опыт видны партнёру всегда.</p>
+    <div class="field pf-share"><span class="smallcaps">Показывать в ленте</span>
+      <label class="chk pf-chk"><input type="checkbox" data-form="profile" data-key="share_activity" ${(S.forms.profile?.share_activity ?? profile().share_activity) !== false ? 'checked' : ''}>мои тренировки, комплексы и активности</label>
+      <p class="note">В ленту «Вместе» уходит только название и минуты (например, «Комплекс «Осанка» · 10 мин», «Велосипед · 40 мин») - без упражнений, еды и подробностей. Личное (массаж, баня, медитация, занятия с детьми) не уходит никогда. Изменение сохранится кнопкой «Сохранить» внизу профиля.</p></div>
     ${pairBody(p)}
-    <div class="actions"><a class="link" href="#together">Открыть «Вместе» →</a></div></div>`;
+    <div class="actions"><a class="link" href="#together">Открыть «Вместе» →</a> <a class="link" href="#feed">Лента →</a></div></div>`;
 }
 
 // «Общие комплексы»: что каждый согласен делать одинаково с партнёром (зал - нет, там у каждого своя программа)
@@ -225,7 +260,51 @@ export const changes = {
   },
 };
 
-export const routes = { together: arg => viewTogether(arg) };
+// ════════════ лента: что делали вы и те, с кем вы делитесь прогрессом ════════════
+const FEED_STEP = 14;
+const HL_TITLE = { workout: 'Тренировка', gym: 'Зал', complex: 'Комплекс', activity: '' };
+const HL_DOM = { workout: 'train', gym: 'train', complex: 'train', activity: 'move' };
+const ago = d => d === C.today() ? 'Сегодня' : d === C.addDays(C.today(), -1) ? 'Вчера' : fmt(d, { weekday: 'long', day: 'numeric', month: 'long' });
+const hm = at => at ? new Date(at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }) : '';
+function feedCard(x) {
+  const who = x.who, ini = esc((who.me ? (profile().name || 'Вы') : who.name || '?').trim()[0] || '?');
+  let body, dom;
+  if (x.kind === 'hl') {
+    const t = HL_TITLE[x.type] ?? '';
+    body = `${t ? `${t} ` : ''}${t ? `«${esc(x.label || '')}»` : `<b>${esc(x.label || 'Активность')}</b>`}${x.minutes ? ` <span class="mono">· ${num(x.minutes)} мин</span>` : ''}`;
+    dom = HL_DOM[x.type] || 'move';
+  } else if (x.kind === 'ach') {
+    body = `Достижение <b>«${esc(x.title)}»</b>${x.couple ? ' <span class="note">на двоих</span>' : ''}`;
+    dom = 'goal';
+  } else {
+    body = x.grade === 'good' ? `Хороший день <span class="mono">· ${x.pct} %</span> чек-листа` : `День закрыт на <span class="mono">${x.pct} %</span>`;
+    dom = 'coach';
+  }
+  return `<article class="raised fd-card" data-dom="${dom}"><span class="fd-ava ${who.me ? 'me' : ''}" aria-hidden="true">${ini}</span>
+    <div class="fd-main"><div class="fd-who"><b class="ell">${esc(who.me ? 'Вы' : who.name)}</b>${x.kind === 'hl' ? `<span class="note mono">${esc(hm(x.at))}</span>` : ''}</div>
+      <div class="fd-body">${body}</div></div>
+    ${who.me ? `<button type="button" class="btn quiet a-mini fd-del" data-act="feed-del" data-kind="${x.kind}" data-key="${esc(x.key)}" aria-label="Убрать из ленты" title="${x.kind === 'hl' ? 'Убрать из ленты' : 'Скрыть из ленты (в вашей статистике останется)'}">${glyph('cross')}</button>` : ''}</article>`;
+}
+function viewFeed() {
+  if (!store.partners().length) return `<div class="kicker smallcaps">Лента</div><h1>Лента</h1>
+    <p class="lede">Здесь будут тренировки, комплексы, активности, достижения и хорошие дни - ваши и тех, с кем вы делитесь прогрессом.</p>
+    <p class="note">Пока на сервере нет никого, с кем вы делитесь прогрессом.</p>`;
+  const f = S.forms.feed ||= { days: FEED_STEP, who: null };
+  const ps = [{ id: store.uid(), name: 'Вы' }, ...store.partners()];
+  const items = C.feed(f.days, f.who);
+  const byDay = [];
+  for (const x of items) { const last = byDay[byDay.length - 1]; if (last?.date === x.date) last.items.push(x); else byDay.push({ date: x.date, items: [x] }); }
+  return `${modeSwitch('feed')}<div class="kicker smallcaps">Вместе</div><h1>Лента</h1>
+    <p class="note a-tight">Видно только то, чем каждый делится: тренировки, комплексы, активности, достижения и хорошие дни - без еды, веса и подробностей.</p>
+    <div class="t-who"><div class="chips">
+      <button type="button" class="chip ${!f.who ? 'on' : ''}" aria-pressed="${!f.who}" data-act="feed-who" data-id="">Все</button>
+      ${ps.map(p => `<button type="button" class="chip ${f.who === p.id ? 'on' : ''}" aria-pressed="${f.who === p.id}" data-act="feed-who" data-id="${esc(p.id)}">${esc(p.name)}</button>`).join('')}</div></div>
+    ${byDay.length ? byDay.map(g => `<div class="fd-day smallcaps muted">${esc(ago(g.date))}</div><div class="fd-list">${g.items.map(feedCard).join('')}</div>`).join('')
+      : `<p class="empty">За ${f.days} дней пока пусто. Вехи появляются, когда кто-то закрывает тренировку, комплекс, записывает активность или получает достижение.</p>`}
+    ${f.days < 120 ? `<div class="actions"><button class="btn quiet" data-act="feed-more">Показать раньше</button><span class="note">сейчас - за ${f.days} дней</span></div>` : ''}`;
+}
+
+export const routes = { together: arg => viewTogether(arg), feed: () => viewFeed() };
 
 export const actions = {
   'together-enable': async () => {
@@ -250,7 +329,15 @@ export const actions = {
     toast(`${C.partner()?.name || 'Партнёр'} увидит это при следующем открытии`);
     S.render();
   },
-  'cheer-seen': async () => { await C.markCheerSeen(); S.render(); },
+  'cheer-seen': async el => { await C.markCheerSeen(el.dataset.pid || undefined); S.render(); },
+  'feed-who': el => { (S.forms.feed ||= { days: FEED_STEP }).who = el.dataset.id || null; S.render(); },
+  'feed-del': async el => {
+    await C.hideFeedItem({ kind: el.dataset.kind, key: el.dataset.key });
+    toast(el.dataset.kind === 'hl' ? 'Убрано из ленты' : 'Скрыто из ленты - в вашей статистике осталось');
+    S.render();
+  },
+  'feed-more': () => { const f = (S.forms.feed ||= { days: FEED_STEP, who: null }); f.days = Math.min(120, f.days + FEED_STEP); S.render(); },
+  'together-pick': async el => { await store.setMeta('together_pid', el.dataset.id); S.render(); },
   'pf-pair-mod': async el => {
     const uid = store.uid(), m = el.dataset.m, cur = P.pairChosen(uid);
     const modules = cur.includes(m) ? cur.filter(x => x !== m) : P.PAIR_MODULES.filter(x => cur.includes(x) || x === m);

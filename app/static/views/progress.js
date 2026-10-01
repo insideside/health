@@ -1,5 +1,6 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
+import { modeSwitch } from './together.js';
 import * as P from '../plan.js';
 import * as GL from '../goals.js';
 import * as AN from '../analysis.js';
@@ -87,7 +88,7 @@ function viewProgress() {
     deload ? 'Пора разгрузочную неделю: объём −40 %, веса те же. Так мышцы и суставы успеют восстановиться, а прогресс продолжится.' : '',
   ].filter(Boolean);
 
-  return `<div class="kicker smallcaps">Прогресс</div><h1>Путь к цели</h1>
+  return `${modeSwitch('me')}<div class="kicker smallcaps">Прогресс</div><h1>Путь к цели</h1>
     <p class="lede">${g.deadline ? `Цель к ${esc(fmt(g.deadline, { day: 'numeric', month: 'long', year: 'numeric' }))}${weeksLeft(g.deadline)}.` : 'Вехи - за результат, опыт - за регулярность.'}</p>
     <div data-dom="goal">${pathBlock()}</div>
     <div class="pg-level" data-dom="goal"><div class="lvl"><div class="num">${lv.n}</div><div class="grow">
@@ -127,7 +128,7 @@ function togetherLink() {
   const d = safe(() => C.duel?.());
   if (!d || d.state === 'no_partner') return '';
   const td = d.days.find(x => x.today);
-  const b = d.state !== 'ok' ? '-' : d.scoring ? `${d.score.me}:${d.score.them}` : td ? `${td.me.pct}:${td.them.pct} %` : '-';
+  const b = d.state !== 'ok' ? '-' : d.scoring ? `${d.score.me}:${d.score.them}` : td ? `${td.me.pct} / ${td.them.pct} %` : '-';
   const note = d.state === 'ok' ? (d.scoring ? `счёт недели: вы и ${esc(d.partner.name)}` : `сегодня: вы и ${esc(d.partner.name)}`)
     : d.state === 'me_off' ? 'обмен прогрессом выключен' : `${esc(d.partner.name)} пока не делится прогрессом`;
   return `<a class="raised pg-link" href="#together"><span class="smallcaps muted">Вместе</span><b class="mono">${b}</b><span class="note ell">${note} →</span></a>`;

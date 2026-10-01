@@ -398,10 +398,14 @@ export const actions = {
   'wo-finish': async () => {
     const date = woDate(), w = C.workout(date);
     await updateWorkout(date, d => { d.done = true; d.finished_at = Date.now(); });
-    if (w) await C.shareHighlight(w.data.place === 'gym' ? 'gym' : 'workout', w.data.title, w.data.planned_minutes || null, date);
+    if (w) await C.shareHighlight(w.data.place === 'gym' ? 'gym' : 'workout', w.data.title, w.data.planned_minutes || null, date, `highlight:${store.uid()}:${date}:workout`, w.id);
     toast(woPraise());
   },
-  'wo-undo': async () => { await updateWorkout(woDate(), d => { d.done = false; }); },
+  'wo-undo': async () => {
+    const date = woDate();
+    await updateWorkout(date, d => { d.done = false; });
+    await C.unshareHighlight(`highlight:${store.uid()}:${date}:workout`);          // отменили - и из ленты
+  },
   'prog-day': el => {
     const i = Number(el.dataset.i), w = S.forms.program.weekdays;
     S.forms.program.weekdays = w.includes(i) ? w.filter(x => x !== i) : [...w, i].sort();

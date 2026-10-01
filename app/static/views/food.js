@@ -201,7 +201,7 @@ function mpItem(it, s, i, src, date) {
 function mpSlot(s, src, date) {
   const done = s.status === 'logged', past = s.status === 'past';
   const items = s.items || [];
-  return `<div class="raised mp-slot ${s.status ? 'mp-' + s.status : ''}" data-dom="food">
+  return `<div class="raised mp-slot ${s.status ? 'mp-' + s.status : ''}" data-dom="food"${MEAL_NAME[s.kind] ? ` data-meal="${s.kind}"` : ''}>
     <div class="mp-sh"><span class="mono mp-time">${esc(s.time)}</span><span class="mp-label">${esc(s.label)}</span><span class="mono muted mp-k">${past ? 'прошло' : `${num(s.totals?.kcal || 0)} ккал`}</span></div>
     ${past ? '' : `${s.title && src === 'ai' ? `<div class="mp-title">${esc(s.title)}</div>` : ''}<p class="note mp-why">${esc(s.reason || '')}</p>
     ${items.length ? `<ul class="mp-items">${items.map((it, i) => mpItem(it, s, i, src, date)).join('')}</ul>` : '<p class="note">На этот приём норма уже набрана - можно пропустить или взять овощи.</p>'}
@@ -819,6 +819,15 @@ document.addEventListener('input', e => {
   }
 });
 
+// молоко в кофе при режиме «только в итогах дня»: в приёмах пищи его нет, но калории видно, откуда
+function milkLine(date) {
+  const m = C.milkDay(date);
+  if (!m.n) return '';
+  const cups = m.n % 10 === 1 && m.n % 100 !== 11 ? 'чашка' : m.n % 10 >= 2 && m.n % 10 <= 4 && (m.n % 100 < 12 || m.n % 100 > 14) ? 'чашки' : 'чашек';
+  return `<div class="meal-title" data-dom="food"><span class="smallcaps muted">Молоко в кофе</span><span class="mono">${num(m.kcal)} ккал</span></div>
+    <p class="note a-tight">${m.n} ${cups}, ${num(m.ml)} мл · Б ${dec(m.p)} · Ж ${dec(m.f)} · У ${dec(m.c)} - учтено в итогах дня. Менять - у счётчика кофе на «Сегодня».</p>`;
+}
+
 function viewFood(date) {
   const entries = store.byDate('food', date).sort((a, b) => timeOf(a).localeCompare(timeOf(b)) || (a.data.created || a.updated_at) - (b.data.created || b.updated_at));
   const tg = C.target();
@@ -873,9 +882,10 @@ function viewFood(date) {
       return bl.map(b => {
         const kc = b.entries.reduce((a, e) => a + (e.data.totals?.kcal || 0), 0);
         const label = b.meal === 'snack' && sn > 1 ? `${MEAL_NAME.snack} ${b.n}` : MEAL_NAME[b.meal] || b.meal;
-        return `<div class="meal-title" data-dom="food"><span class="smallcaps muted">${label}</span><span class="mono">${num(kc)} ккал</span></div>${b.entries.map(e => foodEntry(e, win)).join('')}`;
+        return `<div class="meal-title" data-dom="food" data-meal="${esc(b.meal)}"><span class="smallcaps muted">${label}</span><span class="mono">${num(kc)} ккал</span></div>${b.entries.map(e => foodEntry(e, win)).join('')}`;
       }).join('');
     })()}
+    ${C.milkMode() === 'hidden' ? milkLine(date) : ''}
     ${!entries.length ? '<p class="empty" style="margin-top:20px">За этот день ничего не записано.</p>' : ''}
     ${mpSection(date)}
     ${planSection(date)}`;
@@ -919,7 +929,7 @@ function foodEntry(e, win) {
   const t = timeOf(e);
   const out = win && t && !inWindow(t, win);
   const fav = isFav(e);
-  return `<div class="raised entry" data-dom="food">
+  return `<div class="raised entry${e.id === flashId && Date.now() < flashUntil ? ' fe-new' : ''}" id="fe-${e.id}" data-dom="food" data-meal="${esc(e.data.meal || 'snack')}">
     <div class="a-entry-head"><div class="etext">${t ? `<span class="mono a-etime">${esc(t)}</span>` : ''}${esc(d.text)}${out ? ' <span class="chip a-out">вне окна</span>' : ''}</div>
       <div class="a-entry-btns"><button class="btn quiet a-star ${fav ? 'on' : ''}" data-act="fd-fav" data-id="${e.id}" aria-label="${fav ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${!!fav}" title="${fav ? 'В избранном' : 'В избранное'}">${glyph('star', { fill: !!fav })}</button>
         <button class="btn quiet" data-act="food-edit" data-id="${e.id}">Изменить</button><button class="btn danger" data-act="food-del" data-id="${e.id}">Удалить</button></div></div>
@@ -946,10 +956,23 @@ export async function calcFood(rec, ai = true) {
   }
 }
 
+// только что добавленная запись: после отрисовки прокручиваем к ней и коротко подсвечиваем. Прокрутка мгновенная:
+// следом приходят ещё перерисовки (расчёт БЖУ, итог дня), и они оборвали бы плавную на полпути. Подсветка - по
+// времени (flashUntil), а не классом на элементе: перерисовка заменяет элемент, класс пропал бы.
+let scrollToEntry = null, flashId = null, flashUntil = 0;
+function revealNew() {
+  const id = scrollToEntry, el = id && document.getElementById(`fe-${id}`);
+  if (!el) return;
+  scrollToEntry = null;
+  flashId = id; flashUntil = Date.now() + 1800;
+  el.classList.add('fe-new');
+  el.scrollIntoView({ block: 'center' });
+  setTimeout(() => document.getElementById(`fe-${id}`)?.classList.remove('fe-new'), 1850);
+}
 async function addEntry(date, data) {
   const win = eatingWindow();
   const time = hm(data.time) || (date === C.today() ? nowHM() : null);
-  const rec = await store.put('food', store.newId(), {
+  const rec = await store.put('food', scrollToEntry = store.newId(), {
     ...data, time, created: Date.now(), entered_at: Date.now(), out_of_window: !!(win && time && !inWindow(time, win)),
   }, date);
   await afterChange(date);
@@ -1003,6 +1026,7 @@ export const actions = {
     const loc = FP.localCalc(text);
     const rec = await addEntry(el.dataset.date, { meal, text, status: 'raw', time, ...loc });
     S.forms.food = { meal };
+    document.activeElement?.blur?.();       // иначе экран ждёт ухода из поля и новая запись не видна
     S.render();
     if (rec.data.out_of_window) toast('Записал. Это вне окна питания - отмечу, но без упрёков.');
     if (store.state.online && rec.data.status !== 'calculated') calcFood(rec, false);
@@ -1218,6 +1242,7 @@ export const routes = { food: arg => viewFood(isDate(arg) ? arg : C.today()) };
 // справочник при первом открытии экрана (дальше — раз в 5 минут из background)
 let firstLoad = 0;
 export function afterRender() {
+  revealNew();
   if (store.getMeta('foods') || !store.state.online || Date.now() - firstLoad < 30e3) return;
   firstLoad = Date.now();
   foods.refresh().then(() => { if (store.getMeta('foods')) S.render(); });

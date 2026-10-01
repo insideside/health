@@ -173,7 +173,7 @@ function viewDay(date) {
       ${sec('Сон', sleep, 'sleep')}${sec('Самочувствие', state + vitals, 'mood')}${sec('Активности', acts, 'move')}
       ${sec('Тренировка', wo + (routines ? `<div class="note">${routines}</div>` : ''), 'train')}
       ${sec('Питание', food, 'food')}
-      ${sec('Вода и шаги', `${m.waterTarget ? `вода <span class="mono">${m.water}/${m.waterTarget}</span> ст.` : ''}${m.waterTarget && m.stepsTarget ? ' · ' : ''}${m.stepsTarget ? `шаги <span class="mono">${num(m.steps)}</span> из <span class="mono">${num(m.stepsTarget)}</span>` : ''}` || empty('-'), 'water')}
+      ${sec('Вода и шаги', `${m.waterTarget ? `вода <span class="mono">${C.glassNum(m.water)}/${m.waterTarget}</span> ст.` : ''}${m.waterTarget && m.stepsTarget ? ' · ' : ''}${m.stepsTarget ? `шаги <span class="mono">${num(m.steps)}</span> из <span class="mono">${num(m.stepsTarget)}</span>` : ''}` || empty('-'), 'water')}
       ${meas ? sec('Замеры', meas, 'goal') : ''}
     </div>
     <div class="actions"><a class="btn solid" href="#day/${date}">${future ? 'Открыть день' : 'Изменить день'} <span class="arrow">→</span></a>

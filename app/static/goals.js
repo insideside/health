@@ -570,6 +570,9 @@ export function lines(uid = store.uid()) {
   for (const gl of metricGoals(uid)) {
     const pr = progress(gl, uid), m = pr.metric;
     if (!LINES[pr.status]) continue;
+    // привычка (шаги, вода, сон): о выполнении судим по неделе, а не по одному-трём дням - иначе одна давняя запись
+    // («11 471 шаг» позавчера) читается как «цель выполнена» сегодня, хотя больше ничего не вносили
+    if (m.group === 'habit' && (!pr.cur || pr.cur.approx)) continue;
     // говорим только о реальном сдвиге: хотя бы неделя с начала и изменение заметнее шага показателя
     const days = pr.cur?.date && gl.since ? C.daysBetween(gl.since, pr.cur.date) : null;
     if (pr.status !== 'done' && (days == null || days < 7 || pr.change == null || (Math.abs(pr.change) < (m.step || 0.5) && pr.status !== 'behind'))) continue;

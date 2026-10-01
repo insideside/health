@@ -80,6 +80,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const avg = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
 const dec = (x, n = 1) => String(Math.round(x * 10 ** n) / 10 ** n).replace('.', ',');
 function plural(n, one, few, many) {
+  if (!Number.isInteger(Number(n))) return few;          // дробное: «1½ стакана», «0,5 стакана»
   const a = Math.abs(n) % 100, b = a % 10;
   return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many;
 }
@@ -138,7 +139,7 @@ export const SNACK_GAP_MIN = 45;
 const MEAL_DEFAULT_MIN = { breakfast: 8 * 60, lunch: 13 * 60, snack: 16 * 60, dinner: 19 * 60 };
 const recTime = r => toMin(r.data.time) ?? (r.data.created ? new Date(r.data.created).getHours() * 60 + new Date(r.data.created).getMinutes() : null);
 export function mealBlocks(date, uid = store.uid(), { all = false } = {}) {
-  const recs = recsOn('food', date, uid).filter(r => all || !['supp', 'drink'].includes(r.data.calc));
+  const recs = recsOn('food', date, uid).filter(r => all ? !(r.data.calc === 'drink' && milkMode(uid) === 'hidden') : !['supp', 'drink'].includes(r.data.calc));
   const main = new Map(), snacks = [];
   for (const r of recs) {
     const m = r.data.meal || 'snack';
@@ -187,6 +188,11 @@ export function cupList(date, kind, uid = store.uid()) {
 // размер чашки: 1 или ½ (amount: 0.5); старые записи без поля - целая
 export const cupAmount = r => (Number(r?.data?.amount) > 0 ? Number(r.data.amount) : 1);
 export const cupNum = v => String(Math.round(v * 10) / 10).replace('.', ',');
+// стаканы воды: можно по полстакана (log v = 1.5) → «1½», «½»
+export const glassNum = v => {
+  const n = Math.round((Number(v) || 0) * 2) / 2, w = Math.floor(n);
+  return n % 1 ? `${w || ''}½` : String(n);
+};
 export function cups(date, uid = store.uid()) {
   const out = { coffee: null, tea: null, late: 0, last: null, lastCoffee: null };
   const recs = cupList(date, null, uid);
@@ -241,9 +247,58 @@ export const alcoholFreeDays = (uid = store.uid()) => freeDays('alcohol', uid);
 // что съедено), только тип, короткая подпись и минуты/метрика. Только если есть хоть одна группа и человек
 // не выключил «Делиться активностью в группе» в профиле (по умолчанию - включено). ──
 export function shareHighlights(uid = store.uid()) { return prof(uid).share_activity !== false; }
-export async function shareHighlight(type, label, minutes = null, date = today()) {
-  if (!store.groups().length || !shareHighlights()) return;
-  await store.put('highlight', store.newId(), { type, label, minutes, date, created: Date.now() }, date);
+// веха для ленты «Вместе»: тип, подпись, минуты - без подробностей. Пишется, если есть с кем делиться (партнёр или
+// группа) и не выключено «делиться активностями»
+// id - постоянный (без дублей), src - запись-источник: пропал источник или снята отметка - веха уходит (syncHighlights)
+export async function shareHighlight(type, label, minutes = null, date = today(), id = null, src = null) {
+  if ((!store.partners().length && !store.groups().length) || !shareHighlights()) return;
+  if (id && store.get(id)) return;
+  await store.put('highlight', id || store.newId(), { type, label, minutes, date, created: Date.now(), ...(src ? { src } : {}) }, date);
+}
+export async function unshareHighlight(id) { if (id && store.get(id)) await store.remove(id); }
+// сверка своих вех за последние дни: комплекс не закрыт, тренировка не завершена, активность удалена - веху убрать
+// (отметки сняли на другом устройстве, в чате, при подстройке плана - везде, а не только кнопками здесь)
+export async function syncHighlights(days = 7, uid = store.uid()) {
+  const from = addDays(today(), -(days - 1));
+  for (const r of store.list('highlight', uid, x => x.date >= from && x.data.src)) {
+    const s = store.get(r.data.src);
+    const alive = s && (['complex', 'workout', 'gym'].includes(r.data.type) ? !!s.data.done : true);
+    if (!alive) await store.remove(r.id);
+  }
+}
+// автор скрывает свою карточку из ленты: веху - удаляет; достижение и хороший день - скрывает (сами они остаются
+// в статистике), список скрытого - публичная запись highlight:{uid}:hidden, её видят и другие
+const hiddenId = uid => `highlight:${uid}:hidden`;
+const hiddenKeys = uid => new Set(store.get(hiddenId(uid))?.data.keys || []);
+export async function hideFeedItem(x) {
+  if (x.kind === 'hl') return store.remove(x.key);
+  const uid = store.uid(), keys = [...hiddenKeys(uid), x.key].slice(-500);
+  await store.put('highlight', hiddenId(uid), { keys }, null);
+}
+// Лента «Вместе»: события каждого (и свои) за последние days дней, от новых к старым - только то, что человек
+// публикует сам: вехи (highlight), достижения (ach, без веса и замеров - их сервер другим не отдаёт) и успешные дни
+// (итог дня от 80 % чек-листа или оценка «хорошо»). who - id человека или null (все).
+export function feed(days = 14, who = null) {
+  const me = store.uid(), from = addDays(today(), -(days - 1));
+  const people = [{ id: me, name: 'Вы', me: true }, ...store.partners()].filter(p => !who || p.id === who);
+  const out = [];
+  for (const p of people) {
+    const hid = hiddenKeys(p.id);
+    for (const r of store.list('highlight', p.id, x => x.date >= from && x.data.type)) {
+      out.push({ kind: 'hl', key: r.id, who: p, date: r.date, at: r.data.created || r.updated_at, type: r.data.type, label: r.data.label, minutes: r.data.minutes });
+    }
+    for (const r of store.list('ach', p.id, x => (x.data.earned || x.date) >= from)) {
+      if (hid.has(r.id)) continue;
+      const d = r.data.earned || r.date;
+      out.push({ kind: 'ach', key: r.id, who: p, date: d, at: r.updated_at, title: r.data.title || r.data.code, couple: !!r.data.couple });
+    }
+    for (const r of store.list('dsum', p.id, x => x.date >= from)) {
+      const pct = Number(r.data.pct) || 0;
+      if ((pct < 80 && r.data.grade !== 'good') || hid.has(`day:${r.date}`)) continue;
+      out.push({ kind: 'day', key: `day:${r.date}`, who: p, date: r.date, at: parse(r.date).getTime() + 86399e3, pct, grade: r.data.grade });
+    }
+  }
+  return out.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : (b.at || 0) - (a.at || 0)));
 }
 // сегодняшние (или за N последних дней) вехи всех, с кем есть общая группа - для ленты на «Вместе»
 export function groupHighlights(days = 1, uid = store.uid()) {
@@ -270,13 +325,27 @@ export const MILK_TYPES = [
 const milkFoodName = type => MILK_TYPES.find(([k]) => k === type)?.[1] || null;
 export const milkLabel = type => MILK_TYPES.find(([k]) => k === type)?.[2] || '';
 const mealAt = time => { const m = toMin(time) ?? 12 * 60; return m < 11 * 60 ? 'breakfast' : m < 16 * 60 ? 'lunch' : m < 21 * 60 ? 'dinner' : 'snack'; };
+// профиль: молоко показывать отдельной строкой в приёме пищи ('meal') или только в итогах дня ('hidden')
+export const milkMode = (uid = store.uid()) => prof(uid).milk_mode === 'hidden' ? 'hidden' : 'meal';
+// приём пищи для молока: выбранный у чашки, иначе - по её времени
+export const milkMeal = (milk, time) => milk?.meal || mealAt(time);
 function milkFor(milk, time) {
   const name = milk?.type && Number(milk.ml) > 0 ? milkFoodName(milk.type) : null;
   const f = name && FD.findByName(name);
   if (!f) return null;
   const it = FD.itemFor(f, milk.ml);
-  return { meal: mealAt(time), text: `молоко к кофе, ${milkLabel(milk.type)}, ${Math.round(milk.ml)} мл`, items: [it],
+  return { meal: milkMeal(milk, time), text: `молоко к кофе, ${milkLabel(milk.type)}, ${Math.round(milk.ml)} мл`, items: [it],
     totals: { kcal: it.kcal, p: it.p, f: it.f, c: it.c }, status: 'calculated', calc: 'drink', time };
+}
+// молоко в кофе за день: сколько чашек, мл и БЖУ (для строки «Молоко в кофе» при режиме «только в итогах»)
+export function milkDay(date, uid = store.uid()) {
+  const recs = recsOn('food', date, uid).filter(r => r.data.calc === 'drink');
+  const t = { n: recs.length, ml: 0, kcal: 0, p: 0, f: 0, c: 0 };
+  for (const r of recs) {
+    t.ml += Number(r.data.items?.[0]?.grams) || 0;
+    for (const k of ['kcal', 'p', 'f', 'c']) t[k] += Number(r.data.totals?.[k]) || 0;
+  }
+  return t;
 }
 // поставить/снять молоко у чашки кофе: молока нет или ml=0 → связанная запись еды убирается
 export async function setCupMilk(id, milk) {
@@ -480,6 +549,8 @@ export async function refreshDsum(date) {
   s.min = streakMin(date, uid);
   const cur = store.get(`ds:${uid}:${date}`)?.data;
   if (cur?.cheer) s.cheer = cur.cheer;
+  if (cur?.cheers) s.cheers = cur.cheers;
+  if (cur?.thanks) s.thanks = cur.thanks;          // «спасибо» на фразы партнёров - видно отправителю
   if (cur && stableJson(cur) === stableJson(s)) return;
   if (!cur && s.pct === 0 && s.grade === 'none') return;
   await store.put('dsum', `ds:${uid}:${date}`, s, date);
@@ -695,6 +766,12 @@ export function cycleInfo(date = today(), uid = store.uid()) {
 
 // ── сон ──
 export function sleep(date, uid = store.uid()) { return store.get(`sleep:${uid}:${date}`)?.data || null; }
+// дневной сон дня (sleep.naps, отдельно от ночи): [{from, to, min}]; минуты за день
+export function naps(date, uid = store.uid()) {
+  return (sleep(date, uid)?.naps || []).map(n => ({ ...n, min: (toMin(n.to) ?? 0) - (toMin(n.from) ?? 0) }))
+    .filter(n => n.min > 0 && n.min <= 300);
+}
+export const napMinutes = (date, uid = store.uid()) => naps(date, uid).reduce((a, n) => a + n.min, 0);
 export function sleepTarget(uid = store.uid()) { return Number(target(uid)?.sleep_hours) || 7.75; }
 
 const SLEEP_ANS = {
@@ -1079,6 +1156,9 @@ export function dayGrade(date, uid = store.uid()) {
     if (total) parts.checklist = Math.round(sum / total * 100);
     const si = sleepInfo(sleep(date, uid), uid);
     if (si && !si.nap) parts.sleep = si.score;
+    // дневной сон после короткой ночи (15-90 мин) немного восстанавливает - оценку сна чуть поднимаем
+    const nm = napMinutes(date, uid);
+    if (parts.sleep !== undefined && si.verdict === 'short' && nm >= 15) parts.sleep = Math.min(100, parts.sleep + Math.min(12, Math.round(Math.min(nm, 90) / 7)));
     const st = stateScore(stateOf(date, uid));
     if (st !== null) parts.state = st;
     if (!noFood) { const f = foodScore(date, uid); if (f !== null) parts.food = f; }
@@ -1418,6 +1498,21 @@ const LINES = {
     sergeant: ['{pct} %. Это ещё не победа. Вперёд!'],
   },
   // ── v2 ──
+  pain_today: {
+    soft: ['Болит: {what}. Сегодня бережно - упражнения на больное убрал, нагрузку снизил. Слушай тело, а если боль сильная - к врачу.'],
+    coach: ['Болит: {what}. План на сегодня подстроен: больное не грузим, интенсивность ниже. Сильная или долгая боль - к врачу.'],
+    sergeant: ['Болит: {what}. Приказ - беречь: больное не грузим, остальное по самочувствию. Сильная боль - сразу к врачу.'],
+  },
+  nap_good: {
+    soft: ['Дневной сон {m} мин после короткой ночи - отличное решение, это правда восстанавливает.'],
+    coach: ['Дневной сон {m} мин после недосыпа - правильно. Лучшая длина - 20-30 минут.'],
+    sergeant: ['Тихий час {m} мин засчитан. Но ночью всё равно отбой вовремя.'],
+  },
+  nap_long: {
+    soft: ['Дневной сон вышел длинным или поздним ({m} мин) - ночью может быть труднее уснуть. Лучше 20-30 минут и до 17:00.'],
+    coach: ['{m} мин дневного сна - многовато или поздно. Держи дневной сон до 30 минут и до 17:00, иначе собьёшь ночь.'],
+    sergeant: ['{m} мин днём? Так ночной сон и ломается. Днём - максимум полчаса и не позже пяти.'],
+  },
   sleep_short: {
     soft: ['Ночью вышло всего {h} ч сна. Сегодня без подвигов: нагрузку полегче, а лечь - пораньше.',
            'Сон короткий, {h} ч. Береги себя сегодня: меньше нагрузки, больше воды, отбой до одиннадцати.'],
@@ -1584,15 +1679,15 @@ const MOOD = { setup: 'info', gap: 'scold', yesterday_perfect: 'praise', yesterd
   evening_low: 'scold', workout_today: 'info', workout_light: 'info', workout_late: 'scold', workout_missed: 'scold', streak_record: 'praise',
   streak: 'praise', kcal_over: 'scold', protein_low: 'scold', weight_good: 'praise', weight_stall: 'scold', plateau: 'info',
   plateau_lifts: 'info', partner_ahead: 'scold', partner_behind: 'praise', morning: 'info', keep_going: 'info',
-  sleep_short: 'info', sleep_poor: 'info', sleep_great: 'praise', state_broken: 'info', cheat_day: 'info', special_day: 'info',
+  sleep_short: 'info', sleep_poor: 'info', sleep_great: 'praise', nap_good: 'praise', nap_long: 'info', pain_today: 'info', state_broken: 'info', cheat_day: 'info', special_day: 'info',
   sick_day: 'info', too_many_cheat: 'scold', too_many_special: 'scold', backdated: 'info', out_of_window: 'scold',
   habit_sugar: 'scold', habit_flour: 'scold', habit_coffee: 'scold', coffee_late: 'info', habit_alcohol: 'scold', habit_fastfood: 'scold', habit_late: 'scold',
   balance_deficit: 'info', deload: 'info' };
 
 // Порядок важности: чем меньше, тем выше реплика.
-const PRIORITY = { setup: 0, sick_day: 5, today_perfect: 10, state_broken: 12, cheat_day: 14, special_day: 14,
+const PRIORITY = { setup: 0, sick_day: 5, today_perfect: 10, pain_today: 11, state_broken: 12, cheat_day: 14, special_day: 14,
   sleep_short: 16, sleep_poor: 17, too_many_cheat: 20, too_many_special: 21, gap: 25, workout_light: 28, workout_missed: 30,
-  workout_late: 32, workout_today: 33, sleep_great: 35, evening_low: 38, habit_sugar: 40, habit_flour: 40, habit_coffee: 40, coffee_late: 41,
+  workout_late: 32, workout_today: 33, nap_long: 34, sleep_great: 35, nap_good: 36, evening_low: 38, habit_sugar: 40, habit_flour: 40, habit_coffee: 40, coffee_late: 41,
   habit_alcohol: 40, habit_fastfood: 40, habit_late: 40, out_of_window: 42, balance_deficit: 44, deload: 45, backdated: 46,
   yesterday_perfect: 48, yesterday_bad: 49, streak_record: 50, streak: 55, kcal_over: 60, protein_low: 61, weight_good: 64,
   plateau: 65, plateau_lifts: 66, weight_stall: 67, partner_ahead: 70, partner_behind: 71, morning: 90, keep_going: 91 };
@@ -1832,10 +1927,10 @@ function motivation(uid, t, hour, nowD = new Date()) {
     const wy = itemVal(water, y, uid), wy2 = itemVal(water, y2, uid);
     if (wy && wy.t >= 2 && yt !== 'special') {
       if (wy.v < wy.t * 0.75 && scold) {
-        c('y_water_low', 0.5 + (1 - wy.v / wy.t), { y: wy.v, t: wy.t, of: ofGl(wy.t), half: glW(Math.ceil(wy.t / 2)),
+        c('y_water_low', 0.5 + (1 - wy.v / wy.t), { y: glassNum(wy.v), t: wy.t, of: ofGl(wy.t), half: glW(Math.ceil(wy.t / 2)),
           plus: glW(Math.max(1, Math.min(3, wy.t - wy.v))) }, normNote);
       } else if (wy2 && wy.v >= wy.t * 0.75 && (wy.v >= wy2.v + 2 || (wy.v >= wy.t && wy2.v < wy.t))) {
-        c('y_water_up', 0.55, { y: wy.v, t: wy.t, ygl: plural(wy.v, 'стакан', 'стакана', 'стаканов') });
+        c('y_water_up', 0.55, { y: glassNum(wy.v), t: wy.t, ygl: plural(wy.v, 'стакан', 'стакана', 'стаканов') });
       }
     }
     // шаги
@@ -1966,7 +2061,7 @@ export function attitude(date = addDays(today(), -1), uid = store.uid()) {
     if (uid !== store.uid() || date > today()) return { good, bad };
     const its = items(uid), tg = target(uid), dt = dayType(date, uid);
     const w = itemVal(its.find(i => i.data.target_from === 'water'), date, uid);
-    if (w && w.t) (w.v >= w.t ? good : w.v < w.t * 0.75 ? bad : []).push(`вода ${w.v} из ${w.t}`);
+    if (w && w.t) (w.v >= w.t ? good : w.v < w.t * 0.75 ? bad : []).push(`вода ${glassNum(w.v)} из ${w.t}`);
     const s = itemVal(its.find(i => i.data.target_from === 'steps'), date, uid);
     if (s && s.t) (s.v >= s.t ? good : s.v < s.t * 0.8 ? bad : []).push(`шаги ${nb(s.v)} из ${nb(s.t)}`);
     const wo = activeWorkout(date, uid);
@@ -2034,6 +2129,13 @@ export function lines(now = new Date()) {
     else if (si && si.score < 50) add('sleep_poor');
     else if (si && si.verdict === 'ok' && si.score >= 85 && sleep(t, uid).rise !== 'hard' && st?.wellbeing !== 'meh') add('sleep_great', { h: dec(si.hours) });
   }
+  // «что-то болит» (самочувствие / жалоба в чате) - план дня уже подстроен (plan.adaptToday)
+  const pains = stateOf(t, uid)?.pains || [];
+  if (pains.length && dt !== 'sick') add('pain_today', { what: pains.map(p => ({ head: 'голова', back: 'спина', knees: 'колени', stomach: 'живот' })[p] || p).join(', ') });
+  // дневной сон: короткий после недосыпа - хорошо; длинный или поздний сбивает ночь
+  const napM = napMinutes(t, uid), lateNap = naps(t, uid).some(n => (toMin(n.to) ?? 0) >= 17 * 60);
+  if (napM > 90 || (napM && lateNap)) add('nap_long', { m: napM });
+  else if (napM >= 10 && si?.verdict === 'short') add('nap_good', { m: napM });
 
   // пропуск: сколько дней подряд до сегодня нет ни одной отметки
   if (start && start < t) {
@@ -2435,7 +2537,11 @@ export async function refreshCompete(weeks = 8) {
   for (let m = from; m <= t; m = addDays(m, 7)) await refreshWsum(m);
 }
 
-export function partner() { return store.partners()[0] || null; }
+// с кем сравниваем на «Вместе»: выбранный на этом устройстве (meta together_pid), иначе первый
+export function partner() {
+  const ps = store.partners(), pick = store.getMeta('together_pid', null);
+  return ps.find(p => p.id === pick) || ps[0] || null;
+}
 
 // включено ли соревнование у партнёра: по самой свежей его публичной сводке с полем compete
 export function partnerCompete(pid = partner()?.id) {
@@ -2727,7 +2833,9 @@ export async function sendCheer(text) {
     base.grade = g.grade; base.score = g.score;
     Object.assign(base, dsumCompete(d, uid));
   }
-  await store.put('dsum', id, { ...base, cheer: { text, at: Date.now() } }, d);
+  // cheer - последняя (для старых версий), cheers - все фразы дня: вторая за день не затирает первую
+  const c = { text, at: Date.now() };
+  await store.put('dsum', id, { ...base, cheer: c, cheers: [...(base.cheers || (base.cheer ? [base.cheer] : [])), c].slice(-10) }, d);
   return true;
 }
 
@@ -2741,15 +2849,52 @@ export function partnerCheer(pid = partner()?.id) {
   }
   return best;
 }
-// непрочитанная (при включённом соревновании у себя)
+// «Спасибо» на фразу партнёра: отметка thanks[его id] = время фразы в своей публичной сводке дня - так она
+// общая для всех своих устройств и видна отправителю (бейдж «спасибо» у его сообщения)
+function thankedAt(pid, uid = store.uid()) {
+  const from = addDays(today(), -4);
+  let at = 0;
+  for (const r of store.list('dsum', uid, x => x.date >= from)) at = Math.max(at, Number(r.data.thanks?.[pid]) || 0);
+  return at;
+}
+// все фразы партнёра за 3 дня, от старых к новым
+function partnerCheers(pid) {
+  const from = addDays(today(), -3), seen = new Set(), out = [];
+  for (const r of store.list('dsum', pid, x => x.date >= from && (x.data.cheers?.length || x.data.cheer?.text))) {
+    for (const c of r.data.cheers || [r.data.cheer]) if (c?.text && !seen.has(c.at)) { seen.add(c.at); out.push(c); }
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+// непрочитанные (при включённом обмене прогрессом у себя): все после последнего «Спасибо» → последняя (+ list - все)
 export function unseenCheer(pid = partner()?.id) {
-  if (!competeSettings().enabled) return null;
-  const c = partnerCheer(pid);
-  return c && c.at > (store.getMeta(`cheer_seen:${pid}`, 0) || 0) ? c : null;
+  if (!competeSettings().enabled || !pid) return null;
+  const seenAt = Math.max(store.getMeta(`cheer_seen:${pid}`, 0) || 0, thankedAt(pid));
+  const list = partnerCheers(pid).filter(c => c.at > seenAt);
+  return list.length ? { ...list[list.length - 1], list } : null;
+}
+// все непрочитанные фразы - от всех, с кем виден прогресс (людей может быть несколько)
+export function unseenCheers() {
+  return store.partners().map(p => ({ p, c: unseenCheer(p.id) })).filter(x => x.c);
 }
 export async function markCheerSeen(pid = partner()?.id) {
   const c = partnerCheer(pid);
-  if (c) await store.setMeta(`cheer_seen:${pid}`, c.at);
+  if (!c) return;
+  await store.setMeta(`cheer_seen:${pid}`, c.at);
+  const uid = store.uid(), d = today(), id = `ds:${uid}:${d}`;
+  let base = store.get(id)?.data;
+  if (!base) {
+    base = { ...dayScore(d, uid) };
+    const g = dayGrade(d, uid);
+    base.grade = g.grade; base.score = g.score;
+    Object.assign(base, dsumCompete(d, uid));
+  }
+  await store.put('dsum', id, { ...base, thanks: { ...(base.thanks || {}), [pid]: c.at } }, d);
+}
+// кто сказал «спасибо» на мою последнюю фразу → [имя, …]
+export function cheerThanks(c = myCheer()) {
+  if (!c) return [];
+  const uid = store.uid();
+  return store.partners().filter(p => thankedAt(uid, p.id) >= c.at).map(p => p.name);
 }
 // своя последняя фраза (чтобы показать «отправлено»)
 export function myCheer() {

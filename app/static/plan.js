@@ -10,6 +10,7 @@ import * as store from './store.js';
 import * as C from './coach.js';
 import * as G from './goals.js';
 import * as PF from './prefs.js';
+import * as MX from './myex.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const prof = (uid = store.uid()) => store.get(`profile:${uid}`)?.data || {};
@@ -62,12 +63,13 @@ function deriveContra(e, impact) {
   if (/neck|шея|шеи/.test(e.id + e.name)) c.add('neck');
   return [...c];
 }
-let catSrc = null, catNorm = [];
+let catSrc = null, catOwn = null, catNorm = [];
 export function catalog() {
   const src = store.getMeta('exercises', null) || [];
-  if (src === catSrc) return catNorm;
-  catSrc = src;
-  catNorm = src.map(e => {
+  const own = MX.list();                       // свои упражнения человека (myex.js) - наравне с каталогом
+  if (src === catSrc && own === catOwn) return catNorm;
+  catSrc = src; catOwn = own;
+  catNorm = [...src, ...own].map(e => {
     const impact = e.impact || (JUMPY.test(`${e.id} ${e.name}`) ? 'high' : e.category === 'cardio' ? 'mid' : 'low');
     const tags = e.tags?.length ? new Set(e.tags) : deriveTags(e, impact);
     if (e.morning) tags.add('morning');
@@ -79,6 +81,10 @@ export function catalog() {
 const exById = id => catalog().find(e => e.id === id);
 
 // противопоказания: ограничения из профиля + зоны открытых травм
+// «Что-то болит» в самочувствии сегодня (state.pains) → противопоказания на сегодня: спина - без нагрузки на поясницу,
+// колени - без ударной и коленной, живот - без тяжёлого пресса (как при грыже); голова - только снижает готовность
+export const PAIN_CONTRA = { back: ['lower_back'], knees: ['knees'], stomach: ['hernia'], head: [] };
+export const PAIN_NAME = { head: 'голова', back: 'спина', knees: 'колени', stomach: 'живот' };
 export function excludedFor(uid = store.uid()) {
   const out = new Set(prof(uid).limitations || []);
   const t = C.today();
@@ -86,6 +92,7 @@ export function excludedFor(uid = store.uid()) {
     const d = r.data;
     if (d.zone && (!d.resolved || d.resolved > t) && (!d.since || d.since <= t)) out.add(d.zone);
   }
+  for (const p of C.stateOf(t, uid)?.pains || []) for (const c of PAIN_CONTRA[p] || []) out.add(c);
   return out;
 }
 const NO_IMPACT = ['knees', 'ankles', 'overweight_joints', 'pregnancy', 'hernia', 'heart', 'varicose'];
@@ -96,6 +103,19 @@ function userLevel(uid) {
   if (lv >= 1 && lv <= 3) return lv;
   const done = store.list('workout', uid, r => r.data.done).length;
   return done >= 30 ? 3 : 2;
+}
+
+// Инвентарь в коротком комплексе (profile.modules[module].gear): any - любой из профиля, mat - только коврик,
+// none - без коврика и инвентаря (стоя, у стены, со стулом нельзя тоже). Упражнения на полу без пометки mat
+// в каталоге (отжимания, скалолаз, гусеница…) тоже требуют коврика.
+export const GEAR = [['any', 'любой'], ['mat', 'только коврик'], ['none', 'без коврика и инвентаря']];
+const ON_FLOOR = new Set(['pushup', 'tempo_pushup', 'mountain_climber', 'inchworm', 'squat_thrust', 'burpee']);
+export const gearOf = (module, uid = store.uid()) => (module && prof(uid).modules?.[module]?.gear) || 'any';
+export function gearOk(e, gear) {
+  if (!e || !gear || gear === 'any') return true;
+  const eq = e.equipment || [];
+  if (gear === 'mat') return eq.every(q => q === 'mat');
+  return !eq.length && !ON_FLOOR.has(e.id) && !/лёжа|лежа|планк/i.test(e.name || '');
 }
 
 // пул упражнений под место, инвентарь, ограничения и уровень
@@ -110,8 +130,16 @@ function pool({ place = 'home', equipment, level, uid = store.uid(), noJump, qui
     else if (Array.isArray(prof(uid).equipment)) eq = new Set([...prof(uid).equipment, 'mat', 'chair']);   // пол и стул есть везде
   }
   const lv = level || userLevel(uid);
+  const gear = gearOf(module, uid);
+  // «и дальше ставить Y вместо X» (prefs.swaps, always): X не предлагаем там, где Y доступно
+  const swapped = new Set(Object.keys(PF.swapsOf(uid)).filter(id => {
+    const to = exById(PF.swapTo(id, { place, module }, uid));
+    return to && (to.place || []).includes(place);
+  }));
   return catalog().filter(e => (e.place || []).includes(place)
     && !skip.has(e.id)
+    && !swapped.has(e.id)
+    && gearOk(e, gear)
     && !(missing?.size && (e.equipment || []).some(q => missing.has(q)))
     && (!eq || (e.equipment || []).every(q => eq.has(q)))
     && !(e._contra || []).some(c => excl.has(c))
@@ -146,6 +174,7 @@ function pickInternal({ tags, fallback, zones, minutes = 10, place = 'home', dat
   const s = seed || `${date}|${(tags || []).join(',')}`;
   const eff = goalEffects(uid);
   const liked = PF.likedIds(uid);
+  for (const v of Object.values(PF.swapsOf(uid))) if (v.always && v.to) liked.add(v.to);   // выбранное на замену - как любимое
   const scored = cand.map(e => ({
     e,
     sc: rnd(s + '|' + e.id) + (liked.has(e.id) ? 0.35 : 0) + G.exerciseBoost(e, eff) * 0.5 + (zones?.length && e._zones.some(z => zones.includes(z)) ? 0.5 : 0)
@@ -161,7 +190,7 @@ function pickInternal({ tags, fallback, zones, minutes = 10, place = 'home', dat
     const pat = e.pattern || 'other';
     if (pat !== 'mobility' && (perPattern[pat] || 0) >= maxPerPattern) continue;
     perPattern[pat] = (perPattern[pat] || 0) + 1;
-    list.push({ id: e.id, name: e.name, amount: fmtAmount(e, n), per_side: !!e.per_side, unit: e.unit, n, sec });
+    list.push({ id: e.id, name: e.name, amount: e.own && e.how ? e.how : fmtAmount(e, n), per_side: !!e.per_side, unit: e.unit, n, sec });
     used += sec;
   }
   // не хватило упражнений — удлиняем каждое, потом добавляем круги
@@ -172,7 +201,7 @@ function pickInternal({ tags, fallback, zones, minutes = 10, place = 'home', dat
     for (const x of list) {
       const e = exById(x.id);
       x.n = e.unit === 'seconds' ? Math.min(60, Math.round(x.n * k / 5) * 5) : Math.min(20, Math.round(x.n * k / 2) * 2);
-      x.amount = fmtAmount(e, x.n);
+      if (!(e.own && e.how)) x.amount = fmtAmount(e, x.n);
       x.sec = setSec(e, x.n);
       used += x.sec;
     }
@@ -259,10 +288,10 @@ export async function makeRoutine(module, a, b, opts = {}) {
   if (rebuild) for (const x of cur?.data.exercises || []) if (!x.pinned) avoid.push(x.id);   // не повторять только что показанное
   // закреплённые пользователем упражнения («моя зарядка») идут первыми, генератор добирает остальное время
   const skipIds = PF.excludedIds(uid, { place: 'home', module });
-  const pinned = module === 'morning' ? (prof(uid).modules?.morning?.pinned || []).filter(x => !skipIds.has(x) && catalog().some(e => e.id === x)) : [];
+  const pinned = module === 'morning' ? (prof(uid).modules?.morning?.pinned || []).filter(x => !skipIds.has(x) && gearOk(exById(x), gearOf(module, uid))) : [];
   const pinnedList = pinned.map(pid => {
     const e = catalog().find(x => x.id === pid);
-    return { id: pid, amount: e.unit === 'seconds' ? `${cfg.sec || 30} с` : `${cfg.reps || 10} раз`, per_side: !!e.per_side, pinned: true };
+    return { id: pid, amount: e.own && e.how ? e.how : e.unit === 'seconds' ? `${cfg.sec || 30} с` : `${cfg.reps || 10} раз`, per_side: !!e.per_side, pinned: true };
   });
   minutes = Math.max(2, minutes - pinned.length * 0.75);
   avoid.push(...pinned);
@@ -334,7 +363,7 @@ function warmFromPartner(pw, uid, module, cur) {
   const doneIds = new Set((cur || []).filter(x => x.done).map(x => x.id));
   for (const x of pw.data.exercises) {
     let id = x.id, amount = x.amount, swapped = null;
-    if (!exById(id) || PF.isExcluded(id, uid, { place: 'home', module })) {
+    if (!exById(id) || PF.isExcluded(id, uid, { place: 'home', module }) || !gearOk(exById(id), gearOf(module, uid))) {
       const alt = alternativesFor(id, { place: 'home', module, exclude: [...ids, ...out.map(o => o.id)], n: 1, uid })[0];
       if (!alt) continue;
       swapped = id; id = alt.id;
@@ -358,12 +387,16 @@ export async function pairWarmSync(date = C.today(), uid = store.uid(), module =
   if (cur.data.done) return false;                                  // уже закончил - свой не трогаем
   const exercises = warmFromPartner(pw, uid, module, cur.data.exercises);
   if (!exercises.length) return false;
-  const who = store.partners().find(p => p.id === pw.user_id)?.name || 'партнёр';
+  const pa = store.partners().find(p => p.id === pw.user_id), who = pa?.name || 'партнёр';
   const minutes = pw.data.minutes || cur.data.minutes;
   const title = `${(MODULES[module] || MODULES.morning).title} · ${minutes} мин`;
   const ch = pw.data.change;
-  const pair_note = ch?.kind === 'swap' ? `${who} ${ch.fem ? 'заменила' : 'заменил'} «${exById(ch.from)?.name || ch.from}» на «${exById(ch.to)?.name || ch.to}»`
-    : ch?.kind === 'rebuild' ? `${who} ${ch.fem ? 'пересобрала' : 'пересобрал'} комплекс` : null;
+  // род глагола - по полу из профиля того, кто менял, или из данных партнёра; неизвестен - без глагола в прошедшем
+  const sex = ch?.fem || pa?.sex === 'f' ? 'f' : pa?.sex === 'm' ? 'm' : null;
+  const v = (m, f) => sex === 'f' ? f : m;
+  const swapTxt = ch?.kind === 'swap' ? `«${exById(ch.from)?.name || ch.from}» на «${exById(ch.to)?.name || ch.to}»` : '';
+  const pair_note = ch?.kind === 'swap' ? (sex ? `${who} ${v('заменил', 'заменила')} ${swapTxt}` : `${who}: замена ${swapTxt}`)
+    : ch?.kind === 'rebuild' ? (sex ? `${who} ${v('пересобрал', 'пересобрала')} комплекс` : `${who}: комплекс пересобран`) : null;
   await store.put('routine', id, { ...cur.data, minutes, title, exercises, done: exercises.every(x => x.done), pair_v: pw.data.v, pair_with: who, pair_note }, date);
   await store.put('pairwarm', mineId, { v: pw.data.v, module, minutes, exercises: exercises.map(({ id: e, amount, per_side }) => ({ id: e, amount, per_side })) }, date);
   await C.refreshDsum(date);
@@ -632,6 +665,8 @@ export function readiness(date = C.today(), uid = store.uid()) {
     if (st.stress === 'high') reasons.push('высокий стресс');
     score += { some: -3, strong: -8 }[st.sleepy] || 0;
     if (st.sleepy === 'strong') reasons.push('сильная сонливость');
+    const PAIN_R = { head: [-15, 'болит голова'], stomach: [-20, 'болит живот'], back: [-10, 'болит спина'], knees: [-8, 'болят колени'] };
+    for (const p of st.pains || []) if (PAIN_R[p]) { score += PAIN_R[p][0]; reasons.push(PAIN_R[p][1]); }
   }
   // вчерашняя нагрузка
   const y = C.addDays(date, -1);
@@ -924,8 +959,37 @@ export function alternativesIn(ctx, n = 4, uid = store.uid()) {
   return inf ? alternativesFor(inf.id, { place: inf.place, module: inf.module, exclude: inf.others, n, uid }) : [];
 }
 
+// Поиск замены по всему каталогу (и своим упражнениям) для места упражнения на экране: по названию и мышцам.
+// Без «не предлагать», недоступного инвентаря и противопоказаний - как pool(); уровень любой (человек выбирает сам).
+export function searchIn(ctx, q, n = 12, uid = store.uid()) {
+  const inf = ctxInfo(ctx, uid);
+  if (!inf) return [];
+  const t = String(q || '').trim().toLowerCase();
+  if (!t) return [];
+  const skip = new Set([inf.id, ...(inf.others || [])]);
+  const words = t.split(/\s+/).filter(Boolean);
+  const hay = e => `${e.name} ${(e.muscles || []).join(' ')}`.toLowerCase();
+  return pool({ place: inf.place, module: inf.module, uid, level: 3 })
+    .filter(e => !skip.has(e.id) && words.every(w => hay(e).includes(w)))
+    .sort((a, b) => (b.own ? 1 : 0) - (a.own ? 1 : 0) || a.name.localeCompare(b.name)).slice(0, n);
+}
+
+// «И дальше вместо X - Y»: переписать будущие (не начатые) тренировки этого места. → сколько тренировок поменяли
+export async function applySwapForward(from, to, place, fromDate = C.addDays(C.today(), 1), uid = store.uid()) {
+  let n = 0;
+  const list = store.list('workout', uid, r => r.date >= fromDate && !r.data.done).sort((a, b) => a.date.localeCompare(b.date));
+  for (const w of list) {
+    if (place && placeOfWorkout(w.data, uid) !== place) continue;
+    if (hasLogs(w.data)) continue;
+    const i = (w.data.exercises || []).findIndex(x => x.id === from);
+    if (i < 0 || (w.data.exercises || []).some(x => x.id === to)) continue;
+    if (await swapExercise({ kind: 'workout', date: w.date, i }, to, uid)) n++;
+  }
+  return n;
+}
+
 // Заменить упражнение в текущей разминке/тренировке; отметки и логи остальных упражнений не трогаем.
-export async function swapExercise(ctx, to, uid = store.uid()) {
+export async function swapExercise(ctx, to, uid = store.uid(), { share = true } = {}) {
   const e = exById(to);
   if (!e || !ctx) return null;
   if (ctx.kind === 'routine') {
@@ -935,11 +999,12 @@ export async function swapExercise(ctx, to, uid = store.uid()) {
     const cur = exs[ctx.i];
     if (!cur) return null;
     const old = exById(cur.id), cfg = MODULES[ctx.module] || MODULES.morning;
-    const amount = old && old.unit === e.unit ? cur.amount : e.unit === 'seconds' ? `${cfg.sec || 30} с` : `${cfg.reps || 10} раз`;
+    // своё упражнение - сколько указал человек («2 мин»), а не стандартные 30 с
+    const amount = e.own && e.how ? e.how : old && old.unit === e.unit ? cur.amount : e.unit === 'seconds' ? `${cfg.sec || 30} с` : `${cfg.reps || 10} раз`;
     exs[ctx.i] = { id: to, amount, per_side: !!e.per_side, done: false, swapped_from: cur.id };
     await store.patch(id, { exercises: exs, done: exs.every(x => x.done), pair_note: null });
     // общий комплекс: замена сразу и у партнёра
-    if (pairOn(uid, ctx.module)) await publishWarm(ctx.date, store.get(id), Date.now(), uid, ctx.module, { kind: 'swap', from: cur.id, to, fem: prof(uid).sex === 'f' });
+    if (share && pairOn(uid, ctx.module)) await publishWarm(ctx.date, store.get(id), Date.now(), uid, ctx.module, { kind: 'swap', from: cur.id, to, fem: prof(uid).sex === 'f' });
     await C.refreshDsum(ctx.date);
     return e;
   }
@@ -955,12 +1020,68 @@ export async function swapExercise(ctx, to, uid = store.uid()) {
     const old = exById(cur.id);
     const same = old && old.unit === e.unit;
     const x = toWorkoutEx(e, { sets: cur.sets, reps: same ? cur.reps : repsRange(userLevel(uid)), secs: 30, rest: cur.rest_sec ?? 60 });
-    if (same) x.reps = cur.reps; else if (e.unit === 'seconds') x.reps = '30-45 с';
+    if (e.own && e.how) x.reps = e.how; else if (same) x.reps = cur.reps; else if (e.unit === 'seconds') x.reps = '30-45 с';
     data.exercises[ctx.i] = { ...x, ...(cur.sets_base ? { sets_base: cur.sets_base } : {}), swapped_from: cur.id };
   }
   await store.put('workout', w.id, data, ctx.date);
   await C.refreshDsum(ctx.date);
   return e;
+}
+
+// Сменили инвентарь комплекса: в уже собранном на дату - заменить неподходящие несделанные упражнения похожими
+// (отметки остальных сохраняются; у партнёра общий комплекс не меняем - у него свой инвентарь). → число замен
+export async function applyGear(module, date = C.today(), uid = store.uid()) {
+  const id = `routine:${uid}:${date}:${module}`, gear = gearOf(module, uid);
+  let n = 0;
+  for (let i = (store.get(id)?.data.exercises || []).length - 1; i >= 0; i--) {
+    const x = store.get(id)?.data.exercises?.[i];
+    if (!x || x.done || gearOk(exById(x.id), gear)) continue;
+    const ctx = { kind: 'routine', module, date, i };
+    const alt = alternativesIn(ctx, 1, uid)[0];
+    if (alt && await swapExercise(ctx, alt.id, uid, { share: false })) { n++; continue; }
+    // похожего без инвентаря нет - просто убираем
+    const exs = store.get(id).data.exercises.filter((_, j) => j !== i);
+    await store.patch(id, { exercises: exs, done: exs.length > 0 && exs.every(e => e.done) });
+    n++;
+  }
+  if (n) await C.refreshDsum(date);
+  return n;
+}
+
+// Подстроить сегодняшние комплексы и тренировку под самочувствие: упражнения, которые сегодня противопоказаны
+// (боль в спине, коленях, животе, травмы), заменить безопасными; при тяжёлом самочувствии (lighten) - облегчить
+// тренировку, если её ещё не начали. Замены только у себя - общий комплекс партнёру не меняем. → { swapped, lightened }
+export async function adaptToday(date = C.today(), { lighten = false } = {}, uid = store.uid()) {
+  const excl = excludedFor(uid), unsafe = id => (exById(id)?._contra || []).some(c => excl.has(c));
+  let swapped = 0, lightened = false;
+  for (const r of store.list('routine', uid, x => x.date === date && !x.data.done)) {
+    const module = r.data.module || r.id.split(':').pop();
+    for (let i = 0; i < (r.data.exercises || []).length; i++) {
+      const x = store.get(r.id)?.data.exercises?.[i];
+      if (!x || x.done || !unsafe(x.id)) continue;
+      const ctx = { kind: 'routine', module, date, i };
+      const alt = alternativesIn(ctx, 1, uid)[0];
+      if (alt && await swapExercise(ctx, alt.id, uid, { share: false })) swapped++;
+    }
+  }
+  const w = C.workout(date, uid);
+  if (w && !w.data.done && !hasLogs(w.data)) {
+    for (const kind of ['workout', 'warmup', 'cooldown']) {
+      const n = kind === 'workout' ? (w.data.exercises || []).length : (w.data[kind] || []).length;
+      for (let i = 0; i < n; i++) {
+        const cur = C.workout(date, uid)?.data, id = kind === 'workout' ? cur?.exercises?.[i]?.id : cur?.[kind]?.[i];
+        if (!id || !unsafe(id)) continue;
+        const ctx = { kind, date, i };
+        const alt = alternativesIn(ctx, 1, uid)[0];
+        if (alt && await swapExercise(ctx, alt.id, uid, { share: false })) swapped++;
+      }
+    }
+    const rd = readiness(date, uid);
+    if (lighten && ['low', 'rest'].includes(rd.level) && (C.workout(date, uid)?.data.variant || 'full') === 'full') {
+      lightened = !!(await applyVariant(date, 'light'))?.ok;
+    }
+  }
+  return { swapped, lightened };
 }
 
 // «Не предлагать» (+ сразу заменить в текущем списке, если он указан) → { alt } — на что заменили

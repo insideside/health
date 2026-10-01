@@ -2,7 +2,7 @@ import * as store from '../store.js';
 import * as C from '../coach.js';
 import * as P from '../plan.js';
 import { S, ctxAttrs, plural, WD, esc, num, fmt, dayTitle, profile, CHECK, toast, ring, field, fval, input, textarea, openModal, closeModal, techHtml, dateNav, isBackdated, afterChange, glyph, MOOD_GLYPH, nowHM } from '../ui.js';
-import { cheerNotice } from './together.js';
+import { cheersBlock } from './together.js';
 import * as FX from './fit.js';
 import * as SPV from './supp.js';
 import * as PF from '../prefs.js';
@@ -41,6 +41,17 @@ export const STATE_Q = [
 ];
 // самочувствие — линейные значки вместо эмодзи (ui.MOOD_GLYPH)
 export const STATE_EMOJI = MOOD_GLYPH;
+// «что-то болит» сегодня: то же отмечает жалоба тренеру в чате; план дня подстраивается (plan.adaptToday)
+export const PAINS = [['head', 'голова'], ['back', 'спина'], ['knees', 'колени'], ['stomach', 'живот']];
+// отметить/снять боль и подстроить план дня → текст, что поменялось
+export async function setPain(date, key, on) {
+  const cur = stateRec(date)?.data.pains || [];
+  const pains = on ? [...new Set([...cur, key])] : cur.filter(x => x !== key);
+  await upsertDaily('state', 'state', date, { pains });
+  if (!on || date !== C.today()) return '';
+  const r = await P.adaptToday?.(date, { lighten: true }) || {};
+  return [r.swapped ? `заменил ${r.swapped} ${plural(r.swapped, 'упражнение', 'упражнения', 'упражнений')}` : '', r.lightened ? 'облегчил тренировку' : ''].filter(Boolean).join(' и ');
+}
 export const DAY_TYPES = [['', 'обычный'], ['cheat', 'читмил'], ['special', 'особый день'], ['sick', 'болею'], ['rest', 'отдых']];
 export const DAY_TYPE_NAME = Object.fromEntries(DAY_TYPES);
 export const GRADE_NAME = { good: 'хороший день', ok: 'средний день', bad: 'слабый день', none: 'нет данных', live: 'день в процессе' };
@@ -319,11 +330,12 @@ function viewDay(date) {
     </div>
     ${backdatedNote(date)}
     ${isToday ? nextStep(prof) : ''}
-    ${coachCard(date, g)}
+    <div id="td-coach" data-date="${date}">${lastCoach = coachCard(date, g)}</div>
+    ${isToday ? `<div class="t-cheers">${safe(() => cheersBlock(), '')}</div>` : ''}
     <div class="summary">${ring(s.pct, 72, 7, 'g-' + g.grade)}
       <div class="a-grow"><div class="stats"><span class="chip">${gradeDot(g.grade)}${g.grade === 'none' && isToday ? 'пока без отметок' : GRADE_NAME[g.grade]}${g.grade !== 'none' && g.score !== null ? ` · <span class="mono">${Math.round(g.score)}</span>` : ''}</span>
         <span class="chip">выполнено ${s.done} из ${s.total}</span>
-        <span class="chip">серия ${st.current} дн.${st.frozen ? ' <span title="Один слабый день на этой неделе не разорвал серию - раз в неделю так можно">· пропуск прощён</span>' : ''}</span><span class="chip" data-dom="goal">+${s.xp} XP</span></div>
+        <span class="chip">серия ${st.current} дн.</span><span class="chip" data-dom="goal">+${s.xp} XP</span></div>
         <p class="note" style="margin:8px 0 0">${s.pct >= streakMin ? 'День засчитан в серию.' : `Для серии нужно ${streakMin} % чек-листа.`}
           <a class="link" href="#calendar/day/${date}">дневник дня</a></p></div>
     </div>
@@ -391,6 +403,23 @@ function backdatedNote(date) {
   }))}</div>`;
 }
 
+// Карточка тренера обновляется сама, без перерисовки всего экрана: пока в поле ввода курсор, полная перерисовка
+// ждёт (правка уже сохранена, а реплика старая), и часть реплик зависит от времени суток («вечером…»).
+let lastCoach = '';
+function refreshCoach() {
+  const el = document.getElementById('td-coach');
+  if (S.pressing) { setTimeout(refreshCoach, 400); return; }
+  if (!el || document.hidden || el.contains(document.activeElement)) return;
+  const date = el.dataset.date;
+  const html = safe(() => coachCard(date, shownGrade(date, dayGrade(date))), null);
+  if (html === null || html === lastCoach) return;
+  lastCoach = html;
+  el.innerHTML = html;
+}
+store.on(refreshCoach);
+setInterval(refreshCoach, 60e3);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshCoach(); });
+
 function coachCard(date, g) {
   const prof = profile();
   const who = C.TONE_NAMES[prof.tone || 'coach'];
@@ -409,7 +438,7 @@ function coachCard(date, g) {
   if (date > C.today()) return `<div class="coach inset info"><div class="who smallcaps">${who}</div><q>${esc(byTone({
     soft: 'Этот день ещё впереди. Загляни сюда, когда он наступит.', coach: 'День ещё не наступил. План - на вкладке «Спорт».', sergeant: 'Будущее не отмечаем. Сначала переживи сегодня.' }))}</q></div>`;
   const txt = {
-    good: { soft: 'Хороший был день - можно собой гордиться.', coach: 'День в зачёт. Так и работаем.', sergeant: 'Хороший день. Не зазнавайся.' },
+    good: { soft: 'Хороший был день - можно собой гордиться.', coach: 'Хороший день, так держать!', sergeant: 'Хороший день. Не зазнавайся.' },
     ok: { soft: 'Нормальный день: что-то получилось, что-то нет. Это тоже движение.', coach: 'Средний день. Есть что подтянуть.', sergeant: 'Середнячок. Мне нужны результаты, а не «нормально».' },
     bad: { soft: 'День вышел слабым. Бывает - главное, что следующий можно сделать лучше.', coach: 'Слабый день. Разберись, что помешало, и не повторяй.', sergeant: 'Провальный день. Записал в личное дело.' },
     none: { soft: 'За этот день почти ничего не отмечено.', coach: 'Данных за день нет - оценивать нечего.', sergeant: 'Пустой день. Где доклад, боец?' },
@@ -428,6 +457,26 @@ function timeBox(label, k, val, date, aria) {
     <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="${esc(aria)}, часы">
     <span class="a-hm-sep">:</span>
     <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="${esc(aria)}, минуты"></div></label>`;
+}
+// дневной сон: интервалы «с - до» (sleep.naps), отдельно от ночи; поля часы/минуты - как у ночного сна
+function napBox(i, end, val, date, label) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(val || '');
+  const a = `data-act="td-nap-time" data-i="${i}" data-end="${end}" data-date="${date}"`;
+  return `<label class="a-napf"><span class="note">${label}</span><span class="a-hm">
+    <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="Дневной сон ${i + 1}, ${label}, часы">
+    <span class="a-hm-sep">:</span>
+    <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="Дневной сон ${i + 1}, ${label}, минуты"></span></label>`;
+}
+function napsBlock(date) {
+  if (date > C.today()) return '';
+  const raw = sleepRec(date)?.data.naps || [];
+  const mins = n => { const a = C.toMin(n.from), b = C.toMin(n.to); return a != null && b != null && b > a ? b - a : 0; };
+  const total = raw.reduce((x, n) => x + mins(n), 0);
+  return `<div class="a-naps"><div class="a-naps-h"><span class="smallcaps muted">Дневной сон</span>${total ? `<span class="note mono">${total} мин</span>` : ''}</div>
+    ${raw.map((n, i) => `<div class="a-nap">${napBox(i, 'from', n.from, date, 'с')}${napBox(i, 'to', n.to, date, 'до')}
+      <button class="btn quiet a-mini" data-act="td-nap-rm" data-i="${i}" data-date="${date}" aria-label="Убрать дневной сон ${i + 1}">${glyph('cross')}</button></div>`).join('')}
+    <button class="btn quiet a-mini" data-act="td-nap-add" data-date="${date}">+ дневной сон</button>
+    ${!raw.length ? `<p class="note a-tight">Если ${fem() ? 'спала' : 'спал'} днём - укажи время: тренер учтёт его в сне дня. Лучше всего 20-30 минут и до 17:00.</p>` : ''}</div>`;
 }
 function sleepCard(date) {
   const rec = sleepRec(date), d = rec?.data || {};
@@ -452,6 +501,7 @@ function sleepCard(date) {
       ${complete ? `<button class="btn quiet a-mini" data-act="td-sleep-open" aria-expanded="${open}">${open ? 'Свернуть' : 'Изменить'}</button>` : ''}</div>
     ${summary}
     ${complete && !open ? `<p class="note a-tight">${esc(SLEEP_Q.map(([k, , o]) => o.find(x => x[0] === d[k])?.[1]).filter(Boolean).join(' · '))} · ${esc(d.bed)}–${esc(d.wake)}</p>` : body}
+    ${napsBlock(date)}
   </div>`;
 }
 
@@ -461,6 +511,10 @@ function stateCard(date) {
   return `<div class="raised a-card" data-dom="mood">
     <div class="a-card-head"><span class="smallcaps">Самочувствие</span>${d.wellbeing ? `<span class="a-emoji" aria-hidden="true">${STATE_EMOJI[d.wellbeing]}</span>` : ''}</div>
     ${STATE_Q.map(([k, label, opts]) => `<div class="a-q"><span class="smallcaps muted">${label}</span>${pick('td-state', d[k], opts, `data-k="${k}" data-date="${date}"`)}</div>`).join('')}
+    <div class="a-q"><span class="smallcaps muted">Что-то болит?</span><div class="chips">${PAINS.map(([k, l]) => {
+      const on = (d.pains || []).includes(k);
+      return `<button type="button" class="chip ${on ? 'on' : ''}" aria-pressed="${on}" data-act="td-pain" data-k="${k}" data-date="${date}">${l}</button>`;
+    }).join('')}</div></div>
   </div>`;
 }
 
@@ -591,6 +645,7 @@ async function migrateMorning() {
   }
 }
 
+const MEAL_RU = { breakfast: 'Завтрак', lunch: 'Обед', dinner: 'Ужин', snack: 'Перекус' };
 // окно чашек дня: время каждой правится (сохраняется сразу), лишнюю можно удалить, новую - добавить с любым временем
 function cupEditor(kind, date, focusNew = false) {
   const list = C.cupList(date, kind), c = C.CUPS[kind];
@@ -601,7 +656,10 @@ function cupEditor(kind, date, focusNew = false) {
     ${r.data.milk ? `<select class="control" data-act="cup-milk-type" data-id="${r.id}" data-date="${date}" aria-label="Какое молоко">
         ${C.MILK_TYPES.map(([k, , l]) => `<option value="${k}" ${r.data.milk.type === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}
       </select>
-      <label class="a-cup-ml"><input class="control mono" type="number" inputmode="numeric" min="0" step="10" value="${r.data.milk.ml || 50}" data-act="cup-milk-ml" data-id="${r.id}" data-date="${date}" aria-label="Сколько молока, мл"> мл</label>` : ''}
+      <label class="a-cup-ml"><input class="control mono" type="number" inputmode="numeric" min="0" step="10" value="${r.data.milk.ml || 50}" data-act="cup-milk-ml" data-id="${r.id}" data-date="${date}" aria-label="Сколько молока, мл"> мл</label>
+      ${C.milkMode() === 'meal' ? `<select class="control a-cup-meal" data-act="cup-milk-meal" data-id="${r.id}" data-date="${date}" aria-label="К какому приёму пищи отнести молоко">
+        <option value="" ${r.data.milk.meal ? '' : 'selected'}>по времени: ${esc(MEAL_RU[C.milkMeal(null, r.data.time)] || '')}</option>
+        ${Object.entries(MEAL_RU).map(([k, l]) => `<option value="${k}" ${r.data.milk.meal === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}` : ''}
   </div>`;
   openModal(`<div class="modal-head"><h2>${esc(c.title)} · ${esc(fmt(date, { day: 'numeric', month: 'long' }))}</h2></div><div class="modal-body">
     ${list.length ? `<div class="a-cups">${list.map((r, i) => `<div class="a-cup-line"><span class="smallcaps muted">${i + 1}</span>
@@ -611,7 +669,7 @@ function cupEditor(kind, date, focusNew = false) {
       : '<p class="note">Пока ни одной чашки.</p>'}
     <div class="a-cup-line a-cup-new"><span class="smallcaps muted">+</span><input class="control" type="time" id="cup-new-time" value="${def}" aria-label="Время новой чашки">
       <button class="btn" data-act="cup-new" data-kind="${kind}" data-date="${date}">Добавить</button></div>
-    <p class="note">После 14:00 кофеин заметнее мешает сну - тренер сравнит такие дни с ночами.${kind === 'coffee' ? ' Молоко в кофе считается в БЖУ дня.' : ''}</p>
+    <p class="note">После 14:00 кофеин заметнее мешает сну - тренер сравнит такие дни с ночами.${kind === 'coffee' ? (C.milkMode() === 'meal' ? ' Молоко в кофе считается в БЖУ дня и показывается в выбранном приёме пищи.' : ' Молоко в кофе считается в БЖУ дня, в приёмах пищи его нет (Профиль → Режим питания).') : ''}</p>
     </div><div class="modal-foot"><button class="btn solid" data-act="close">Готово</button></div>`);
   if (focusNew) document.getElementById('cup-new-time')?.focus();
 }
@@ -666,7 +724,18 @@ export async function background() {
   bgBusy = true;
   // разминка не зависит от заполненного профиля: без перевода старые пункты-упражнения
   // остаются в чек-листе, и «Не предлагать» / «Заменить» на них не действуют
-  try { await migrateMorning(); await ensureTodayRoutine(); await P.pairSyncAll?.(C.today()); if (profile().setup_done) { await ensureCups(); await ensureHabitLogItems(); } } catch (e) { warn(e); } finally { bgBusy = false; }
+  try {
+    // Сначала свежие данные с сервера: после сна устройства или в полночь другое устройство могло уже собрать
+    // сегодняшнюю разминку - собрать свою параллельно значит получить две разные версии одной записи.
+    if (store.state.online && Date.now() - (store.state.lastSync || 0) > 30000) { try { await store.sync(); } catch (e) { /* офлайн - соберём своё */ } }
+    await migrateMorning();
+    await ensureTodayRoutine();
+    await P.pairSyncAll?.(C.today());
+    // боль и травмы, отмеченные на другом устройстве или тренером в чате: противопоказанное сегодня - заменить
+    if ((stateRec(C.today())?.data.pains || []).length || store.list('injury').some(r => !r.data.resolved)) await P.adaptToday?.(C.today());
+    await C.syncHighlights?.();                      // вехи ленты без источника (сняли отметку, удалили) - убрать
+    if (profile().setup_done) { await ensureCups(); await ensureHabitLogItems(); }
+  } catch (e) { warn(e); } finally { bgBusy = false; }
 }
 
 function modulesBlock(date) {
@@ -775,6 +844,8 @@ function moduleCard(k, date) {
     ${today ? `<div class="a-modbar"><span class="smallcaps muted">Время</span>
       ${m.mins.map(n => `<button class="chip ${n === d.minutes ? 'on' : ''}" aria-pressed="${n === d.minutes}" data-act="td-mod-make" data-m="${k}" data-min="${n}" data-date="${date}" aria-label="Пересобрать на ${n} минут">${n} мин</button>`).join('')}
       <button class="btn quiet a-mini" data-act="td-mod-redo" data-m="${k}" data-date="${date}" title="Другие упражнения на то же время${pins.length ? '; закреплённые останутся' : ''}">${glyph('rise')} Пересобрать</button></div>
+      <div class="a-modbar"><span class="smallcaps muted">Инвентарь</span>
+      ${P.GEAR.map(([g, l]) => `<button class="chip ${g === P.gearOf(k) ? 'on' : ''}" aria-pressed="${g === P.gearOf(k)}" data-act="td-mod-gear" data-m="${k}" data-g="${g}" data-date="${date}">${l}</button>`).join('')}</div>
       ${started ? '<p class="note a-tight">Пересборка начнёт комплекс заново - отметки сбросятся.</p>' : ''}
       ${pins.length && pins.length * 0.75 > (d.minutes || 10) * 0.7 ? `<div class="notice a-tight">Закреплено ${pins.length} ${pins.length < 5 ? 'упражнения' : 'упражнений'} - они есть в разминке всегда, и на ${d.minutes} мин тренеру почти не остаётся места.
         <div class="a-row-btns"><button class="btn quiet a-mini" data-act="td-unpin-all" data-date="${date}">Открепить все</button></div></div>` : ''}` : ''}
@@ -985,12 +1056,14 @@ function itemRow(it, date) {
         <span class="val">${C.cupNum(v)}</span><button data-act="cup-add" ${ka} aria-label="Ещё чашка: ${esc(d.title)}">+</button></div></div>`;
   }
   if (d.type === 'counter') {
-    const glasses = d.target_from === 'water' && p.target <= 16
-      ? `<div class="glasses">${Array.from({ length: p.target }, (_, i) => `<i class="${i < p.value ? 'on' : ''}"></i>`).join('')}</div>` : '';
+    // вода - и по полстакана: «½» заполняет стакан наполовину, второй «½» - целиком
+    const water = d.target_from === 'water', v = Number(p.value) || 0;
+    const glasses = water && p.target <= 16
+      ? `<div class="glasses">${Array.from({ length: p.target }, (_, i) => `<i class="${i + 1 <= v ? 'on' : i < v ? 'half' : ''}"></i>`).join('')}</div>` : '';
     return `<div class="row ${done ? 'done' : ''}"${da}>${tick(`data-act="inc" data-d="1" ${attrs}`)}
       <div><div class="title">${esc(d.title)}</div>${glasses || `<div class="hint">цель ${p.target} ${esc(d.unit || '')}</div>`}</div>
-      <div class="stepper"><button data-act="inc" data-d="-1" ${attrs} aria-label="Меньше">−</button>
-        <span class="val">${p.value}/${p.target}</span><button data-act="inc" data-d="1" ${attrs} aria-label="Больше">+</button></div></div>`;
+      <div class="stepper"><button data-act="inc" data-d="-1" ${attrs} aria-label="Меньше${water && v % 1 ? ' на полстакана' : ''}">−</button>
+        <span class="val">${water ? C.glassNum(v) : p.value}/${p.target}</span><button data-act="inc" data-d="1" ${attrs} aria-label="Больше">+</button>${water ? `<button class="half" data-act="inc" data-d="0.5" ${attrs} aria-label="Полстакана">½</button>` : ''}</div></div>`;
   }
   if (d.type === 'number') {
     return `<div class="row ${done ? 'done' : ''}"${da}>${tick(`data-act="focus-num" data-item="${it.id}"`)}
@@ -1044,10 +1117,9 @@ function partnersBlock(date) {
 // соревнование пары: полученная поддержка и счёт недели (если соревнование включено у обоих)
 function duelBlock(date) {
   if (date !== C.today()) return '';
-  const cheer = safe(() => cheerNotice(), '');
   const d = safe(() => C.duel?.(), null);
   const line = d?.state === 'ok' ? safe(() => C.duelScoreLine(d), '') : '';
-  return `${cheer}${line ? `<div class="t-duel-line"><span class="note ell">${esc(line)}</span><a class="link" href="#together">вместе →</a></div>` : ''}`;
+  return `${line ? `<div class="t-duel-line"><span class="note ell">${esc(line)}</span><a class="link" href="#together">вместе →</a></div>` : ''}`;
 }
 
 // общий комплекс с партнёром: с кем, что последнее он поменял
@@ -1174,7 +1246,10 @@ export const actions = {
   },
   inc: async el => {
     const { item, date } = el.dataset;
-    const v = Math.max(0, (Number(C.logVal(date, item)) || 0) + Number(el.dataset.d));
+    const cur = Number(C.logVal(date, item)) || 0;
+    // «−» после полстакана убирает полстакана, иначе - целый
+    const dv = Number(el.dataset.d) === -1 && cur % 1 ? -(cur % 1) : Number(el.dataset.d);
+    const v = Math.max(0, Math.round((cur + dv) * 2) / 2);
     await setLog(item, date, v);
   },
   // сон
@@ -1251,6 +1326,14 @@ export const actions = {
     const pa = P.pairPartner?.(el.dataset.m);
     if (pa) toast(`Пересобрано у вас и у ${C.nameForms?.(pa.id)?.gen || pa.name}`);
   },
+  'td-mod-gear': async el => {
+    const { m, g, date } = el.dataset, p = profile();
+    if (P.gearOf(m) === g) return;
+    await store.put('profile', `profile:${store.uid()}`, { ...p, modules: { ...(p.modules || {}), [m]: { ...(p.modules?.[m] || {}), gear: g } } });
+    const n = g === 'any' ? 0 : await P.applyGear(m, date);
+    S.render();
+    toast(g === 'any' ? 'Инвентарь - любой из профиля: со следующей сборки' : n ? `Заменил упражнений: ${n}. Дальше комплекс собирается так же` : 'Запомнил - комплекс собирается так и дальше');
+  },
   'td-goto-mod': async el => {
     const { m, date } = el.dataset;
     if (!store.get(routineId(date, m))) await makeRoutine(m, Number(profile().modules?.[m]?.minutes || modDef(m)?.def || 15), date);
@@ -1268,6 +1351,22 @@ export const actions = {
     await setPinned(on ? cur.filter(x => x !== id) : [...cur, id]);
     toast(on ? 'Откреплено - дальше по ситуации' : 'Закреплено: это упражнение будет в разминке каждый день');
   },
+  'td-pain': async el => {
+    const { k, date } = el.dataset, on = !(stateRec(date)?.data.pains || []).includes(k);
+    const did = await setPain(date, k, on);
+    const name = PAINS.find(x => x[0] === k)?.[1] || k, pl = k === 'knees';
+    toast(on ? `Отметил: ${pl ? 'болят' : 'болит'} ${name}.${did ? ` План на сегодня подстроил: ${did}.` : ''}` : `Снял отметку: ${name} ${pl ? 'больше не болят' : 'больше не болит'}`);
+    await afterChange(date);
+  },
+  'td-nap-add': async el => {
+    const date = el.dataset.date, naps = [...(sleepRec(date)?.data.naps || []), { from: null, to: null }];
+    await upsertDaily('sleep', 'sleep', date, { naps });
+    setTimeout(() => document.querySelector(`[data-act="td-nap-time"][data-i="${naps.length - 1}"][data-end="from"][data-part="h"]`)?.focus(), 60);
+  },
+  'td-nap-rm': async el => {
+    const date = el.dataset.date, i = Number(el.dataset.i);
+    await upsertDaily('sleep', 'sleep', date, { naps: (sleepRec(date)?.data.naps || []).filter((_, j) => j !== i) });
+  },
   'td-rt-tick': async el => {
     const { m, date } = el.dataset, i = Number(el.dataset.i);
     const rec = store.get(routineId(date, m));
@@ -1277,7 +1376,12 @@ export const actions = {
     const done = exercises.every(x => x.done);
     await store.patch(rec.id, { exercises, done, ...(done ? { done_at: Date.now() } : {}) });
     await afterChange(date);
-    if (done && !rec.data.done) toast(byTone({ soft: 'Комплекс сделан - ты молодец!', coach: 'Комплекс закрыт. Отлично.', sergeant: 'Комплекс выполнен. Засчитано.' }));
+    if (done && !rec.data.done) {
+      toast(byTone({ soft: 'Комплекс сделан - ты молодец!', coach: 'Комплекс закрыт. Отлично.', sergeant: 'Комплекс выполнен. Засчитано.' }));
+      // веха для ленты «Вместе»: какой комплекс и сколько минут (без списка упражнений); id постоянный - без дублей
+      const title = String(rec.data.title || P.MODULES?.[m]?.title || 'Комплекс').replace(/\s*·.*$/, '');
+      await C.shareHighlight('complex', title, Number(rec.data.minutes) || null, date, `highlight:${store.uid()}:${date}:${m}`, rec.id);
+    } else if (!done && rec.data.done) await C.unshareHighlight(`highlight:${store.uid()}:${date}:${m}`);   // сняли отметку - и из ленты
   },
   // активности
   'td-ac-open': el => {
@@ -1335,7 +1439,9 @@ export const actions = {
     delete S.forms.act;
     await afterChange(f.date);
     // личное (массаж, баня, медитация, дети) в ленту группы не уходит
-    if (!prev && !def.private) await C.shareHighlight('activity', def.name, minutes, f.date);
+    const hl = `highlight:${store.uid()}:act:${id}`;
+    if (!prev && !def.private) await C.shareHighlight('activity', def.name, minutes, f.date, hl, id);
+    else if (prev && store.get(hl)) await store.patch(hl, { label: def.name, minutes });     // поменяли длительность - и в ленте
     toast(f.id ? 'Активность обновлена' : `${def.name}: ${minutes} мин записано`);
     if (!f.id && isBackdated(f.date)) setTimeout(() => toast('Засчитал. В следующий раз лучше отметить в тот же день.'), 3000);
   },
@@ -1343,6 +1449,7 @@ export const actions = {
     const r = store.get(el.dataset.id);
     closeModal();
     await store.remove(el.dataset.id);
+    await C.unshareHighlight(`highlight:${store.uid()}:act:${el.dataset.id}`);
     if (r) await afterChange(r.date);
     toast('Активность удалена');
   },
@@ -1353,7 +1460,14 @@ export const changes = {
     if (!el.value) return;
     const r = store.get(el.dataset.id);
     await store.patch(el.dataset.id, { time: el.value });
-    if (r?.data.food_id && store.get(r.data.food_id)) await store.patch(r.data.food_id, { time: el.value });
+    if (r?.data.food_id && store.get(r.data.food_id)) await store.patch(r.data.food_id, { time: el.value, meal: C.milkMeal(r.data.milk, el.value) });
+    await afterChange(el.dataset.date);
+  },
+  // к какому приёму пищи отнести молоко ('' - по времени чашки)
+  'cup-milk-meal': async el => {
+    const r = store.get(el.dataset.id);
+    if (!r?.data.milk) return;
+    await C.setCupMilk(el.dataset.id, { ...r.data.milk, meal: el.value || null });
     await afterChange(el.dataset.date);
   },
   // какое молоко к кофе (жирность/растительное) - пересчитывает связанную запись еды
@@ -1372,6 +1486,18 @@ export const changes = {
   setnum: el => setLog(el.dataset.item, el.dataset.date, Math.max(0, Number(el.value) || 0)),
   // часы и минуты - отдельные поля (не единый <input type="time">): у него .value пуст, пока не заполнены
   // ОБА внутренних окошка сразу, поэтому заполнение только часов и уход с поля ничего не сохраняло
+  'td-nap-time': async el => {
+    const { i, end, date } = el.dataset;
+    const pair = [...document.querySelectorAll(`[data-act="td-nap-time"][data-i="${i}"][data-end="${end}"][data-date="${date}"]`)];
+    const raw = part => (pair.find(x => x.dataset.part === part)?.value ?? '').trim();
+    const h = raw('h'), m = raw('m');
+    const value = !h && !m ? null
+      : `${String(Math.min(23, Math.max(0, parseInt(h, 10) || 0))).padStart(2, '0')}:${String(Math.min(59, Math.max(0, parseInt(m, 10) || 0))).padStart(2, '0')}`;
+    const naps = structuredClone(sleepRec(date)?.data.naps || []);
+    if (!naps[Number(i)]) return;
+    naps[Number(i)][end] = value;
+    await upsertDaily('sleep', 'sleep', date, { naps });
+  },
   'td-sleep-time': async el => {
     const { k, date } = el.dataset;
     const pair = [...document.querySelectorAll(`[data-act="td-sleep-time"][data-k="${k}"][data-date="${date}"]`)];

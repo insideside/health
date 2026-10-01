@@ -3,7 +3,7 @@
 // afterRender (после отрисовки) и background (раз в цикл опроса, пока приложение открыто).
 import * as store from './store.js';
 import * as C from './coach.js';
-import { S, esc, svg, ring, field, toast, openModal, closeModal, showTech, afterChange, isModalOpen, glyph, exCtx, profile as userProfile } from './ui.js';
+import { S, ExMap, esc, svg, ring, field, toast, openModal, closeModal, showTech, afterChange, isModalOpen, glyph, exCtx, profile as userProfile } from './ui.js';
 import * as today from './views/today.js';
 import * as calendar from './views/calendar.js';
 import * as food from './views/food.js';
@@ -18,6 +18,7 @@ import * as install from './views/install.js';
 import * as connect from './views/connect.js';
 import * as fit from './views/fit.js';
 import * as supp from './views/supp.js';
+import * as SPS from './supps.js';
 import * as advice from './views/advice.js';
 import * as report from './views/report.js';
 
@@ -30,7 +31,7 @@ const NAV = [['today', 'Сегодня'], ['calendar', 'Календарь'], ['
 // какой пункт меню подсвечивать для вложенных экранов
 // цвет значка активного пункта — по смыслу раздела (accents.css)
 const NAV_DOM = { today: 'coach', calendar: 'goal', food: 'food', workout: 'train', chat: 'coach', progress: 'goal' };
-const NAV_OF = { advice: 'chat', install: 'profile', about: 'profile', together: 'progress', health: 'profile', connect: 'profile', day: 'today', program: 'workout', generator: 'workout', week: 'progress', body: 'progress', sleep: 'today' };
+const NAV_OF = { feed: 'progress', advice: 'chat', install: 'profile', about: 'profile', together: 'progress', health: 'profile', connect: 'profile', day: 'today', program: 'workout', generator: 'workout', week: 'progress', body: 'progress', sleep: 'today' };
 
 const routes = Object.assign({}, ...VIEWS.map(v => v.routes || {}));
 const actions = Object.assign({}, ...VIEWS.map(v => v.actions || {}));
@@ -48,17 +49,28 @@ function isEditing() {
     (a.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(a.type)));
 }
 let renderPending = false;
+// Нажатие на кнопку, пока в поле ввода курсор: поле теряет фокус уже при нажатии (mousedown/touchstart), и если
+// отложенная перерисовка сработает до отпускания, кнопка под пальцем заменится новой - браузер не засчитает
+// click, и кнопку приходится жать второй раз. Пока нажатие не закончилось, перерисовку держим.
+let pressing = false, pressTimer = null;
+const flushPending = () => { if (renderPending && !isEditing() && !pressing) { renderPending = false; render(); } };
+const release = () => { pressing = S.pressing = false; flushPending(); };
+const endPress = () => {
+  clearTimeout(pressTimer);
+  // click приходит после pointerup (на iOS - чуть позже): отпускаем после него или через запас по времени
+  pressTimer = setTimeout(release, 350);
+};
+document.addEventListener('pointerdown', () => { pressing = S.pressing = true; clearTimeout(pressTimer); }, true);
+document.addEventListener('pointerup', endPress, true);
+document.addEventListener('pointercancel', endPress, true);
+document.addEventListener('click', () => { if (!pressing) return; clearTimeout(pressTimer); pressTimer = setTimeout(release, 0); }, true);
 function scheduleRender() {
   // невидимую страницу не рисуем (батарея) — нарисуем один раз, когда её откроют
-  if (isEditing() || document.hidden) { renderPending = true; return; }
+  if (isEditing() || document.hidden || pressing) { renderPending = true; return; }
   render();
 }
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && renderPending && !isEditing()) { renderPending = false; render(); }
-});
-document.addEventListener('focusout', () => setTimeout(() => {
-  if (renderPending && !isEditing()) { renderPending = false; render(); }
-}, 0));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) flushPending(); });
+document.addEventListener('focusout', () => setTimeout(flushPending, 0));
 
 window.addEventListener('hashchange', () => {
   for (const k of Object.keys(S.forms)) delete S.forms[k];
@@ -88,9 +100,57 @@ function render() {
     </div>
     <nav class="tabbar">${NAV.map(([k, l]) => `<a href="#${k}" class="${navKey === k ? 'on' : ''}" ${NAV_DOM[k] ? `data-dom="${NAV_DOM[k]}"` : ''}>${svg(k)}${dot(k)}<span>${l}</span></a>`).join('')}</nav>`;
   window.scrollTo(0, y);
+  mhLastY = window.scrollY;
+  applyMasthead();
   for (const v of VIEWS) if (v.routes?.[view] && v.afterRender) v.afterRender(arg);
 }
 S.render = scheduleRender;
+
+// ── шапка: уезжает при прокрутке вниз, сразу выезжает при прокрутке вверх (у верха страницы видна всегда) ──
+let mhHidden = false, mhLastY = window.scrollY;
+function applyMasthead() {
+  const m = document.querySelector('.masthead');
+  if (!m) return;
+  m.classList.toggle('mh-hide', mhHidden);
+  m.classList.toggle('mh-float', !mhHidden && window.scrollY > 4);
+  // левое меню на широком экране прилипает под шапкой, пока она видна
+  document.documentElement.style.setProperty('--mh-offset', mhHidden ? '0px' : `${m.offsetHeight}px`);
+}
+// Зум запрещён: iOS Safari игнорирует user-scalable=no в метатеге, поэтому щипок гасим сами
+// (gesture* - только в Safari; в Chrome хватает метатега).
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
+// iOS (режим приложения): после закрытия клавиатуры панель вкладок с position: fixed иногда остаётся
+// приподнятой над низом экрана, пока страницу не прокрутят. Пока клавиатура открыта - панель прячем
+// (она и так закрыта клавиатурой), а после закрытия показываем заново и сдвигаем прокрутку на пиксель -
+// браузер пересчитывает положение закреплённых элементов.
+const isTyping = () => !!document.activeElement?.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select, [contenteditable="true"]');
+function syncKeyboard() {
+  const vv = window.visualViewport;
+  const open = isTyping() && !!vv && vv.height < window.innerHeight * 0.85;
+  const root = document.documentElement, was = root.classList.contains('kb-open');
+  if (open === was) return;
+  root.classList.toggle('kb-open', open);
+  if (!open) requestAnimationFrame(() => { window.scrollBy(0, 1); window.scrollBy(0, -1); });
+}
+window.visualViewport?.addEventListener('resize', syncKeyboard);
+document.addEventListener('focusin', () => setTimeout(syncKeyboard, 350));
+document.addEventListener('focusout', () => setTimeout(() => {
+  syncKeyboard();
+  // клавиатура закрылась, а resize не пришёл (бывает на iOS) - всё равно поправить панель
+  if (!isTyping()) { document.documentElement.classList.remove('kb-open'); window.scrollBy(0, 1); window.scrollBy(0, -1); }
+}, 300));
+
+window.addEventListener('scroll', () => {
+  const y = window.scrollY, dy = y - mhLastY;
+  if (y < 40) mhHidden = false;
+  else if (dy > 4) mhHidden = true;          // вниз - убираем
+  else if (dy < -4) mhHidden = false;        // вверх - сразу показываем
+  else return;
+  mhLastY = y;
+  applyMasthead();
+}, { passive: true });
 
 function unreadChat() {
   const seen = store.getMeta('chat_seen', 0);
@@ -138,7 +198,7 @@ function fieldLabel(path, c) {
   const p = String(path);
   if (p === '(удаление)') return 'запись';
   const last = p.replace(/\[\d+\]/g, '').split('.').filter(Boolean).pop() || '';
-  let label = FIELD_NAME[last] || 'другие данные';
+  let label = (c?.kind === 'food' && p === 'text' ? 'что съедено' : null) || FIELD_NAME[last] || 'другие данные';
   const set = /\.done\[(\d+)\]$/.exec(p);
   if (set) label += `, подход ${Number(set[1]) + 1}`;
   // ближайший элемент списка с названием (упражнение, продукт) - в начало подписи
@@ -175,17 +235,39 @@ function picksFor(c) {
   return p;
 }
 
+// что это за запись, чтобы было понятно, о чём спор: «Обед 13:10 · гречка с курицей», «Сон · ночь на 1 октября»
+const MEAL_NAME = { breakfast: 'Завтрак', lunch: 'Обед', dinner: 'Ужин', snack: 'Перекус' };
+const clip = (t, n = 60) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+function recordTitle(c) {
+  const d = { ...(c.server.data || {}), ...(c.local.data || {}) }, kind = c.kind;
+  const bits = [];
+  if (kind === 'food') {
+    bits.push([MEAL_NAME[d.meal] || 'Еда', d.time].filter(Boolean).join(' '));
+    const text = d.text || (d.items || []).map(i => i.name).filter(Boolean).join(', ');
+    if (text) bits.push(`«${clip(text)}»`);
+  } else if (kind === 'sleep') bits.push('Сон, ночь на это число');
+  else if (kind === 'activity') bits.push([today.activityName(d.type), d.minutes ? `${d.minutes} мин` : ''].filter(Boolean).join(', '));
+  else if (kind === 'workout') bits.push(['Тренировка', d.title && `«${clip(d.title, 40)}»`].filter(Boolean).join(' '));
+  else if (kind === 'supp') bits.push(['Добавка', d.name, d.time].filter(Boolean).join(' '));
+  else if (kind === 'drink') bits.push(['Чашка', d.time].filter(Boolean).join(' '));
+  else if (kind === 'log') {
+    const item = store.get(String(c.id).split(':').pop());
+    bits.push(item?.data?.title ? `Чек-лист: ${item.data.title}` : KIND_NAME.log);
+  } else bits.push(KIND_NAME[kind] || 'Запись');
+  if (c.date) bits.push(new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' }).format(C.parse(c.date)));
+  return bits.filter(Boolean).join(' · ');
+}
+
 function conflictHtml(c) {
-  const when = c.date ? ` · ${esc(new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' }).format(C.parse(c.date)))}` : '';
   const picks = picksFor(c);
   const side = (f, i, who) => {
     const on = picks[i] === who;
     return `<button class="conflict-opt${on ? ' on' : ''}" data-act="conflict-pick" data-id="${esc(c.id)}" data-i="${i}" data-choice="${who}" aria-pressed="${on}">
-      <span class="smallcaps muted">${who === 'local' ? 'это устройство' : 'сервер'}</span><span class="conflict-val">${esc(valueLabel(who === 'local' ? f.local : f.server, f.path))}</span></button>`;
+      <span class="smallcaps muted">${who === 'local' ? 'на этом устройстве' : 'с другого устройства'}</span><span class="conflict-val">${esc(valueLabel(who === 'local' ? f.local : f.server, f.path))}</span></button>`;
   };
   return `<div class="raised card conflict-card">
-    <div class="smallcaps muted">${esc(KIND_NAME[c.kind] || c.kind)}${when}</div>
-    <p class="note">Правка на этом устройстве: ${esc(fmtStamp(c.local.updated_at))}, на сервере: ${esc(fmtStamp(c.server.updated_at))}. Отмечено более свежее - можно выбрать иначе в каждой строке.</p>
+    <div class="conflict-title">${esc(recordTitle(c))}</div>
+    <p class="note">Эту запись изменили и здесь (${esc(fmtStamp(c.local.updated_at))}), и на другом устройстве (${esc(fmtStamp(c.server.updated_at))}) - по-разному. Отмечено более свежее, в каждой строке можно выбрать иначе.</p>
     <div class="conflict-rows">
       ${c.fields.map((f, i) => `<div class="conflict-row"><div class="conflict-field">${esc(fieldLabel(f.path, c))}</div>${side(f, i, 'local')}${side(f, i, 'server')}</div>`).join('')}
     </div>
@@ -203,11 +285,11 @@ function syncPanel() {
       <p class="small">${store.state.online ? 'Сервер на связи.' : 'Сервер недоступен - правки сохраняются на этом устройстве и уйдут при подключении.'}
         Последний обмен: <span class="mono">${esc(last)}</span>. Ждут отправки: <span class="mono">${n}</span>.</p>
       ${store.state.error ? `<p class="err">${esc(store.state.error)}</p>` : ''}
-      ${cs.length ? `<div class="notice">Одни и те же данные изменили на разных устройствах по-разному. В каждой строке выберите, какое значение оставить, и нажмите «Применить выбор». «Объединить сами» сложит всё, что можно сложить, а в спорных местах возьмёт более свежую правку и склеит тексты.</div>
+      ${cs.length ? `<div class="notice">Одну и ту же запись изменили на двух устройствах по-разному. Разные записи (обед на компьютере и перекус на телефоне) не спорят - сохраняются обе, здесь только то, где значения расходятся. В каждой строке выберите, что оставить, и нажмите «Применить выбор».</div>
         ${cs.map(conflictHtml).join('')}
         ${cs.length > 1 ? `<div class="actions"><span class="note">Для всех:</span>
-          <button class="btn quiet" data-act="conflict-all" data-choice="local">Это устройство</button>
-          <button class="btn quiet" data-act="conflict-all" data-choice="server">Сервер</button>
+          <button class="btn quiet" data-act="conflict-all" data-choice="local">Как на этом устройстве</button>
+          <button class="btn quiet" data-act="conflict-all" data-choice="server">Как на другом</button>
           <button class="btn quiet" data-act="conflict-all" data-choice="merge">Объединить</button></div>` : ''}`
         : '<p class="note">Конфликтов нет: изменения с разных устройств дополняют друг друга.</p>'}
       <div class="actions"><button class="btn quiet" data-act="cn-open">Адреса сервера${store.usingMirror() ? ' · сейчас запасной' : ''} <span class="arrow">→</span></button>
@@ -341,6 +423,14 @@ Object.assign(actions, {
     } else {
       f[key] = cast(val);
     }
+    // во всплывающем окне страница под ним перерисуется, а само окно - нет: подсветку переключаем на месте,
+    // иначе кажется, что таблетка не нажимается
+    const box = el.closest('#modal') && el.closest('.chips');
+    if (box) {
+      if (multi) { el.classList.toggle('on'); el.setAttribute('aria-pressed', el.classList.contains('on')); }
+      else box.querySelectorAll('.chip[data-act="chip-set"]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); });
+      return;
+    }
     render();
   },
 });
@@ -433,7 +523,7 @@ document.getElementById('modal').addEventListener('click', e => { if (e.target.i
 
 async function loadCatalogs() {
   const ex = store.getMeta('exercises'), act = store.getMeta('activities');
-  if (ex) S.exMap = new Map(ex.map(e => [e.id, e]));
+  if (ex) S.exMap = new ExMap(ex.map(e => [e.id, e]));
   if (act) S.activities = new Map(act.map(a => [a.id, a]));
   const sp = store.getMeta('supplements');
   if (sp) S.supps = { items: new Map((sp.items || []).map(x => [x.id, x])), stoplist: sp.stoplist || [] };
@@ -445,7 +535,7 @@ async function loadCatalogs() {
     await store.setMeta('activities', a1.activities);
     if (s1) { await store.setMeta('supplements', s1); S.supps = { items: new Map((s1.items || []).map(x => [x.id, x])), stoplist: s1.stoplist || [] }; }
     await store.setMeta('catalog_build', BUILD);
-    S.exMap = new Map(e1.exercises.map(e => [e.id, e]));
+    S.exMap = new ExMap(e1.exercises.map(e => [e.id, e]));
     S.activities = new Map(a1.activities.map(a => [a.id, a]));
     scheduleRender();
   } catch (e) { /* офлайн — останемся с кэшем */ }
@@ -453,6 +543,22 @@ async function loadCatalogs() {
 
 const JOB_DONE = { food: 'БЖУ посчитаны', norms: 'Тренер прокомментировал нормы', weekly: 'Разбор недели готов',
   mealplan: 'План питания готов', recipe: 'Рецепт готов', analysis: 'Анализ готов', chat: 'Тренер ответил' };
+
+// входящие фразы «Подбодрить»: всплывающее уведомление один раз на фразу (сама фраза - на «Сегодня» и во «Вместе»)
+async function notifyCheers() {
+  const fresh = [];
+  for (const { p, c } of C.unseenCheers?.() || []) {
+    if (c.at <= (store.getMeta(`cheer_toasted:${p.id}`, 0) || 0)) continue;
+    await store.setMeta(`cheer_toasted:${p.id}`, c.at);
+    fresh.push({ p, c, n: c.list?.length || 1 });
+  }
+  if (!fresh.length) return;
+  // одно уведомление на всех: несколько всплывающих подряд перебивают друг друга
+  if (fresh.length === 1) {
+    const { p, c, n } = fresh[0];
+    toast(n > 1 ? `${p.name} подбадривает (${n} ${n < 5 ? 'сообщения' : 'сообщений'}): «${c.text}»` : `${p.name} подбадривает: «${c.text}»`, 5000);
+  } else toast(`Новые сообщения: ${fresh.map(({ p, n }) => (n > 1 ? `${p.name} (${n})` : p.name)).join(', ')} - на «Сегодня»`, 5000);
+}
 
 let pollTimer = null;
 async function poll() {
@@ -462,6 +568,7 @@ async function poll() {
   const hidden = document.hidden;
   try {
     for (const v of VIEWS) if (v.background) await v.background({ hidden });
+    if (!hidden) await notifyCheers();
     let changed = false;
     for (const j of store.getMeta('jobs', [])) {
       try {
@@ -506,6 +613,16 @@ async function poll() {
   pollTimer = setTimeout(poll, hidden ? 60000 : busy ? 3000 : sleeping ? 30000 : 15000);
 }
 window.addEventListener('trainer:poll', () => { clearTimeout(pollTimer); pollTimer = setTimeout(poll, 1500); });
+// новые записи с сервера → фоновые пересчёты экранов сразу (через 0,3 с - пачка обменов подряд сливается в один)
+window.addEventListener('trainer:remote', e => {
+  clearTimeout(pollTimer); pollTimer = setTimeout(poll, 300);
+  // свои данные поменялись не здесь (другое устройство, тренер отметил из чата) - итог дня и БЖУ добавок пересчитать
+  const dates = (e.detail?.dates || []).filter(d => d <= C.today());
+  if (dates.length) (async () => {
+    try { await SPS.ensureFoods(dates); } catch (err) { console.warn(err); }
+    for (const d of dates) { try { await C.refreshDsum(d); } catch (err) { console.warn(err); } }
+  })();
+});
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;

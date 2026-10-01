@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from . import db, food, norms, userdata
+from . import daylog, db, food, norms, userdata
 from .ai import jobs
 from .ai.jobs import (DAYTYPE_LABEL, SLEEPY_LABEL, SORENESS_LABEL, STRESS_LABEL, WEEKDAYS, WELLBEING_LABEL, goals_text,
                       person_text, sleep_hours_of, snooze_min, system_for)
@@ -22,9 +22,11 @@ router = APIRouter()
 
 HISTORY = 12
 ACTION_KINDS = ("skip_today", "move_workout", "lighten_today", "swap_exercise", "recalc_norms", "set_macros", "rebuild_program",
-                "set_daytype", "add_injury", "set_pace", "log_food", "log_activity")
+                "set_daytype", "add_injury", "set_pace", "log_food", "log_activity", "mark_supp", "check_item")
+# отметки выполняются сразу (просьба «отметь / сними» однозначна), кнопка в ответе - «Отменить»
+AUTO_KINDS = ("mark_supp", "check_item")
 DAYTYPES = ("cheat", "special", "sick", "rest")
-INJURY_ZONES = ("chest", "shoulders", "arms", "back", "abs", "sides", "glutes", "legs", "neck",
+INJURY_ZONES = ("head", "stomach", "chest", "shoulders", "arms", "back", "abs", "sides", "glutes", "legs", "neck",
                 "knees", "lower_back", "wrists", "ankles", "hips")
 MEALS = ("breakfast", "lunch", "dinner", "snack")
 WEEKDAY_ACC = ["понедельник", "вторник", "среду", "четверг", "пятницу", "субботу", "воскресенье"]
@@ -41,7 +43,8 @@ CHAT_SCHEMA = {
                 "type": {"type": "string"}, "zone": {"type": "string"}, "note": {"type": "string"},
                 "pace": {"type": "string"}, "text": {"type": "string"}, "meal": {"type": "string"},
                 "minutes": {"type": "number"}, "intensity": {"type": "string"},
-                "kcal": {"type": "number"}, "p": {"type": "number"}, "f": {"type": "number"}, "c": {"type": "number"}}},
+                "kcal": {"type": "number"}, "p": {"type": "number"}, "f": {"type": "number"}, "c": {"type": "number"},
+                "name": {"type": "string"}, "value": {"type": "number"}, "time": {"type": "string"}, "undo": {"type": "boolean"}}},
         }, "required": ["kind", "label", "params"]}},
     },
     "required": ["reply", "actions"],
@@ -79,11 +82,19 @@ ACTIONS_HELP = """actions - кнопки, которые клиент может
   (акценты по зонам, что убрать/оставить, предпочтения по кардио и т. п. - из того, что клиент только что описал),
   иначе пересборка о разговоре ничего не узнает и придумает своё;
 - set_daytype {date, type} - тип дня: cheat (читмил), special (особый), sick (болею), rest (отдых);
-- add_injury {zone, note} - записать, что болит; zone: chest, shoulders, arms, back, abs, sides, glutes, legs, neck,
+- add_injury {zone, note} - записать, что болит (отметится и в самочувствии на «Сегодня», план дня подстроится);
+  zone: head (голова), stomach (живот), chest, shoulders, arms, back, abs, sides, glutes, legs, neck,
   knees, lower_back, wrists, ankles, hips;
 - set_pace {pace} - темп: slower, normal, faster (пересчитает нормы и план);
 - log_food {text, meal} - записать еду как написал клиент; meal: breakfast, lunch, dinner, snack;
 - log_activity {type, minutes, intensity} - записать активность; type - id из списка активностей; intensity: low, mid, high.
+- mark_supp {name, date?, time?, undo?} - отметить приём добавки из плана клиента (undo: true - снять отметку); name -
+  как её назвал клиент; date - YYYY-MM-DD (по умолчанию сегодня, можно прошлые дни); выполняется сразу, без кнопки;
+- check_item {name, date?, value?, undo?} - отметить пункт чек-листа (галочку или разминку) или записать число
+  (вода - стаканы, шаги - шаги) в value; undo: true - снять; за любую дату; выполняется сразу.
+Просят отметить или снять добавку/пункт («отметь, что выпил л-карнитин», «поставь воду 6 стаканов за вчера») -
+обязательно добавь mark_supp / check_item. Если непонятно, что именно отметить (в плане несколько похожих, названия
+нет в данных), - не добавляй действие, а спроси. Про уже сделанное отметку не пиши, будто она есть: отметит кнопка.
 Даты - YYYY-MM-DD. label - коротко на кнопке, 2–5 слов («Перенести на четверг»).
 Ты сам ничего не делаешь, пока не нажата кнопка - не пиши так, будто уже записал, перенёс или заменил. Но и не
 подставляй в каждый ответ одну и ту же фразу «жми - сделаю»: предложи действие обычными словами, как в разговоре
@@ -99,7 +110,7 @@ ACTIONS_HELP = """actions - кнопки, которые клиент может
 
 # ── контекст ──
 
-def _context(uid: str) -> str:
+def _context(uid: str, text: str = "") -> str:
     today = date.today()
     a = (today - timedelta(days=6)).isoformat()
     t = (userdata.latest_target(uid) or {}).get("data") or {}
@@ -124,7 +135,10 @@ def _context(uid: str) -> str:
             parts.append(f"чек-лист {dsum[d].get('pct', 0)}%" + (f", оценка {dsum[d]['grade']}" if dsum[d].get("grade") else ""))
         if d in sleep:
             sz = snooze_min(sleep[d])
-            parts.append(f"сон {sleep_hours_of(sleep[d]) or '?'} ч" + (f" (из них {sz} мин дрёмы после будильника)" if sz else ""))
+            if sleep_hours_of(sleep[d]):
+                parts.append(f"сон {sleep_hours_of(sleep[d])} ч" + (f" (из них {sz} мин дрёмы после будильника)" if sz else ""))
+            if (nm := jobs.nap_min_of(sleep[d])):
+                parts.append(f"дневной сон {nm} мин")
         if d in state:
             s = state[d]
             parts.append("самочувствие: " + ", ".join(filter(None, (WELLBEING_LABEL.get(s.get("wellbeing")),
@@ -163,6 +177,10 @@ def _context(uid: str) -> str:
     free = [d for d in ((today + timedelta(days=i)).isoformat() for i in range(1, 5)) if d not in wos]
     acts_cat = ", ".join(f"{a['id']} ({a.get('name')})" for a in db.activities()) or "walking, running, cycling, swimming, other"
     injuries = userdata.open_injuries(uid)
+    # сегодня и вчера - подробно (каждый приём пищи, добавки из плана с отметками, чек-лист, чашки, комплексы), и дни,
+    # о которых спрашивают («в понедельник», «28 сентября»)
+    days = sorted({today.isoformat(), (today - timedelta(days=1)).isoformat(), *daylog.mentioned_dates(text, today)}, reverse=True)
+    detail = "\n".join(daylog.day_detail(uid, d) for d in days)
     return f"""{_cardio_line(uid)}
 Сегодня {today.isoformat()}, {WEEKDAYS[today.weekday()]}, {datetime.now():%H:%M}.
 Клиент: {person_text(uid)}. Цели: {goals_text(goal)}.
@@ -174,7 +192,9 @@ def _context(uid: str) -> str:
 Тренировка сегодня: {today_wo}{swap}
 Ближайшие тренировки: {'; '.join(upcoming) or 'нет'}
 Свободные для переноса дни: {', '.join(f"{d} {WEEKDAYS[date.fromisoformat(d).weekday()]}" for d in free) or 'нет'}
-Виды активностей (id): {acts_cat}"""
+Виды активностей (id): {acts_cat}
+{detail}
+{daylog.FACTS_RULE}"""
 
 
 def _cardio_line(uid: str) -> str:
@@ -192,6 +212,13 @@ def _cardio_line(uid: str) -> str:
         out.append("В зале клиента НЕТ: " + ", ".join(missing) + " - не предлагай упражнения на этом.")
     if regular:
         out.append("Постоянные занятия вне программы (это не кардио в зале, не путай с ним): " + "; ".join(regular) + ".")
+    own = jobs.own_exercises(uid)
+    if own:
+        out.append("Свои упражнения клиента (добавил сам; отметки - в чек-листе дня): "
+                   + ", ".join(f"{e['name']}{' (' + e['how'] + ')' if e.get('how') else ''}" for e in own[:12]) + ".")
+    sw = jobs.swaps_text(uid, prof)
+    if sw:
+        out.append("Клиент сам заменял упражнения (было → стало): " + sw + ". Учитывай: прежнее ему не подошло.")
     return "\n".join(out)
 
 
@@ -243,6 +270,15 @@ def _clean_actions(raw: list, uid: str) -> list[dict]:
                 continue
             if p.get("meal") not in MEALS:
                 p["meal"] = "snack"
+        if k in AUTO_KINDS:
+            if not p.get("name"):
+                continue
+            p.setdefault("date", today)
+            if p.get("date") > today:
+                continue
+            if p.get("time") and not re.fullmatch(r"\d{1,2}:\d{2}", str(p["time"])):
+                p.pop("time")
+            p["undo"] = bool(p.get("undo"))
         if k == "log_activity":
             if not p.get("minutes"):
                 continue
@@ -273,6 +309,61 @@ def _humanize(reply: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", reply).replace(" .", ".").strip()
 
 
+def _find_mark(uid: str, kind: str, p: dict):
+    """→ ('ok', объект) | ('ask'/'none', [названия]) - добавка из плана или пункт чек-листа."""
+    if kind == "mark_supp":
+        if p.get("key"):
+            s = next((x for x in daylog.supp_plan(uid) if x["key"] == p["key"]), None)
+            return ("ok", s) if s else ("none", [x["name"] for x in daylog.supp_plan(uid)])
+        return daylog.resolve_supp(uid, p.get("name") or "")
+    if p.get("item_id"):
+        r = next((x for x in daylog.checklist(uid) if x["id"] == p["item_id"]), None)
+        return ("ok", r) if r else ("none", [x["data"].get("title") for x in daylog.checklist(uid)])
+    return daylog.resolve_item(uid, p.get("name") or "")
+
+
+def _mark(uid: str, kind: str, p: dict) -> dict:
+    st, obj = _find_mark(uid, kind, p)
+    if st != "ok":
+        raise HTTPException(400, "Не нашёл, что отметить")
+    d = p.get("date") or date.today().isoformat()
+    if kind == "mark_supp":
+        return {"text": daylog.mark_supp(uid, obj, d, p.get("time"), bool(p.get("undo"))), "key": obj["key"], "date": d}
+    return {"text": daylog.check_item(uid, obj, d, p.get("value"), bool(p.get("undo"))), "item_id": obj["id"], "date": d}
+
+
+def _apply_marks(uid: str, actions: list[dict], text: str = "") -> tuple[list[dict], list[str], str | None]:
+    """Отметки из ответа выполняем сразу. → (действия для сообщения, строки «что сделано», вопрос-уточнение | None).
+    Не нашли однозначно - ничего не отмечаем, а спрашиваем со списком вариантов."""
+    out, done, ask = [], [], None
+    for a in actions:
+        if a["kind"] not in AUTO_KINDS:
+            out.append(a)
+            continue
+        p = a["params"]
+        # модель часто не ставит дату («за вчера отметь…» → сегодня): одна названная в сообщении дата важнее
+        said = daylog.mentioned_dates(text)
+        if len(said) == 1 and p.get("date") == date.today().isoformat() and said[0] != p["date"]:
+            p["date"] = said[0]
+        st, obj = _find_mark(uid, a["kind"], p)
+        what = "добавку" if a["kind"] == "mark_supp" else "пункт"
+        if st != "ok":
+            if not obj:
+                ask = f"Не нашёл «{p.get('name')}»: в плане нет {'добавок' if a['kind'] == 'mark_supp' else 'пунктов чек-листа'}."
+            else:
+                ask = (f"Уточни, какую {what} отметить: " if st == "ask" else f"Не нашёл «{p.get('name')}». Какую {what} ты имеешь в виду: ") + ", ".join(obj) + "?"
+            continue
+        res = _mark(uid, a["kind"], p)
+        done.append(res["text"])
+        ref = {"key": res["key"]} if "key" in res else {"item_id": res["item_id"]}
+        a.update(status="done", result=res, done_at=db.now_ms(), params={**p, **ref}, label=res["text"].split(",")[0][:40])
+        out.append(a)
+        # «Отменить» - то же действие с обратным знаком
+        out.append({"id": uuid.uuid4().hex[:8], "kind": a["kind"], "label": "Отменить", "status": "offered", "undo_of": a["id"],
+                    "params": {**p, **ref, "undo": not p.get("undo")}})
+    return out, done, ask
+
+
 async def job_chat(uid: str, inp: dict) -> dict:
     msg = db.get(inp["message_id"])
     if msg and msg["user_id"] != uid:
@@ -280,7 +371,7 @@ async def job_chat(uid: str, inp: dict) -> dict:
     text = inp.get("text") or (msg or {}).get("data", {}).get("text") or ""
     system = (system_for(uid, "Ты личный тренер и помощник по здоровью в приложении «Тренер»: питание, тренировки, сон, "
                               "восстановление, мотивация.") + "\n\n" + STYLE + "\n\n" + ACTIONS_HELP +
-              "\n\nДанные клиента (используй, когда к месту):\n" + _context(uid))
+              "\n\nДанные клиента (используй, когда к месту):\n" + _context(uid, text))
     # think=True: иначе модель рассуждает прямо в поле reply
     out = await ask_json(system, text, CHAT_SCHEMA, temperature=0.7, think=True, history=_history(uid, inp["message_id"]))
     reply = (out.get("reply") or "").strip()
@@ -291,6 +382,30 @@ async def job_chat(uid: str, inp: dict) -> dict:
     if not reply:
         raise AIError("Модель промолчала - спросите ещё раз")
     actions = _clean_actions(out.get("actions"), uid)
+    # модель не добавила отметку, хотя просили явно («поставь воду 6 стаканов за вчера») - берём из самого текста
+    if not any(a["kind"] in AUTO_KINDS for a in actions):
+        for m in daylog.intent_marks(uid, text):
+            actions.append({"id": uuid.uuid4().hex[:8], "kind": m["kind"], "label": "Отметить", "params": m["params"], "status": "offered"})
+    # несколько добавок по одному общему слову («отметь витамины») - не угадываем, спрашиваем
+    many = [a for a in actions if a["kind"] == "mark_supp"]
+    if len(many) > 1:
+        keys = [(daylog.resolve_supp(uid, a["params"].get("name") or "")[1] or {}).get("key") if daylog.resolve_supp(uid, a["params"].get("name") or "")[0] == "ok" else None for a in many]
+        vague = daylog.vague_supps(uid, text, [k for k in keys if k])
+        if vague:
+            names = [a["params"].get("name") for a in many if a["params"].get("name")]
+            actions = [a for a in actions if a["kind"] != "mark_supp"]
+            reply = f"Уточни, что отметить: {', '.join(names)} - какие из них?"
+    actions, marked, ask = _apply_marks(uid, actions, text)
+    if not marked and not ask and daylog.MARK_RE.search(text) and re.search(r"(?i)(отметил|снял|записал|поставил|убрал)", reply):
+        # «отметил», а на деле ничего не сделано и понять, что именно, не вышло - честно переспрашиваем
+        reply = "Не понял, что именно отметить. Назови добавку или пункт чек-листа и день - например, «отметь омегу за вчера»."
+    if ask:
+        # отметить не вышло - вместо уверенного ответа уточнение (модель могла написать «отметил»)
+        reply = ask if not marked else f"{'. '.join(marked)}. {ask}"
+    elif marked:
+        # что именно сделано - нашими словами: модель иногда пишет «отмечу», хотя уже отмечено
+        reply = re.sub(r"(?i)[^.!?]*(отмеч|отмет|сним|снял|снят|запиш|записа|постав)[^.!?]*[.!?]?\s*", "", reply).strip()
+        reply = (". ".join(marked) + ". " + reply).strip()
     # модель иногда отвечает «записал», не предложив кнопку: если просили записать еду - добавляем её сами
     if re.search(r"запиш|записа|внес", text, re.I) and not any(a["kind"] == "log_food" for a in actions):
         idx = food.Index()
@@ -430,7 +545,7 @@ async def execute(uid: str, kind: str, p: dict) -> dict:
         if not w:
             raise HTTPException(400, f"На {d} нет тренировки")
         prof = userdata.profile(uid)
-        new = next((e for e in db.exercises() if e["id"] == p.get("to")), None)
+        new = next((e for e in [*db.exercises(), *jobs.own_exercises(uid)] if e["id"] == p.get("to")), None)
         if not new:
             raise HTTPException(400, "Такого упражнения нет в каталоге")
         if set(new.get("contraindications") or []) & jobs.excluded_codes(uid, prof):
@@ -477,6 +592,15 @@ async def execute(uid: str, kind: str, p: dict) -> dict:
         _set_daytype(uid, p.get("date") or today, p["type"], p.get("note") or "")
         return {"text": "Тип дня отмечен"}
     if kind == "add_injury":
+        # то же, что «Что-то болит» в самочувствии: отметка на сегодня (устройство подстроит план дня)
+        pain = {"head": "head", "stomach": "stomach", "back": "back", "lower_back": "back", "knees": "knees"}.get(p["zone"])
+        if pain:
+            st = db.get(f"state:{uid}:{today}")
+            data = dict(st["data"]) if st and not st["deleted"] else {"entered_at": db.now_ms()}
+            data["pains"] = sorted(set(data.get("pains") or []) | {pain})
+            db.server_put(uid, "state", f"state:{uid}:{today}", data, today)
+        if p["zone"] in ("head", "stomach"):
+            return {"text": "Отметил в самочувствии на сегодня - план дня облегчу"}
         db.server_put(uid, "injury", uuid.uuid4().hex, {"zone": p["zone"], "note": p.get("note") or "",
                                                          "since": today, "resolved": None}, today)
         return {"text": "Записал. Упражнения на эту зону уберу из новых тренировок, пока не отметишь, что прошло"}
@@ -487,6 +611,8 @@ async def execute(uid: str, kind: str, p: dict) -> dict:
             res["job_id"] = jobs.submit(uid, "program", {"rebuild": True, "reason": f"смена темпа на {p['pace']}"})
             res["text"] += "; план пересобирается"
         return res
+    if kind in AUTO_KINDS:
+        return _mark(uid, kind, p)
     if kind == "log_food":
         rid = uuid.uuid4().hex
         rec = db.server_put(uid, "food", rid, {"meal": p.get("meal") or "snack", "text": p["text"], "items": [],
@@ -532,6 +658,8 @@ async def chat_action(request: Request, u=Depends(userdata.current_user)):
         return {"ok": True, "result": {"text": "Отклонено"}}
     result = await execute(uid, act["kind"], act.get("params") or {})
     act.update(status="done", result=result, done_at=db.now_ms())
+    if act.get("undo_of"):
+        act["label"] = (result.get("text") or "Отменено").split(",")[0][:40]
     cur = db.get(msg["id"])                # сообщение могли поменять, пока шло действие
     db.server_put(uid, "chat", msg["id"], {**cur["data"], "actions": actions}, msg["date"])
     return {"ok": True, "result": result}

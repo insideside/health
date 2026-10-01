@@ -3,11 +3,18 @@
 import * as store from './store.js';
 import * as C from './coach.js';
 import * as PF from './prefs.js';
+import * as MX from './myex.js';
 
 // Android: нет «Здоровья» iPhone и «Команд» - этих блоков там не показываем
 export const IS_ANDROID = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+// каталог упражнений + свои упражнения человека (myex.js): get/has/values видят и те, и другие
+export class ExMap extends Map {
+  get(id) { return super.get(id) || MX.byId(id) || undefined; }
+  has(id) { return super.has(id) || !!MX.byId(id); }
+  *values() { yield* super.values(); yield* MX.list(); }
+}
 export const S = {
-  exMap: new Map(),       // id → упражнение из каталога
+  exMap: new ExMap(),     // id → упражнение из каталога (и свои)
   activities: new Map(),  // id → вид активности из справочника
   supps: { items: new Map(), stoplist: [] },   // справочник витаминов и добавок
   forms: {},              // черновики форм: не теряются при перерисовке, сбрасываются при смене экрана

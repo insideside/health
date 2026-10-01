@@ -2,7 +2,7 @@
 // сюда не попадают. BUILD_HASH подставляет сервер — новый билд = новый воркер = новый кэш.
 var CACHE = 'app-BUILD_HASH';
 var ASSETS = ['/', '/app.js', '/store.js', '/coach.js', '/names.js', '/plan.js', '/ui.js', '/app.css', '/ui-a.css', '/ui-b.css', '/ui-c.css', '/accents.css', '/foods.js', '/normslocal.js', '/mealplan.js', '/goals.js', '/brain.js', '/foodparse.js', '/analysis.js', '/stenogramma.css', '/theme.js',
-  '/views/today.js', '/views/calendar.js', '/views/food.js', '/views/workout.js', '/views/progress.js', '/views/profile.js', '/views/chat.js', '/views/together.js', '/views/health.js', '/views/about.js', '/views/install.js', '/qrcode.js', '/views/connect.js', '/prefs.js', '/views/fit.js', '/supps.js', '/views/supp.js', '/views/advice.js'];
+  '/views/today.js', '/views/calendar.js', '/views/food.js', '/views/workout.js', '/views/progress.js', '/views/profile.js', '/views/chat.js', '/views/together.js', '/views/health.js', '/views/about.js', '/views/install.js', '/qrcode.js', '/views/connect.js', '/prefs.js', '/views/fit.js', '/supps.js', '/views/supp.js', '/views/advice.js', '/views/report.js', '/myex.js'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {

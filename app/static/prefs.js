@@ -37,7 +37,7 @@ export const EXCLUDE_REASONS = [['uncomfortable', 'неудобно'], ['no_equi
 export const REASON_NAME = { ...Object.fromEntries(EXCLUDE_REASONS), skipped: 'пропускаю' };
 export function exPrefs(uid = store.uid()) {
   const p = prof(uid).exercise_prefs || {};
-  return { exclude: p.exclude || {}, like: p.like || [], keep: p.keep || {} };
+  return { exclude: p.exclude || {}, like: p.like || [], keep: p.keep || {}, swaps: p.swaps || {} };
 }
 // Где не предлагать: только в утренней разминке, дома, в зале или нигде (старые отметки без scope - «нигде»).
 // where - контекст подбора: { place: 'home'|'gym', module?: 'morning'|… }; без него учитываются только «нигде».
@@ -63,7 +63,7 @@ export const isLiked = (id, uid) => exPrefs(uid).like.includes(id);
 async function savePrefs(fn, extra = p => ({})) {
   const uid = store.uid(), p = prof(uid);
   const cur = exPrefs(uid);
-  const next = fn({ exclude: { ...cur.exclude }, like: [...cur.like], keep: { ...cur.keep } });
+  const next = fn({ exclude: { ...cur.exclude }, like: [...cur.like], keep: { ...cur.keep }, swaps: { ...cur.swaps } });
   await store.put('profile', profId(uid), { ...p, exercise_prefs: next, ...extra(p) });
 }
 // «не предлагать»: из любимых и «оставить» — прочь; закреплённое в утренней разминке — открепляем
@@ -90,6 +90,28 @@ export async function setLike(id, on) {
 // «Оставить»: тренер больше не предлагает замену, пока не накопится 3 новых пропуска после этой даты
 export async function keep(id) { await savePrefs(x => { x.keep[id] = { at: Date.now(), date: C.today() }; return x; }); }
 export async function unkeep(id) { await savePrefs(x => { delete x.keep[id]; return x; }); }
+
+// ── замены руками: «вместо X - Y» ──
+// exercise_prefs.swaps[from] = { to, place: 'home'|'gym'|'morning'…, n (сколько раз), at, always }. Каждую ручную замену
+// запоминаем (тренер видит в чате и разборе недели); always - «и дальше ставить Y вместо X»: подбор и программа
+// (сервер, jobs.job_program) берут Y, будущие тренировки этого места переписываются сразу.
+export const swapsOf = (uid = store.uid()) => exPrefs(uid).swaps;
+export function swapTo(id, where, uid = store.uid()) {
+  const v = swapsOf(uid)[id];
+  if (!v?.always || !v.to) return null;
+  return !where || !v.place || v.place === where.place || (where.module && v.place === where.module) ? v.to : null;
+}
+export async function recordSwap(from, to, place, always = false) {
+  await savePrefs(x => {
+    const cur = x.swaps[from];
+    x.swaps[from] = { to, place: place || null, n: (cur?.to === to ? cur.n || 1 : 0) + 1, at: Date.now(), always: !!always };
+    // обратная замена отменяет прежнюю «всегда»: Y → X после X → Y
+    if (x.swaps[to]?.to === from) delete x.swaps[to];
+    return x;
+  });
+}
+export async function setSwapAlways(from, always) { await savePrefs(x => { if (x.swaps[from]) x.swaps[from] = { ...x.swaps[from], always: !!always }; return x; }); }
+export async function unswap(from) { await savePrefs(x => { delete x.swaps[from]; return x; }); }
 
 // ── кардио ──
 // Виды кардио строятся из справочника активностей (поля cardio/setting/season/cold_ok/weather_sensitive);

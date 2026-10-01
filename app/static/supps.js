@@ -110,6 +110,23 @@ function mealAt(time) {
   return m < 11 * 60 ? 'breakfast' : m < 16 * 60 ? 'lunch' : m < 21 * 60 ? 'dinner' : 'snack';
 }
 
+// приёмы, отмеченные тренером из чата (сервер пишет только supp): дописать запись еды для протеина и т. п. -
+// справочник порций и БЖУ только здесь. Один раз на приём (food_id или food_checked).
+export async function ensureFoods(dates, uid = store.uid()) {
+  for (const d of dates) {
+    for (const r of store.byDate('supp', d, uid)) {
+      if (r.data.via !== 'chat' || r.data.food_id || r.data.food_checked) continue;
+      const s = plan(uid).find(x => x.key === r.data.key);
+      const f = s && foodFor(s, r.data.dose || planDose(s).dose, r.data.dose_unit || planDose(s).unit, r.data.time);
+      if (f) {
+        const fid = store.newId();
+        await store.put('food', fid, { ...f, supp_id: r.id, created: Date.now(), entered_at: Date.now() }, d);
+        await store.patch(r.id, { food_id: fid });
+      } else await store.patch(r.id, { food_checked: true });
+    }
+  }
+}
+
 // запись еды для спортпита с калориями: белок протеина идёт в БЖУ дня
 function foodFor(s, dose, unit, time) {
   const m = macrosOf(s);

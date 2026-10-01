@@ -1,13 +1,21 @@
 /* Стили приложения «Тренер». Токены и базовые компоненты — в stenogramma.css. */
+/* без зума: двойной тап не увеличивает (touch-action), щипок гасит app.js; шрифт не раздувается при повороте */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 :root { --aside-w: 250px; --layout-pad-l: 18px; --layout-gap: 8px; --tab-h: 62px; --ok: var(--c3); }
 
 .boot { padding: 40vh 0 0; text-align: center; position: relative; z-index: 1; }
 
 /* ---------- шапка ---------- */
 .masthead {
-  position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between;
   gap: 14px; flex-wrap: wrap; padding: calc(18px + env(safe-area-inset-top)) 36px 14px;
+  /* прилипает сверху: при прокрутке вниз уезжает, при прокрутке вверх сразу выезжает (app.js, mh-hide) */
+  background: color-mix(in srgb, var(--desk) 92%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: transform .2s ease-out, box-shadow .2s ease-out; will-change: transform;
 }
+.masthead.mh-float { box-shadow: 0 6px 18px -14px rgba(0, 0, 0, .5); }
+.masthead.mh-hide { transform: translateY(-100%); box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .masthead { transition: none; } }
 .wordmark { display: flex; align-items: baseline; gap: 12px; min-width: 0; text-decoration: none; }
 .wordmark b {
   font-family: var(--serif-display); font-weight: 700; font-size: 23px; line-height: 1;
@@ -23,7 +31,7 @@
 /* ---------- раскладка ---------- */
 .layout { position: relative; z-index: 1; display: grid; grid-template-columns: var(--aside-w) minmax(0, 1fr); gap: var(--layout-gap); padding: 0 28px 40px var(--layout-pad-l); }
 .layout > * { min-width: 0; }
-aside.nav { padding: 6px 10px 30px 18px; position: sticky; top: 0; align-self: start; }
+aside.nav { padding: 6px 10px 30px 18px; position: sticky; top: var(--mh-offset, 0px); align-self: start; transition: top .2s ease-out; }
 main { padding: 0 0 60px; }
 .wrap {
   max-width: var(--measure);
@@ -61,6 +69,7 @@ main { padding: 0 0 60px; }
   .tabbar a svg { width: 22px; height: 22px; }
   .tabbar a.on { color: var(--accent); }
   .tabbar a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html.kb-open .tabbar { display: none; }     /* открыта клавиатура (app.js, syncKeyboard) */
 }
 
 /* ---------- общие блоки ---------- */
@@ -95,9 +104,10 @@ a.link { color: var(--accent); text-decoration: none; border-bottom: 1px solid v
 .coach q { display: block; quotes: none; font-size: 18.5px; line-height: 1.45; color: var(--ink-strong); font-style: italic; }
 .coach ul { margin: 10px 0 0; padding: 0; list-style: none; }
 .coach li { font-size: 14.5px; color: var(--ink-2); padding: 3px 0 3px 16px; position: relative; }
-.coach li::before { content: "—"; position: absolute; left: 0; color: var(--ink-3); }
-.coach li.praise::before { color: var(--ok); }
-.coach li.scold::before { color: var(--accent); }
+/* цветная точка по центру первой строки: зелёная - похвала, терракотовая - замечание, серая - к сведению */
+.coach li::before { content: ""; position: absolute; left: 2px; top: calc(3px + .725em - 3.5px); width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+.coach li.praise::before { background: var(--ok); }
+.coach li.scold::before { background: var(--accent); }
 
 /* ---------- кольцо прогресса ---------- */
 .ring { position: relative; flex: 0 0 auto; }
@@ -132,6 +142,8 @@ a.link { color: var(--accent); text-decoration: none; border-bottom: 1px solid v
 .stepper button { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--sheet-2); box-shadow: var(--shadow-raised); font: 700 18px var(--sans); color: var(--ink); padding: 0; }
 .stepper button:active { box-shadow: var(--shadow-inset); }
 .stepper .val { min-width: 54px; text-align: center; font-family: var(--mono); font-size: 14px; }
+.glasses i.half { background: linear-gradient(to top, var(--c2) 50%, transparent 50%); }
+.stepper button.half { font-size: 15px; }
 .num-in { width: 110px; text-align: right; font-family: var(--mono); }
 .glasses { display: flex; gap: 3px; margin-top: 5px; flex-wrap: wrap; }
 .glasses i { width: 9px; height: 13px; border-radius: 1px 1px 3px 3px; border: 1px solid var(--rule-2); }
@@ -274,6 +286,7 @@ button.sync:hover { background: var(--hl); border-color: var(--rule); color: var
 .sync.conflict { color: var(--accent); }
 .sync.conflict::before { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .conflict-card { margin-top: 12px; }
+.conflict-title { font-weight: 600; overflow-wrap: anywhere; }
 .conflict-rows { display: grid; gap: 8px; margin-top: 8px; }
 .conflict-row { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: stretch; }
 .conflict-field { color: var(--ink-3); font-style: italic; font-size: 14px; align-self: center; overflow-wrap: anywhere; }
@@ -349,8 +362,6 @@ input.control[type="time"]::-webkit-date-and-time-value, input.control[type="dat
 .field { min-width: 0; }
 
 /* ---------- быстрые ссылки профиля ---------- */
-.pf-quick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 6px; }
-.pf-quick .btn { min-width: 0; }
 button.sync.update { color: var(--accent); }
 button.sync.update::before { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 

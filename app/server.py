@@ -29,7 +29,7 @@ HTTPS_PORT = int(os.environ.get("TRAINER_PORT", 8790))
 MAX_USERS = 20
 KINDS = {"profile", "goal", "target", "item", "log", "food", "body", "program", "workout", "dsum", "ach", "coach",
          "sleep", "state", "daytype", "activity", "injury", "routine", "favfood", "chat", "wsum", "mtest", "vitals",
-         "period", "drink", "supp", "pairwarm", "smoke", "alcohol", "highlight"}
+         "period", "drink", "supp", "pairwarm", "smoke", "alcohol", "highlight", "myex"}
 SYNC_LIMIT = 2000
 
 

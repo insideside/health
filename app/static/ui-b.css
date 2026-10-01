@@ -2,7 +2,9 @@
 
 /* ════════ профиль ════════ */
 .profile-v2 { margin-top: 8px; }
-.pgroup { color: var(--ink-3); margin: 26px 0 8px; }
+.pgroup { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; color: var(--ink-3); margin: 28px 0 8px; }
+.pgroup .smallcaps { color: var(--accent); letter-spacing: .12em; }
+.pgroup .note { font-size: 13px; }
 .pgroup:first-child { margin-top: 6px; }
 details.psec { border-top: 1px solid var(--rule); }
 details.psec:last-child { border-bottom: 1px solid var(--rule); }
@@ -228,6 +230,10 @@ details.pf-inner > summary { cursor: pointer; color: var(--ink-3); font-family: 
     padding: 8px 12px 10px; background: color-mix(in srgb, var(--sheet) 96%, transparent);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 -8px 20px -14px rgba(0, 0, 0, .35);
   }
+  /* страница чата ровно в экран: лист тянется до поля ввода, отступы снизу не нужны (views/chat.js fitList) */
+  body:has(.chat-v2) .layout { padding-bottom: 0; }
+  body:has(.chat-v2) main { padding-bottom: 0; }
+  body:has(.chat-v2) .sheet { padding-bottom: 10px; }
   .chat-quick { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px 8px; padding: 0 12px 2px; }
   .chat-quick::-webkit-scrollbar { display: none; }
   .msg { max-width: 90%; }

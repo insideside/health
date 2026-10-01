@@ -104,11 +104,11 @@ function initForm() {
     sched_irregular: !!p.schedule?.irregular, sched_days: days,
     activities: clone(p.activities || []),
     mod_home_on: m.home_plan?.enabled !== false,
-    mod_morning_on: m.morning?.enabled ?? true, mod_morning_min: m.morning?.minutes || 10,
+    mod_morning_on: m.morning?.enabled ?? true, mod_morning_min: m.morning?.minutes || 10, mod_morning_gear: m.morning?.gear || 'any',
     mod_neck_on: !!m.neck?.enabled, mod_neck_week: m.neck?.per_week || 3, mod_neck_min: m.neck?.minutes || 5,
     mod_posture_on: !!m.posture?.enabled, mod_posture_week: m.posture?.per_week || 3, mod_posture_min: m.posture?.minutes || 10,
     ew_on: !!p.eating_window?.enabled, ew_from: p.eating_window?.from || '10:00', ew_to: p.eating_window?.to || '20:00',
-    glass_ml: p.glass_ml || 250, reminders: clone(p.reminders || []), tone: p.tone || 'coach',
+    glass_ml: p.glass_ml || 250, milk_mode: p.milk_mode === 'hidden' ? 'hidden' : 'meal', reminders: clone(p.reminders || []), tone: p.tone || 'coach',
     ai: p.ai === 'off' ? 'off' : 'on',
     share_activity: p.share_activity !== false,
   };
@@ -187,41 +187,50 @@ function viewProfile() {
   const injuries = store.list('injury').filter(r => !r.data.resolved);
   const acts = fm.activities;
 
+  const grp = (title, note = '') => `<div class="pgroup"><span class="smallcaps">${title}</span>${note ? `<span class="note">${note}</span>` : ''}</div>`;
   const sections = [
-    `<div class="pgroup smallcaps">О вас</div>`,
+    grp('О вас', 'по этому считаются нормы и подбираются упражнения'),
     sec('params', 'Параметры', [age ? `${age} лет` : '', fm.height ? `${fm.height} см` : '', fm.weight ? `${String(fm.weight).replace('.', ',')} кг` : ''].filter(Boolean).join(' · ') || 'не заполнено', paramsBody(fm)),
     sec('body', 'Телосложение и особенности', fm.body_type ? BODY.find(b => b[0] === fm.body_type)?.[1] : 'не указано', bodyBody(fm)),
-    sec('goals', 'Цели', selGoals || 'не выбраны', goalsBody(fm)),
-    sec('deadline', 'Срок цели', fm.deadline ? `до ${esc(fmt(fm.deadline, { day: 'numeric', month: 'long', year: 'numeric' }))}${preview.data?.label ? ' · ' + (TL[preview.data.label] || '') : ''}` : 'без срока', deadlineBody(fm, tg)),
     sec('health', 'Здоровье', [fm.limitations.length ? `ограничений: ${fm.limitations.length}` : '', injuries.length ? `травм: ${injuries.length}` : '', fm.diet !== 'normal' ? DIETS.find(d => d[0] === fm.diet)?.[1] : ''].filter(Boolean).join(' · ') || 'без ограничений', healthBody(fm)),
     fm.sex === 'f' ? sec('cycle', 'Цикл', fm.cycle_on ? 'учитывается' : 'не учитывается', cycleBody(fm)) : '',
-    `<div class="pgroup smallcaps">План и режим</div>`,
-    sec('training', 'Тренировки', `${fm.gym ? (fm.gym_program === 'own' ? 'зал - своя программа' : 'зал') : 'дома'} · ${fm.weekdays.map(i => WD[i]).join(', ') || 'дни не выбраны'} · до ${fm.time_budget_min} мин`, trainingBody(fm)),
+
+    grp('Цели и нормы', 'к чему идём и сколько нужно в день'),
+    sec('goals', 'Цели', selGoals || 'не выбраны', goalsBody(fm)),
+    sec('deadline', 'Срок цели', fm.deadline ? `до ${esc(fmt(fm.deadline, { day: 'numeric', month: 'long', year: 'numeric' }))}${preview.data?.label ? ' · ' + (TL[preview.data.label] || '') : ''}` : 'без срока', deadlineBody(fm, tg)),
+    sec('norms', 'Нормы', tg ? `${num(tg.kcal)} ккал · белок ${tg.p} г · ${num(tg.steps_manual || tg.steps)} шагов` : 'ещё не считались', normsBody(tgRec)),
+
+    grp('Тренировки', 'где, когда и что делать'),
+    sec('training', 'Где и когда', `${fm.gym ? (fm.gym_program === 'own' ? 'зал - своя программа' : 'зал') : 'дома'} · ${fm.weekdays.map(i => WD[i]).join(', ') || 'дни не выбраны'} · до ${fm.time_budget_min} мин`, trainingBody(fm)),
     sec('equipment', 'Что есть дома', equipSummary(fm), equipBody(fm)),
-    sec('cardio', 'Кардио', cardioSummary(fm), cardioBody(fm)),
-    sec('myex', 'Мои упражнения', myExSummary(), myExBody()),
-    sec('activities', 'Активности', acts.length ? acts.map(a => esc(actName(a))).join(', ') : 'нет', activitiesBody(fm)),
     sec('modules', 'Короткие комплексы', [fm.mod_home_on ? 'под цели' : '', fm.mod_morning_on ? `разминка ${fm.mod_morning_min} мин` : '', fm.mod_neck_on ? 'шея' : '', fm.mod_posture_on ? 'осанка' : ''].filter(Boolean).join(' · ') || 'выключены', modulesBody(fm)),
-    sec('food', 'Питание', fm.ew_on ? `окно ${esc(fm.ew_from)}–${esc(fm.ew_to)}` : `стакан ${fm.glass_ml} мл`, foodBody(fm)),
+    sec('cardio', 'Кардио', cardioSummary(fm), cardioBody(fm)),
+    sec('activities', 'Активности', acts.length ? acts.map(a => esc(actName(a))).join(', ') : 'нет', activitiesBody(fm)),
+    sec('myex', 'Мои упражнения', myExSummary(), myExBody()),
+
+    grp('Питание'),
+    sec('food', 'Режим питания', [fm.ew_on ? `окно ${esc(fm.ew_from)}–${esc(fm.ew_to)}` : '', `стакан ${fm.glass_ml} мл`, fm.milk_mode === 'hidden' ? 'молоко в итогах' : 'молоко в приёмах'].filter(Boolean).join(' · '), foodBody(fm)),
     sec('supps', 'Витамины и добавки', SPV.profileSummary(), SPV.profileBody()),
+
+    grp('Каждый день', 'что отмечать и когда напоминать'),
+    sec('checklist', 'Чек-лист', `${store.list('item').filter(i => i.data.active !== false).length} пунктов`, checklistBody()),
     sec('reminders', 'Напоминания', fm.reminders.filter(r => r.enabled).length ? fm.reminders.filter(r => r.enabled).map(r => esc(r.time)).join(', ') : 'нет', remindersBody(fm)),
-    `<div class="pgroup smallcaps">Тренер и приложение</div>`,
+
+    grp('Тренер'),
     sec('tone', 'Тон тренера', C.TONE_NAMES[fm.tone] || '', toneBody(fm)),
     sec('ai', 'ИИ-тренер', fm.ai === 'off' ? 'выключена' : 'включена', aiBody(fm)),
-    sec('compete', 'Прогресс вместе', competeSummary(), competeBody()),
-    sec('group', 'Группа', groupSummary(fm), groupBody(fm)),
-    sec('privacy', 'Данные и приватность', BR.privacySummary(), BR.privacyBody()),
-    sec('norms', 'Нормы', tg ? `${num(tg.kcal)} ккал · белок ${tg.p} г · ${num(tg.steps_manual || tg.steps)} шагов` : 'ещё не считались', normsBody(tgRec)),
-    sec('checklist', 'Чек-лист', `${store.list('item').filter(i => i.data.active !== false).length} пунктов`, checklistBody()),
+
+    store.partners().length || store.groups().length || store.isAdmin() ? grp('Вместе', 'что видят другие и что делаете вместе') : '',
+    store.partners().length ? sec('compete', 'Прогресс вместе', competeSummary(), competeBody()) : '',
+    store.groups().length || store.isAdmin() ? sec('group', 'Группа', groupSummary(fm), groupBody(fm)) : '',
+
+    grp('Приложение и данные'),
     IS_ANDROID ? '' : sec('iphone', 'Здоровье iPhone', 'шаги, сон и вес через «Команды»', iphoneBody()),
-    sec('app', 'Приложение', 'тема, адрес, экспорт, выход', appBody()),
+    sec('privacy', 'Данные и приватность', BR.privacySummary(), BR.privacyBody()),
+    sec('app', 'Приложение', 'тема, адрес, установка, экспорт, выход', appBody()),
   ];
 
   return `<div class="kicker smallcaps">Профиль</div><h1>${esc(prof.name || store.me()?.name || 'Профиль')}</h1>
-    <div class="pf-quick">
-      <a class="btn" href="#install">${IS_ANDROID ? 'Установка на телефон' : 'Установка на iPhone'}</a>${IS_ANDROID ? '' : '<a class="btn quiet" href="#health">Здоровье iPhone</a>'}
-      <a class="btn quiet" href="#connect">Адреса сервера</a><a class="btn quiet" href="#about">Как это работает</a>
-      ${themeSwitch()}</div>
     <p class="lede">${prof.setup_done ? 'Всё, что тренер знает о вас. Откройте нужный раздел, поправьте и сохраните.'
       : 'Начнём знакомство: заполните параметры и цели - по ним тренер посчитает нормы и составит план. Остальное можно добавить потом.'}</p>
     <div class="profile-v2">${sections.join('')}</div>
@@ -543,7 +552,8 @@ function modulesBody(fm) {
     <div class="pf-mod"><div>${chk('mod_morning_on', '<b>Утренняя разминка</b>', fm.mod_morning_on)}
       <p class="note">Каждый день новая, из упражнений для дома, под выбранное время.</p>
       ${fm.mod_morning_on && store.partners().length ? `<p class="note">Делать разминку и другие комплексы вместе с ${esc(C.nameForms(store.partners()[0].id).ins || store.partners()[0].name)} - в разделе «Прогресс вместе» → «Общие комплексы».</p>` : ''}</div>
-      ${fm.mod_morning_on ? chips(F, 'mod_morning_min', fm.mod_morning_min, [5, 10, 15, 20].map(k => [k, `${k} мин`])) : ''}</div>
+      ${fm.mod_morning_on ? `<div class="pf-mod-o">${chips(F, 'mod_morning_min', fm.mod_morning_min, [5, 10, 15, 20].map(k => [k, `${k} мин`]))}
+        ${chips(F, 'mod_morning_gear', fm.mod_morning_gear, [['any', 'любой инвентарь'], ['mat', 'только коврик'], ['none', 'без коврика и инвентаря']])}</div>` : ''}</div>
     <div class="pf-mod"><div>${chk('mod_neck_on', '<b>Шея и скулы</b>', fm.mod_neck_on)}
       <p class="note">Тонус шеи и осанка. Честно: второй подбородок уходит только вместе с общим жиром.</p></div>
       ${fm.mod_neck_on ? `<div class="pf-mod-o">${select(F, 'mod_neck_week', fm.mod_neck_week, [1, 2, 3, 4, 5, 6, 7].map(k => [k, `${k} ${plural(k, 'раз', 'раза', 'раз')} в неделю`]), 'aria-label="Шея и скулы: сколько раз в неделю"')}
@@ -558,7 +568,12 @@ function foodBody(fm) {
   return `${chk('ew_on', 'Есть в окне (интервальное питание)', fm.ew_on)}
     ${fm.ew_on ? `<div class="grid3" style="margin-top:12px">${field('С', input(F, 'ew_from', fm.ew_from, 'type="time"'))}${field('До', input(F, 'ew_to', fm.ew_to, 'type="time"'))}</div>
       <p class="note">Приёмы пищи вне окна тренер отметит - без упрёков, просто для статистики.</p>` : ''}
-    <div class="grid3" style="margin-top:12px">${field('Объём стакана, мл', input(F, 'glass_ml', fm.glass_ml, 'type="number" inputmode="numeric" min="100" max="600"'))}</div>`;
+    <div class="grid3" style="margin-top:12px">${field('Объём стакана, мл', input(F, 'glass_ml', fm.glass_ml, 'type="number" inputmode="numeric" min="100" max="600"'))}</div>
+    <div class="field" style="margin-top:14px"><span class="smallcaps">Молоко в кофе</span>
+      ${chips(F, 'milk_mode', fm.milk_mode, [['meal', 'Показывать в приёмах пищи'], ['hidden', 'Только в итогах дня']])}
+      <p class="note">${fm.milk_mode === 'hidden'
+        ? 'Молоко считается в калориях и БЖУ дня, но в приёмах пищи его нет - оно видно у счётчика кофе на «Сегодня» и одной строкой под приёмами пищи.'
+        : 'Молоко - отдельной строкой в приёме пищи. У каждой чашки с молоком можно выбрать, к какому приёму её отнести; без выбора - по времени чашки.'}</p></div>`;
 }
 
 function remindersBody(fm) {
@@ -665,9 +680,7 @@ function groupBody(fm) {
   const gs = store.groups();
   const mine = `${gs.length ? `<div class="chips">${gs.map(g => `<span class="chip">${esc(g.name)} · ${g.members.map(m => esc(m.name)).join(', ')}</span>`).join('')}</div>`
     : '<p class="note" style="margin-top:0">Вы не состоите ни в одной группе - её создаёт админ.</p>'}
-    ${gs.length ? `<div class="field" style="margin-top:12px"><span class="smallcaps">Делиться активностью в группе</span>
-      <p class="note" style="margin:2px 0 6px">Другие в группе видят только общие вехи (тренировка, велосипед и т. п.) - время и минуты, без подробностей, что именно вы делали или ели. Никогда не уходят: питание, вес и замеры, самочувствие, цикл, курение и алкоголь, добавки, а также личное - массаж, баня, медитация, занятия с детьми.</p>
-      <label class="chk"><input type="checkbox" data-form="${F}" data-key="share_activity" ${fm.share_activity !== false ? 'checked' : ''}> делиться</label></div>` : ''}`;
+    ${gs.length ? '<p class="note">Что видят участники группы - в разделе «Прогресс вместе» выше: переключатель «Показывать в ленте».</p>' : ''}`;
   if (!store.isAdmin()) return mine;
   if (!adminGroups.users && !adminGroups.loading) loadAdminGroups();
   const editing = S.forms.grp || null;
@@ -712,7 +725,7 @@ function themeSwitch() {
 }
 
 function appBody() {
-  return `<div class="theme-switch" role="group" aria-label="Тема"><button data-theme-set="auto" title="Как в системе">Авто</button><button data-theme-set="dark" aria-label="Тёмная тема" title="Тёмная тема">${glyph('night')}</button><button data-theme-set="light" aria-label="Светлая тема" title="Светлая тема">${glyph('sun')}</button></div>
+  return `${themeSwitch()}
     <p class="small" id="server-info"><span class="note">Адрес для телефона…</span></p>
     <p class="note">На iPhone: откройте адрес в Safari → скачайте <a class="link" href="/ca.crt">сертификат</a> → Настройки → «Профиль загружен» → Установить → Основные → Об этом устройстве → Доверие сертификатам → включить «Trainer local CA». Потом «Поделиться → На экран „Домой“».</p>
     <p class="small"><a class="link" href="#connect">Адреса сервера и доступ из интернета →</a></p>
@@ -793,13 +806,13 @@ function buildProfile(fm) {
       ...(cur.modules || {}),
       home_plan: { ...(cur.modules?.home_plan || {}), enabled: !!fm.mod_home_on },
       // ...cur: закреплённые упражнения разминки (pinned) правятся не в форме — не теряем их при сохранении
-      morning: { ...(cur.modules?.morning || {}), enabled: !!fm.mod_morning_on, minutes: n(fm.mod_morning_min) || 10 },
+      morning: { ...(cur.modules?.morning || {}), enabled: !!fm.mod_morning_on, minutes: n(fm.mod_morning_min) || 10, gear: fm.mod_morning_gear || 'any' },
       neck: { ...(cur.modules?.neck || {}), enabled: !!fm.mod_neck_on, per_week: n(fm.mod_neck_week) || 3, minutes: n(fm.mod_neck_min) || 5 },
       posture: { ...(cur.modules?.posture || {}), enabled: !!fm.mod_posture_on, per_week: n(fm.mod_posture_week) || 3, minutes: n(fm.mod_posture_min) || 10 },
     },
     eating_window: { enabled: !!fm.ew_on, from: fm.ew_from || '10:00', to: fm.ew_to || '20:00' },
     reminders: fm.reminders.map(r => ({ kind: r.kind, time: r.time || '09:00', enabled: !!r.enabled })),
-    pace: fm.pace || 'normal', tone: fm.tone || 'coach', glass_ml: n(fm.glass_ml) || 250,
+    pace: fm.pace || 'normal', tone: fm.tone || 'coach', glass_ml: n(fm.glass_ml) || 250, milk_mode: fm.milk_mode === 'hidden' ? 'hidden' : 'meal',
     ai: fm.ai === 'off' ? 'off' : 'on',
     share_activity: fm.share_activity !== false,
   };
