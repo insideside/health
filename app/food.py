@@ -227,6 +227,71 @@ STATE_HINT = [(r"сух", "сухой"), (r"сыр(ой|ая|ое|ом|ом ви
               (r"запеч", "запечённый"), (r"жарен", "жареный"), (r"готов", "готовый")]
 
 
+# Яйца по категориям (ГОСТ 31654-2012, масса с скорлупой): СВ от 75 г, С0 65-74,9, С1 55-64,9, С2 45-54,9, С3 35-44,9.
+# Съедобная часть - около 88 % (скорлупа ≈ 12 %): середина категории × 0,88. Без категории - 50 г из справочника.
+EGG_G = {"В": 69, "0": 61, "1": 53, "2": 44, "3": 35}
+EGG_RE = re.compile(r"яйц|яиц|яичн", re.I)
+# «С0», «C1», «СО» (буква вместо нуля), «СВ» - латиница и кириллица, без пробела внутри
+EGG_CAT_RE = re.compile(r"(?<![^\W\d_])[сc]\s?([0-3оoвvbB])(?![^\W\d_])", re.I)
+# куриное яйцо (в том числе товар из магазина «Яйцо окское С1»): вес штуки - по категории; перепелиные, утиные,
+# шоколадные, блюда из яиц - нет (как foods.isChickenEgg на клиенте)
+CHICKEN_EGG = re.compile(r"^(яйц|яичница-глазунья)", re.I)
+NOT_CHICKEN = re.compile(r"перепел|утин|гусин|страус|индюш|шоколад|киндер|фарширов|бенедикт|порошок|белок|желток|сюрприз", re.I)
+EGG_PLAIN_G = 50
+
+
+def is_chicken_egg(name: str) -> bool:
+    return bool(CHICKEN_EGG.search(name or "")) and not NOT_CHICKEN.search(name or "")
+
+
+def egg_category(chunk: str) -> str | None:
+    """«яйцо С0 2 шт» → "0"; нет яиц или категории - None."""
+    if not EGG_RE.search(chunk or ""):
+        return None
+    m = EGG_CAT_RE.search(chunk)
+    if not m:
+        return None
+    c = m.group(1).lower()
+    return "0" if c in "оo0" else "В" if c in "вvb" else c
+
+
+def piece_of(food: dict | None, chunk: str = "", pieces: dict | None = None) -> float | None:
+    """Вес 1 шт для записи: категория яйца из текста, из названия продукта; личный вес (profile.pieces);
+    справочник (portions.шт); куриное яйцо без категории - 50 г. Как foods.pieceOf на клиенте."""
+    if not food:
+        return None
+    egg = is_chicken_egg(food.get("name") or "")
+    cat = (egg_category(chunk) or egg_category(food.get("name") or "")) if egg else None
+    if cat:
+        return EGG_G[cat]
+    own = (pieces or {}).get(str(food.get("id")))
+    if own and float(own) > 0:
+        return float(own)
+    base = (food.get("portions") or {}).get("шт")
+    if base:
+        return base
+    return EGG_PLAIN_G if egg else None
+
+
+def with_piece(food: dict | None, chunk: str, pieces: dict | None = None) -> dict | None:
+    """Копия продукта с piece_g, если вес штуки для этой записи отличается от справочного."""
+    if not food:
+        return food
+    g = piece_of(food, chunk, pieces)
+    return {**food, "piece_g": g} if g and g != (food.get("portions") or {}).get("шт") else food
+
+
+def pieces_of(uid: str | None) -> dict:
+    """Личный вес штуки: {id продукта: граммы} из профиля (окно продукта в записи еды)."""
+    if not uid:
+        return {}
+    try:
+        from . import userdata
+        return (userdata.profile(uid) or {}).get("pieces") or {}
+    except Exception:
+        return {}
+
+
 def prepare(chunk: str) -> tuple[str, bool]:
     """→ (кусок для разбора, «немного»). Состояние из скобок важнее слов снаружи: «рис отварной 40 г (в сухом виде)» - сухой."""
     hint = None
@@ -240,6 +305,9 @@ def prepare(chunk: str) -> tuple[str, bool]:
         text = STATE_WORDS.sub(" ", text) + " " + hint
     text = QUALIFIER_RE.sub(" ", text)
     text = WITHOUT_RE.sub(" ", text)            # «без сахара», «без масла» - не продукт
+    if EGG_RE.search(text):                     # «яйцо С0» - категория идёт в вес штуки (with_piece), не в название
+        text = EGG_CAT_RE.sub(" ", text)
+    text = re.sub(r"\s[-–]\s", " ", text)        # «яйцо С0 - 1 шт»: одиночное тире между словами - не часть названия
     small = bool(SMALL_RE.search(text)) and not QTY_RE.search(text)
     if small:
         text = SMALL_RE.sub(" ", text)
@@ -421,7 +489,9 @@ def usage(uid: str, idx: "Index | None" = None, days: int = 180) -> dict[int, di
 
 
 def grams_for(food: dict, n: float | None, unit: str | None) -> float | None:
-    portions = food.get("portions") or {}
+    portions = dict(food.get("portions") or {})
+    if food.get("piece_g"):                     # with_piece: категория яйца или личный вес штуки
+        portions["шт"] = food["piece_g"]
     if unit in ("g", "ml"):
         return n
     if unit in ("kg", "l"):
@@ -455,24 +525,31 @@ def item_from(food: dict, grams: float, text: str, source: str = "db") -> dict:
     return out
 
 
+def drop_covered(rest: list[str], rec_data: dict) -> list[str]:
+    """Нераспознанные куски без тех, что человек закрыл строкой руками («+ Добавить продукт» → «это вместо», covers)."""
+    cov = {norm(str(c)) for i in (rec_data.get("items") or []) if isinstance(i, dict) and i.get("added") for c in i.get("covers") or []}
+    return [r for r in rest if norm(r) not in cov] if cov else rest
+
+
 def quick_parse(text: str, idx: Index | None = None, uid: str | None = None) -> tuple[list[dict], list[str]]:
     """→ (распознанные позиции, нераспознанные куски). Явные КБЖУ относятся к целому куску «между ;/переносами
     строк» (split_strong) — так составное блюдо, у которого через запятую перечислены части («рис с креветками,
     яйцом и луком»), не разваливается на отдельные продукты; запятая делит на блюда, только когда КБЖУ рядом нет."""
     idx = idx or Index()
     done, rest = [], []
+    pieces = pieces_of(uid)
     for seg, macro in macro_annotate(split_strong(text)):
         if macro:
             clean, small = prepare(seg)
             name, n, unit = parse_chunk(clean)
-            food = idx.match(name)
+            food = with_piece(idx.match(name), seg, pieces)
             # явные КБЖУ рядом с продуктом — они и идут в БЖУ приёма пищи, справочник тут не спрашиваем
             done.append(_macro_item(seg, name, _macro_grams(n, unit, food), macro, idx, uid))
             continue
         for chunk in split_weak(seg):
             clean, small = prepare(chunk)
             name, n, unit = parse_chunk(clean)
-            food = idx.match(name)
+            food = with_piece(idx.match(name), chunk, pieces)
             grams = (food.get("portions") or {}).get("горсть", SMALL_G) if food and small else grams_for(food, n, unit) if food else None
             if food and grams:
                 done.append(item_from(food, grams, chunk))

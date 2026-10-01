@@ -124,9 +124,45 @@ export function itemFor(food, grams) {
   return it;
 }
 
+// ── штуки ──
+// Яйца по категориям (ГОСТ 31654-2012, с скорлупой): СВ от 75 г, С0 65-74,9, С1 55-64,9, С2 45-54,9, С3 35-44,9;
+// съедобная часть ≈ 88 % - середина категории × 0,88. Без категории - 50 г. Как food.EGG_G на сервере.
+export const EGG_G = { 'В': 69, '0': 61, '1': 53, '2': 44, '3': 35 };
+export const EGG_PLAIN_G = 50;
+const EGG_RE = /яйц|яиц|яичн/i;
+export const EGG_CAT_RE = /(?<!\p{L})[сc]\s?([0-3оoвvb])(?!\p{L})/iu;
+// куриное яйцо (в том числе товар из магазина «Яйцо окское С1»): вес штуки - по категории; перепелиные, утиные,
+// шоколадные, блюда из яиц - нет
+const CHICKEN_EGG = /^(яйц|яичница-глазунья)/i;
+const NOT_CHICKEN = /перепел|утин|гусин|страус|индюш|шоколад|киндер|фарширов|бенедикт|порошок|белок|желток|сюрприз/i;
+export const isChickenEgg = name => CHICKEN_EGG.test(name || '') && !NOT_CHICKEN.test(name || '');
+export function eggCategory(text) {
+  if (!EGG_RE.test(text || '')) return null;
+  const m = String(text).match(EGG_CAT_RE);
+  if (!m) return null;
+  const c = m[1].toLowerCase();
+  return 'оo0'.includes(c) ? '0' : 'вvb'.includes(c) ? 'В' : c;
+}
+export const pieces = () => store.get(`profile:${store.uid()}`)?.data?.pieces || {};
+// вес 1 шт для этой записи или null. Порядок: категория яйца из текста записи, из названия продукта; личный вес
+// (profile.pieces); справочник (portions.шт); куриное яйцо без категории - 50 г
+export function pieceOf(food, text = '') {
+  if (!food) return null;
+  const egg = isChickenEgg(food.name);
+  const cat = egg ? eggCategory(text) || eggCategory(food.name) : null;
+  if (cat) return EGG_G[cat];
+  const own = Number(pieces()[String(food.id)]);
+  if (own > 0) return own;
+  const base = Number(food.portions?.['шт']);
+  if (base > 0) return base;
+  return egg ? EGG_PLAIN_G : null;
+}
+
 // порции продукта: [['1 шт', 55], ['ст.л.', 25], …]
 export function portions(food) {
-  return Object.entries(food?.portions || {}).filter(([, g]) => Number(g) > 0).map(([k, g]) => [k === 'шт' ? '1 шт' : k, Number(g)]);
+  const pc = pieceOf(food);                     // личный вес штуки, категория яйца - важнее справочного
+  const ps = { ...(food?.portions || {}), ...(pc ? { 'шт': pc } : {}) };
+  return Object.entries(ps).filter(([, g]) => Number(g) > 0).map(([k, g]) => [k === 'шт' ? '1 шт' : k, Number(g)]);
 }
 
 // 4б + 4у + 9ж против ккал: доля расхождения или null

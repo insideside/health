@@ -186,6 +186,16 @@ const WITH_RE = /\s(?:с|со|плюс)\s+(.+)$/iu;
 const SMALL_RE = new RegExp(`(?<!${W})(?:немного|немножко|чуть-чуть|чуть|щепотк${W}*|несколько листьев|пар[ау] листьев)(?!${W})`, 'giu');
 const STATE_HINT = [[/сух/i, 'сухой'], [/сыр(ой|ая|ое|ом)/i, 'сырой'], [/вар[её]н|отварн/i, 'варёный'], [/запеч/i, 'запечённый'], [/жарен/i, 'жареный'], [/готов/i, 'готовый']];
 export const SMALL_G = 20;          // «немного» без числа - горсть или 20 г
+// штуки: категория яйца, личный вес, справочник - одно правило с поиском (foods.pieceOf)
+export const { EGG_G, eggCategory, pieces } = foods;
+const EGG_RE = /яйц|яиц|яичн/i;
+// вес штуки для этой записи → копия продукта с piece_g (как food.with_piece на сервере)
+export function withPiece(food, chunk) {
+  if (!food) return food;
+  const g = foods.pieceOf(food, chunk);
+  return g && g !== Number(food.portions?.['шт']) ? { ...food, piece_g: g } : food;
+}
+
 export function prepare(chunk) {
   let hint = null;
   for (const m of String(chunk).matchAll(/\(([^)]*)\)/g)) {
@@ -194,6 +204,8 @@ export function prepare(chunk) {
   let text = String(chunk).replace(/\([^)]*\)/g, ' ');
   if (hint) text = text.replace(new RegExp(STATE_WORDS.source, 'giu'), ' ') + ' ' + hint;
   text = text.replace(QUALIFIER_RE, ' ').replace(WITHOUT_RE, ' ');     // «без сахара» - не продукт
+  if (EGG_RE.test(text)) text = text.replace(new RegExp(foods.EGG_CAT_RE.source, 'giu'), ' ');   // «яйцо С0» - категория в вес штуки
+  text = text.replace(/\s[-–]\s/g, ' ');     // «яйцо С0 - 1 шт»: одиночное тире между словами - не часть названия
   SMALL_RE.lastIndex = 0;
   const small = SMALL_RE.test(text) && !QTY_RE.test(text);
   if (small) text = text.replace(SMALL_RE, ' ');
@@ -346,6 +358,8 @@ export function gramsFor(food, n, unit) {
   const portions = food.portions || {};
   if (unit === 'g' || unit === 'ml') return n;
   if (unit === 'kg' || unit === 'l') return n * 1000;
+  // категория яйца или личный вес штуки (withPiece) важнее и справочника, и памяти тренера
+  if (food.piece_g && (unit === 'шт' || (unit == null && (n == null ? !('порция' in portions) : n <= 20)))) return (n ?? 1) * food.piece_g;
   const learned = (u, c) => (typeof food.id === 'number' ? brain.portion(food.id, u, c) : null);
   if (n == null) {
     for (const u of ['порция', 'шт', 'чашка', 'стакан', 'тарелка', 'кусок']) if (u in portions) return learned(u, 0.7) ?? portions[u];
@@ -410,8 +424,9 @@ function parsePiece(chunk, macro) {
   const I = index();
   const [clean, small] = prepare(chunk);
   const [name, n, unit] = parseChunk(clean);
-  if (macro) return [macroItem(chunk, name, macroGrams(n, unit, match(name, { alias: false })), macro)];
-  const byFood = (f, source) => {
+  if (macro) return [macroItem(chunk, name, macroGrams(n, unit, withPiece(match(name, { alias: false }), chunk)), macro)];
+  const byFood = (f0, source) => {
+    const f = withPiece(f0, chunk);
     const g = f ? (small ? f.portions?.['горсть'] || SMALL_G : gramsFor(f, n, unit)) : null;
     if (!g) return null;
     const it = itemFrom(f, g, chunk, source);

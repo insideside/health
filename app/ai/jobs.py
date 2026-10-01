@@ -165,6 +165,7 @@ async def job_food(uid: str, inp: dict) -> dict:
         raise AIError("Запись о еде не найдена")
     idx = food.Index(uid)          # с историей: «гречка» без уточнения - в том состоянии, что человек ест обычно
     done, rest = food.quick_parse(rec["data"].get("text", ""), idx, uid=uid)
+    rest = food.drop_covered(rest, rec["data"])
     if rest:                       # что ИИ уже разбирала раньше - из памяти «мозга», без модели
         more, rest = brain.resolve(rest, idx)
         done += more
@@ -198,6 +199,9 @@ async def job_food(uid: str, inp: dict) -> dict:
 
 def _save_food(rec: dict, items: list[dict], calc: str = "db") -> dict:
     items = food.apply_preferences(items, rec["user_id"])
+    # строки, добавленные руками («+ Добавить продукт», «+ из справочника»), в тексте записи нет - пересчёт по
+    # тексту их не знает, поэтому сохраняем как есть
+    items = items + [i for i in (rec["data"].get("items") or []) if isinstance(i, dict) and i.get("added")]
     # calc - чем посчитано: db (справочник и память) | ai (уточнено ИИ); клиент показывает пометку
     data = {**rec["data"], "items": items, "totals": food.totals(items), "status": "calculated", "calc": calc,
             "unresolved": None, "calc_error": None, "partial": None}

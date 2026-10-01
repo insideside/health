@@ -358,7 +358,8 @@ function selEditor(f) {
   const g = P.grams;
   const ps = foods.portions(f);
   return `<div class="fp-edit inset">
-    ${ps.length ? `<div class="chips fp-portions">${ps.map(([k, v]) => `<button type="button" class="chip" data-act="fp-portion" data-g="${v}">${esc(k)} <span class="mono muted">${num(v)} г</span></button>`).join('')}</div>` : ''}
+    ${ps.length ? `<div class="chips fp-portions">${ps.flatMap(([k, v]) => (k === '1 шт' ? [1, 2, 3].map(n => [`${n} шт`, Math.round(v * n)]) : [[k, v]]))
+      .map(([k, v]) => `<button type="button" class="chip" data-act="fp-portion" data-g="${v}">${esc(k)} <span class="mono muted">${num(v)} г</span></button>`).join('')}</div>` : ''}
     <div class="fp-grams"><label class="fp-gl"><input class="control mono" id="fp-g" type="number" inputmode="decimal" min="0" step="any" value="${esc(g)}" placeholder="100" aria-label="Сколько граммов"><span>г</span></label>
       <span class="fp-live mono" id="fp-live">${mac(foods.macrosFor(f, g || 0))}</span></div>
     <div class="fp-per note">на 100 г: ${mac(foods.macrosFor(f, 100))}${f.state ? ` · ${esc(foods.STATE_HINT[f.state])}` : ''}</div>
@@ -700,7 +701,7 @@ const pickerActions = {
     if (!P.items.length) return;
     const into = P.into ? store.get(P.into) : null;
     if (into) {
-      const items = [...(into.data.items || []), ...P.items.map(it => ({ ...it }))];
+      const items = [...(into.data.items || []), ...P.items.map(it => ({ ...it, added: true }))];   // added: пересчёт текста их не трогает
       await store.patch(into.id, { items, totals: sumItems(items), edited: true });
       const added = sumItems(P.items).kcal;
       P.items = []; P.sel = null; P.q = ''; P.into = null;
@@ -934,7 +935,8 @@ function foodEntry(e, win) {
       <div class="a-entry-btns"><button class="btn quiet a-star ${fav ? 'on' : ''}" data-act="fd-fav" data-id="${e.id}" aria-label="${fav ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${!!fav}" title="${fav ? 'В избранном' : 'В избранное'}">${glyph('star', { fill: !!fav })}</button>
         <button class="btn quiet" data-act="food-edit" data-id="${e.id}">Изменить</button><button class="btn danger" data-act="food-del" data-id="${e.id}">Удалить</button></div></div>
     ${items ? `<div class='fis'>${items}</div>` : ''}
-    ${d.status === 'calculated' && d.calc !== 'supp' ? `<div class="a-row-btns fi-add"><button class="btn quiet a-mini" data-act="food-item-add" data-id="${e.id}">+ продукт в эту запись</button>${d.edited ? '<span class="note">изменено вручную</span>' : ''}</div>` : ''}
+    ${!job && !['supp', 'drink'].includes(d.calc) ? `<div class="a-row-btns fi-add"><button class="btn quiet a-mini" data-act="fi-new" data-id="${e.id}">+ Добавить продукт</button>
+      <button class="btn quiet a-mini" data-act="food-item-add" data-id="${e.id}">+ из справочника</button>${d.edited ? '<span class="note">изменено вручную</span>' : ''}</div>` : ''}
     ${d.totals ? `<div class="tot"><span>итого ${num(d.totals.kcal)} ккал</span><span>Б ${dec(d.totals.p)} · Ж ${dec(d.totals.f)} · У ${dec(d.totals.c)}</span>${calcLabel(d)}</div>` : ''}
     ${status}</div>`;
 }
@@ -984,32 +986,48 @@ const aiErr = e => e.status === 404 || e.status === 400 ? 'Эта функция
 // ── правка одного продукта в записи: название, вес, КБЖУ на 100 г и съеденное (одно пересчитывает другое) ──
 const MK = [['kcal', 'ккал'], ['p', 'белки'], ['f', 'жиры'], ['c', 'углеводы']];
 const rnd = (k, v) => k === 'kcal' ? Math.round(v) : Math.round(v * 10) / 10;
+// i = -1 - новая строка: «+ Добавить продукт» руками (название, вес, КБЖУ)
 function fiModal(r, i) {
-  const it = r.data.items[i], g = Number(it.grams) || 0;
+  const fresh = i < 0;
+  const it = fresh ? { name: '', grams: 100, kcal: 0, p: 0, f: 0, c: 0 } : r.data.items[i], g = Number(it.grams) || 0;
+  // штуки: вес одной - как посчитано в записи (категория яйца, «2 шт»), иначе личный (profile.pieces), иначе справочник
+  const fd = typeof it.food_id === 'number' ? foods.get(it.food_id) : null;
+  const piece = it.pu === 'шт' && it.pn ? Math.round(g / it.pn) : (fd && foods.pieceOf(fd, it.text || '')) || '';
+  const pcs = it.pu === 'шт' && it.pn ? it.pn : piece && g ? Math.round(g / piece * 10) / 10 : '';
   const p100 = k => g ? rnd(k, (it[k] || 0) * 100 / g) : 0;
   const cell = (col, k, v) => `<input class="control mono" type="number" inputmode="decimal" min="0" step="${k === 'kcal' ? 1 : 0.1}"
     id="fi-${col}-${k}" value="${esc(String(v ?? 0))}" aria-label="${MK.find(x => x[0] === k)[1]}, ${col === 'h' ? 'на 100 г' : 'съедено'}">`;
-  openModal(`<div class="modal-head"><div class="kicker smallcaps">Продукт в записи</div><h2 class="ell">${esc(it.name)}</h2></div>
+  openModal(`<div class="modal-head"><div class="kicker smallcaps">${fresh ? 'Добавить в запись' : 'Продукт в записи'}</div><h2 class="ell">${fresh ? 'Новый продукт' : esc(it.name)}</h2></div>
     <div class="modal-body fi-modal" data-id="${r.id}" data-i="${i}">
-      <div class="grid2">${field('Название', `<input class="control" id="fi-name" value="${esc(it.name)}" autocomplete="off">`)}
+      <div class="grid2">${field('Название', `<input class="control" id="fi-name" value="${esc(it.name)}" autocomplete="off"${fresh ? ' placeholder="например: яйцо жареное"' : ''}>`)}
         ${field('Съедено, г', `<input class="control mono" type="number" inputmode="decimal" min="0" id="fi-g" value="${esc(String(g))}">`)}</div>
+      <div class="grid2 fi-pcs">${field('Штук', `<input class="control mono" type="number" inputmode="decimal" min="0" step="0.5" id="fi-n" value="${esc(String(pcs))}" placeholder="-">`)}
+        ${field('Вес 1 шт, г', `<input class="control mono" type="number" inputmode="decimal" min="0" id="fi-pg" value="${esc(String(piece))}" placeholder="${fd ? 'не штучный' : 'если считаете штуками'}">`)}</div>
       <table class="fi-tbl"><thead><tr><th></th><th>на 100 г</th><th>съедено</th></tr></thead><tbody>
         ${MK.map(([k, l]) => `<tr><th scope="row">${l}</th><td>${cell('h', k, p100(k))}</td><td>${cell('e', k, it[k])}</td></tr>`).join('')}
       </tbody></table>
-      <p class="note">Поменяйте цифры в любой колонке - вторая пересчитается по весу. КБЖУ с упаковки обычно указано на 100 г.</p>
+      <p class="note">Поменяйте цифры в любой колонке - вторая пересчитается по весу. КБЖУ с упаковки обычно указано на 100 г.
+        Вес штуки запоминается${fd ? ` для «${esc(fd.name)}»: дальше «2 шт» посчитается по нему` : ' вместе с продуктом, если сохранить его в справочник'}.</p>
+      ${fresh && r.data.unresolved?.length ? `<div class="field fi-cover"><span class="smallcaps">Это вместо непосчитанного</span>
+        ${r.data.unresolved.map((u, j) => `<label class="chk"><input type="checkbox" data-cover="${j}" ${r.data.unresolved.length === 1 ? 'checked' : ''}> ${esc(u)}</label>`).join('')}
+        <p class="note">Отмеченное больше не нужно считать с ИИ - его заменит эта строка.</p></div>` : ''}
       <label class="chk"><input type="checkbox" id="fi-learn"> Запомнить в справочнике: в следующий раз посчитается с этими цифрами на 100 г</label>
     </div>
-    <div class="modal-foot"><button class="btn danger" data-act="fi-remove" data-id="${r.id}" data-i="${i}">Убрать из записи</button>
+    <div class="modal-foot">${fresh ? '' : `<button class="btn danger" data-act="fi-remove" data-id="${r.id}" data-i="${i}">Убрать из записи</button>`}
       <button class="btn quiet" data-act="close">Отмена</button><button class="btn solid" data-act="fi-save" data-id="${r.id}" data-i="${i}">Сохранить</button></div>`);
 }
 // живой пересчёт в окне: правка «на 100 г» или веса → «съедено», правка «съедено» → «на 100 г»
 document.addEventListener('input', e => {
   const t = e.target;
-  if (!t.closest?.('.fi-modal') || !/^fi-(h|e)-|^fi-g$/.test(t.id)) return;
-  const $ = id => document.getElementById(id), g = Number($('fi-g').value) || 0;
+  if (!t.closest?.('.fi-modal') || !/^fi-(h|e)-|^fi-(g|n|pg)$/.test(t.id)) return;
+  const $ = id => document.getElementById(id);
   const val = id => Math.max(0, Number($(id).value) || 0);
+  // штуки × вес штуки → граммы; граммы → штуки
+  if ((t.id === 'fi-n' || t.id === 'fi-pg') && val('fi-n') && val('fi-pg')) $('fi-g').value = Math.round(val('fi-n') * val('fi-pg'));
+  else if (t.id === 'fi-g' && val('fi-pg')) $('fi-n').value = val('fi-g') ? Math.round(val('fi-g') / val('fi-pg') * 10) / 10 : '';
+  const g = Number($('fi-g').value) || 0, wt = /^fi-(g|n|pg)$/.test(t.id);
   for (const [k] of MK) {
-    if (t.id === 'fi-g' || t.id === `fi-h-${k}`) $(`fi-e-${k}`).value = rnd(k, val(`fi-h-${k}`) * g / 100);
+    if (wt || t.id === `fi-h-${k}`) $(`fi-e-${k}`).value = rnd(k, val(`fi-h-${k}`) * g / 100);
     else if (t.id === `fi-e-${k}` && g) $(`fi-h-${k}`).value = rnd(k, val(`fi-e-${k}`) * 100 / g);
   }
 });
@@ -1061,7 +1079,17 @@ export const actions = {
     // тот же текст: запись, посчитанная справочником на устройстве и не правленная руками, разбираем заново -
     // так чинятся записи, разобранные старыми правилами (результат ИИ и ручные правки не трогаем)
     if (text === r.data.text && (r.data.calc !== 'local' || r.data.edited)) { await store.patch(r.id, { meal, time, out_of_window }); return; }
-    const rec = await store.put('food', r.id, { ...r.data, text, meal, time, out_of_window, status: 'raw', items: [], totals: null, unresolved: null, calc_error: null, calc: null, partial: null, ...FP.localCalc(text) }, r.date);
+    // строки, добавленные руками, в тексте нет - разбор текста заново их сохраняет
+    const kept = (r.data.items || []).filter(i => i.added), loc = FP.localCalc(text);
+    if (kept.length) {
+      loc.items = [...(loc.items || []), ...kept]; loc.totals = sumItems(loc.items);
+      const cov = new Set(kept.flatMap(i => i.covers || []).map(x => x.toLowerCase().trim()));
+      if (loc.unresolved?.length && cov.size) {
+        loc.unresolved = loc.unresolved.filter(u => !cov.has(u.toLowerCase().trim()));
+        if (!loc.unresolved.length) Object.assign(loc, { unresolved: null, partial: null, status: 'calculated', calc: 'local' });
+      }
+    }
+    const rec = await store.put('food', r.id, { ...r.data, text, meal, time, out_of_window, status: 'raw', items: [], totals: null, unresolved: null, calc_error: null, calc: null, partial: null, ...loc }, r.date);
     if (store.state.online && rec.data.status !== 'calculated') calcFood(rec, false);
   },
   // избранное
@@ -1170,27 +1198,62 @@ export const actions = {
     }
     await afterChange(r.date);
   },
+  'fi-new': el => { const r = store.get(el.dataset.id); if (r) { fiModal(r, -1); setTimeout(() => document.getElementById('fi-name')?.focus(), 60); } },
   'fi-open': el => { const r = store.get(el.dataset.id); if (r?.data.items?.[Number(el.dataset.i)]) fiModal(r, Number(el.dataset.i)); },
   'fi-remove': async el => { closeModal(); await actions['food-item-del'](el); },
   'fi-save': async el => {
     const r = store.get(el.dataset.id);
     if (!r) return closeModal();
-    const i = Number(el.dataset.i), items = structuredClone(r.data.items), it = items[i], prev = { ...it };
+    const i = Number(el.dataset.i), items = structuredClone(r.data.items || []);
     const $ = id => document.getElementById(id), num0 = id => Math.max(0, Number($(id).value) || 0);
+    if (i < 0) {
+      // новая строка руками
+      const nm = $('fi-name').value.trim();
+      if (!nm) { toast('Напишите название продукта'); $('fi-name').focus(); return; }
+      items.push({ name: nm, grams: 0, kcal: 0, p: 0, f: 0, c: 0, source: 'manual', added: true });
+    }
+    const at = i < 0 ? items.length - 1 : i, it = items[at], prev = i < 0 ? { ...it, name: null } : { ...it };
     const name = $('fi-name').value.trim() || it.name, g = num0('fi-g'), learn = $('fi-learn').checked;
+    const pg = num0('fi-pg'), pn = num0('fi-n');
+    const pgTouched = $('fi-pg').value !== $('fi-pg').defaultValue;   // поле веса штуки не трогали - личный вес не меняем
     const per = Object.fromEntries(MK.map(([k]) => [k, num0(`fi-h-${k}`)]));
     it.name = name;
     it.grams = g;
     for (const [k] of MK) it[k] = rnd(k, num0(`fi-e-${k}`));
-    const same = name === prev.name && MK.every(([k]) => it[k] === prev[k]);
+    if (pg && pn) Object.assign(it, { pu: 'шт', pn }); else if (it.pu === 'шт' && !pn) { delete it.pu; delete it.pn; }
+    // тот же продукт - то же название и те же КБЖУ на 100 г (вес и штуки менять можно, связь со справочником остаётся)
+    const per0 = k => (prev.grams ? (prev[k] || 0) * 100 / prev.grams : 0);
+    const same = name === prev.name && MK.every(([k]) => Math.abs(per[k] - per0(k)) <= (k === 'kcal' ? 1.5 : 0.25));
+    const fd = typeof it.food_id === 'number' ? foods.get(it.food_id) : null;
     if (!same) { it.source = 'manual'; delete it.food_id; delete it.state; }
+    // новая строка вместо непосчитанной части текста: та часть больше не ждёт ИИ
+    const covered = new Set([...document.querySelectorAll('.fi-cover [data-cover]:checked')].map(x => Number(x.dataset.cover)));
+    const extra = {};
+    if (i < 0 && covered.size) {
+      const left = (r.data.unresolved || []).filter((_, j) => !covered.has(j));
+      Object.assign(extra, left.length ? { unresolved: left } : { unresolved: null, partial: null, status: 'calculated', calc: r.data.calc || 'local', calc_error: null, calc_pending: false });
+      it.covers = (r.data.unresolved || []).filter((_, j) => covered.has(j));
+    }
     closeModal();
-    await store.patch(r.id, { items, totals: itemsTotals(items), edited: true });
-    if (g !== prev.grams && same) BR.gramsEdited(items, i);
+    await store.patch(r.id, { items, totals: itemsTotals(items), edited: true, ...extra });
+    // вес штуки продукта из справочника - личный (profile.pieces); совпал со справочным - личный не нужен.
+    // Категорию яйца («С0» в тексте) за личный вес не считаем: она своя у каждой записи
+    const egg = FP.eggCategory(it.text || r.data.text || '') && FP.EGG_G[FP.eggCategory(it.text || r.data.text || '')] === Math.round(pg);
+    if (fd && same && !egg && pgTouched) {
+      const pr = profile(), cur = { ...(pr.pieces || {}) }, key = String(fd.id), base = Number(fd.portions?.['шт']) || 0;
+      const want = pg && Math.round(pg) !== Math.round(base) ? Math.round(pg * 10) / 10 : null;
+      if ((cur[key] ?? null) !== want) {
+        if (want) cur[key] = want; else delete cur[key];
+        await store.put('profile', `profile:${store.uid()}`, { ...pr, pieces: cur });
+      }
+    }
+    // общая память тренера учится на правке веса, но не на категории яйца и не на личном весе штуки
+    const pieceSet = pg && pn && Math.round(pg) !== Math.round((prev.grams || 0) / (prev.pn || 1));
+    if (i >= 0 && g !== prev.grams && same && !egg && !pieceSet) BR.gramsEdited(items, i);
     if (learn && per.kcal) {
-      foods.save({ name, kcal: per.kcal, p: per.p, f: per.f, c: per.c, source: 'manual' }, { force: true })
+      foods.save({ name, kcal: per.kcal, p: per.p, f: per.f, c: per.c, source: 'manual', ...(pg ? { portions: { 'шт': pg } } : {}) }, { force: true })
         .then(() => toast(`«${name}» теперь в справочнике`)).catch(e => toast(e.message));
-    } else toast('Сохранено');
+    } else toast(i < 0 ? `«${name}» добавлен в запись` : 'Сохранено');
     await afterChange(r.date);
   },
   'food-item-add': el => {

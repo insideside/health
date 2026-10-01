@@ -240,6 +240,10 @@ def main():
     items = build(rows)[: a.limit]
     OUT.write_text(json.dumps(items, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{len(rows)} товаров в выборке → {len(items)} в {OUT.relative_to(ROOT)} ({OUT.stat().st_size // 1024} КБ)")
+    # вес 1 шт (штучная упаковка или как у такого же продукта базового справочника) - scripts/store_pieces.py
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import store_pieces
+    store_pieces.main()
 
 
 if __name__ == "__main__":

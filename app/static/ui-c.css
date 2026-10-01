@@ -267,3 +267,7 @@
   .set input { width: 52px; }
   .mac-f input.control { width: 62px; }
 }
+.fi-cover { margin-top: 14px; }
+.fi-cover .chk { white-space: normal; align-items: flex-start; margin-top: 6px; }
+.fi-cover .note { margin: 6px 0 0; }
+.fi-modal .fi-pcs { margin-top: 14px; }

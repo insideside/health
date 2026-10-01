@@ -439,6 +439,7 @@ async def food_calc(request: Request, u=Depends(current_user)):
         db.put(c, {**rec, "updated_at": int(rec.get("updated_at") or db.now_ms())})
     saved = db.get(rec["id"])
     done, rest = food.quick_parse(saved["data"].get("text", ""), uid=u["id"])
+    rest = food.drop_covered(rest, saved["data"])
     if rest:                                   # то, что ИИ уже однажды разобрала, — из памяти, без ИИ
         more, rest = brain.resolve(rest)
         done += more
