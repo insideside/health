@@ -81,18 +81,23 @@ window.addEventListener('hashchange', () => {
   render();
 });
 
+const BADGE = '\u0000badge\u0000';
+let lastHtml = '', lastBadge = '';
+// после ввода и нажатий DOM мог разойтись с прошлым HTML (набранный текст, раскрытые блоки) - тогда перерисовываем всегда
+let touched = false;
+for (const ev of ['input', 'change', 'click', 'submit', 'toggle']) document.addEventListener(ev, () => { touched = true; }, true);
 function render() {
-  if (!store.me()) return renderAuth();
+  if (!store.me()) { lastHtml = ''; return renderAuth(); }
   const { view, arg } = route();
   const navKey = NAV_OF[view] || view;
   let body;
   try { body = routes[view](arg); } catch (e) { console.error(e); body = `<div class="notice">Ошибка отрисовки: ${esc(e.message)}</div>`; }
   const y = window.scrollY;
   const dot = k => (k === 'chat' && unreadChat() ? '<span class="dot"></span>' : '');
-  $app.innerHTML = `
+  const html = `
     <header class="masthead">
       <a class="wordmark" href="#today"><b>Тренер<i>.</i></b></a>
-      <div class="mast-actions">${syncBadge()}
+      <div class="mast-actions"><span class="sync-slot">${BADGE}</span>
         <div class="theme-switch" role="group" aria-label="Тема"><button data-theme-set="auto" title="Как в системе">Авто</button><button data-theme-set="dark" aria-label="Тёмная тема" title="Тёмная тема">${glyph('night')}</button><button data-theme-set="light" aria-label="Светлая тема" title="Светлая тема">${glyph('sun')}</button></div>
       </div>
     </header>
@@ -102,6 +107,16 @@ function render() {
       <main><div class="wrap"><div class="sheet">${body}</div></div></main>
     </div>
     <nav class="tabbar">${NAV.map(([k, l]) => `<a href="#${k}" class="${navKey === k ? 'on' : ''}" ${NAV_DOM[k] ? `data-dom="${NAV_DOM[k]}"` : ''}>${svg(k)}${dot(k)}<span>${l}</span></a>`).join('')}</nav>`;
+  // Фон (опрос раз в 15 с, каждая синхронизация) просит перерисовку и тогда, когда ничего не поменялось. Полная
+  // замена страницы сбрасывает прокрутку внутренних областей, выделение, наведение - выглядит как перезагрузка.
+  // Ничего не изменилось - не трогаем; изменилась только метка синхронизации в шапке - меняем только её.
+  const badge = syncBadge(), slot = $app.querySelector('.sync-slot');
+  if (html === lastHtml && slot && !touched) {
+    if (badge !== lastBadge) { slot.innerHTML = badge; lastBadge = badge; }
+    return;
+  }
+  lastHtml = html; lastBadge = badge; touched = false;
+  $app.innerHTML = html.replace(BADGE, badge);
   window.scrollTo(0, y);
   mhLastY = window.scrollY;
   applyMasthead();

@@ -23,6 +23,7 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
 }
 .wordmark b i { font-style: normal; color: var(--accent); }
 .mast-actions { display: flex; gap: 12px; align-items: center; }
+.sync-slot { display: contents; }
 .sync { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-3); font-family: var(--sans); font-size: 12.5px; white-space: nowrap; }
 .sync::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
 .sync.pending::before { background: var(--c5); }

@@ -6,6 +6,7 @@ import * as foods from '../foods.js';
 import * as FP from '../foodparse.js';
 import * as BR from '../brain.js';
 import * as MPL from '../mealplan.js';
+import * as N from '../names.js';
 
 // Питание: запись еды свободным текстом, время и окно питания, оценка дня, избранное, «как вчера», идеи рациона и рецепты.
 
@@ -665,7 +666,45 @@ async function applyChoice(el, f, per100, source) {
   openChoice();
 }
 
+// ── скопировать приём пищи партнёра (он разрешил: profile.share_meals) - дальше обычная своя запись ──
+const PM = { date: null, data: null, error: null, loading: false };
+function pmHtml() {
+  const d = PM.data;
+  const body = PM.loading ? '<p class="note"><span class="spinner"></span> Загружаю…</p>'
+    : PM.error ? `<p class="err">${esc(PM.error)}</p>`
+    : `${(d.partners || []).map(p => `<div class="pm-who"><div class="smallcaps">${esc(p.name)}</div>
+        ${p.meals.length ? p.meals.map((m, i) => `<div class="raised fp-var">
+          <div class="fp-var-t">${esc(MEAL_NAME[m.meal] || 'Приём пищи')}${m.time ? ` <span class="mono muted">${esc(m.time)}</span>` : ''}</div>
+          <div class="note a-tight">${esc(m.items.map(it => `${it.name} ${num(it.grams)} г`).join(', '))}</div>
+          <div class="mono">${num(m.totals.kcal)} ккал · Б ${dec(m.totals.p)} · Ж ${dec(m.totals.f)} · У ${dec(m.totals.c)}</div>
+          <div class="a-row-btns"><button type="button" class="btn" data-act="pm-copy" data-pid="${esc(p.id)}" data-i="${i}">Скопировать себе</button></div></div>`).join('')
+        : '<p class="note a-tight">За этот день посчитанных приёмов пищи нет.</p>'}</div>`).join('')}
+      ${d.closed?.length ? `<p class="note">${esc(d.closed.join(', '))}: копировать приёмы пищи пока не разрешено - это включается в профиле, «Прогресс вместе» → «Питание».</p>` : ''}
+      ${!d.partners?.length && !d.closed?.length ? '<p class="note">Партнёров по группе нет.</p>' : ''}`;
+  return `<div class="modal-head"><div class="kicker smallcaps">Как у партнёра · ${esc(fmt(PM.date, { day: 'numeric', month: 'long' }))}</div><h2>Скопировать приём пищи</h2></div>
+    <div class="modal-body fp"><p class="note a-tight">Копия станет вашей обычной записью: граммы, продукты, КБЖУ и приём пищи можно менять как угодно. У партнёра ничего не изменится.</p>${body}</div>
+    <div class="modal-foot"><button type="button" class="btn quiet" data-act="close">Закрыть</button></div>`;
+}
+
 const pickerActions = {
+  'pm-open': async el => {
+    if (!store.state.online) return toast('Нужна связь с сервером: чужие записи на устройстве не хранятся');
+    Object.assign(PM, { date: el.dataset.date, data: null, error: null, loading: true });
+    openModal(pmHtml());
+    try { PM.data = await store.api(`/api/partner/meals?date=${encodeURIComponent(PM.date)}`); }
+    catch (e) { PM.error = aiErr(e); }
+    PM.loading = false;
+    if (isModalOpen()) openModal(pmHtml());
+  },
+  'pm-copy': async el => {
+    const p = PM.data?.partners?.find(x => x.id === el.dataset.pid), m = p?.meals?.[Number(el.dataset.i)];
+    if (!m) return;
+    const items = m.items.map(it => ({ ...it }));
+    closeModal();
+    await addEntry(PM.date, { meal: m.meal || 'snack', time: m.time, text: m.text || items.map(it => `${it.name} ${num(it.grams)} г`).join(', '),
+      items, totals: sumItems(items), status: 'calculated', calc: 'copy', copied_from: p.name });
+    toast(`Скопировано: ${MEAL_NAME[m.meal] || 'приём пищи'}, ${num(sumItems(items).kcal)} ккал - поправьте, если ели не столько же`, 5000);
+  },
   'fc-pick': async el => {
     const v = store.get(el.dataset.id)?.data.items?.[Number(el.dataset.i)]?.choice?.options?.[Number(el.dataset.o)];
     if (!v) return openChoice();
@@ -984,6 +1023,7 @@ function viewFood(date) {
         <input class="control mono a-time" type="time" data-form="food" data-key="time" value="${esc(fval('food', 'time', date === C.today() ? nowHM() : ''))}" aria-label="Время">
         <button class="btn solid" data-act="food-add" data-date="${date}">Добавить</button>
         <button class="btn" data-act="fp-open" data-date="${date}">Из справочника</button>
+        ${store.partners().length ? `<button class="btn" data-act="pm-open" data-date="${date}" title="Скопировать приём пищи партнёра к себе">Как у ${esc(store.partners().length === 1 ? N.decl(store.partners()[0].name, store.partners()[0].sex).gen : 'партнёра')}</button>` : ''}
         ${uncounted > 1 ? `<button class="btn" data-act="food-calc-all" data-date="${date}">Посчитать всё (${uncounted})</button>` : ''}</div>
       ${win && date === C.today() && !nowOk ? '<p class="note a-tight">Сейчас вне окна питания - запись отметится. Решать тебе.</p>' : ''}
       <div class="a-quick" id="fd-hist" data-date="${date}">${histChips(date, fval('food', 'meal', defMeal), String(fval('food', 'text', '')).trim().length >= 2 ? String(fval('food', 'text', '')).trim() : '')}</div>
@@ -1011,6 +1051,7 @@ function viewFood(date) {
 // чем посчитана запись: справочником (и памятью) на устройстве или с уточнением ИИ
 function calcLabel(d) {
   if (d.status !== 'calculated' || !d.items?.length) return d.partial ? '<span class="fd-calc">часть посчитана по справочнику</span>' : '';
+  if (d.calc === 'copy') return `<span class="fd-calc">копия приёма пищи: ${esc(d.copied_from || 'партнёр')}${d.edited ? ', изменено' : ''}</span>`;
   if (d.calc === 'supp') return '<span class="fd-calc">из добавок - отмечено на «Сегодня»</span>';
   if (d.calc === 'drink') return '<span class="fd-calc">молоко к кофе - отмечено на «Сегодня»</span>';
   if (d.calc === 'ai' || d.items.some(i => i.source === 'ai')) return '<span class="fd-calc">уточнено ИИ</span>';

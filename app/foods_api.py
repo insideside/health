@@ -158,3 +158,38 @@ def foods_delete(fid: int, u=Depends(current_user)):
     _own(fid, u["id"])
     db.delete_food(fid)
     return {"ok": True}
+
+
+# ── приёмы пищи партнёра: скопировать к себе ──
+# Питание приватно: отдаём только тех из группы (db.partner_ids), кто сам включил в профиле share_meals
+# («Можно копировать мои приёмы пищи»). Только по запросу, в синхронизацию чужая еда не попадает.
+ITEM_KEYS = ("name", "grams", "kcal", "p", "f", "c", "food_id", "state", "source", "dish", "text")
+
+
+@router.get("/api/partner/meals")
+def partner_meals(date: str, u=Depends(current_user)):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date or ""):
+        raise HTTPException(400, "Дата в виде ГГГГ-ММ-ДД")
+    out, closed = [], []
+    for pid in db.partner_ids(u["id"]):
+        row = db.q("SELECT name FROM users WHERE id = ?", (pid,))
+        if not row:
+            continue
+        prof = (db.get(f"profile:{pid}") or {}).get("data") or {}
+        if not prof.get("share_meals"):
+            closed.append(row[0]["name"])
+            continue
+        meals = []
+        for r in db.list_kind(pid, "food", date, date):
+            d = r["data"]
+            # добавки и молоко к кофе - из чужого «Сегодня», не приём пищи; непосчитанное копировать нечего
+            if d.get("calc") in ("supp", "drink") or d.get("status") != "calculated":
+                continue
+            items = [{k: i[k] for k in ITEM_KEYS if i.get(k) is not None}
+                     for i in d.get("items") or [] if isinstance(i, dict) and not i.get("milk")]
+            if items:
+                meals.append({"id": r["id"], "meal": d.get("meal"), "time": d.get("time"), "text": d.get("text") or "",
+                              "items": items, "totals": food.totals(items)})
+        meals.sort(key=lambda m: m["time"] or "99")
+        out.append({"id": pid, "name": row[0]["name"], "meals": meals})
+    return {"partners": out, "closed": closed}

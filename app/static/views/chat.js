@@ -23,6 +23,9 @@ const ZONE_NAME = Object.fromEntries(PAIN_ZONES);
 
 const pending = new Set();   // действия, которые сейчас выполняются
 let lastCount = -1, entered = true;
+// где человек оставил список: внизу (pinned - новые сообщения подтягивают вниз) или выше (lastTop). Перерисовка
+// страницы создаёт список заново - без этого он прыгал вниз, пока человек читал старые сообщения.
+let pinned = true, lastTop = 0;
 window.addEventListener('hashchange', () => { if (location.hash.startsWith('#chat')) entered = true; });
 
 function messages() {
@@ -76,9 +79,9 @@ function refreshList() {
   const el = document.getElementById('chat-list');
   if (S.pressing) { setTimeout(refreshList, 400); return; }
   if (!el || !location.hash.startsWith('#chat')) return;
-  const stick = nearBottom(el);
+  const top = el.scrollTop;
   el.innerHTML = listHtml();
-  if (stick) el.scrollTop = el.scrollHeight;
+  el.scrollTop = pinned ? el.scrollHeight : top;
   const btn = document.querySelector('[data-act=chat-send]');
   if (btn) btn.disabled = !(store.state.online && !aiOff() && !jobFor('chat'));
   afterRender();
@@ -275,6 +278,7 @@ async function send() {
   if (!text) return;
   if (!store.state.online) return toast('Нет связи с сервером - чат недоступен');
   if (jobFor('chat')) return toast('Тренер ещё отвечает на прошлый вопрос');
+  pinned = true;                        // своё сообщение - всегда видно
   const id = await say('user', text);
   S.forms.chat = { text: '' };
   const ta = document.getElementById('chat-in');
@@ -374,7 +378,11 @@ function fitList() {
   const tab = document.querySelector('.tabbar');
   const mobile = tab && getComputedStyle(tab).display !== 'none';
   comp.style.bottom = mobile ? `${tab.offsetHeight}px` : '';
-  const stick = !list.style.height || nearBottom(list);
+  const fresh = !list.dataset.watch;
+  if (fresh) {
+    list.dataset.watch = '1';
+    list.addEventListener('scroll', () => { pinned = nearBottom(list); lastTop = list.scrollTop; }, { passive: true });
+  }
   if (mobile) {
     // телефон: поле ввода закреплено над вкладками - низ списка (и листа под ним) ставим прямо к его верхнему краю.
     // Считаем по фактическому положению на экране, а не по innerHeight: в приложении на iOS высота окна
@@ -389,7 +397,8 @@ function fitList() {
     const extra = document.documentElement.scrollHeight - window.innerHeight;
     if (extra > 0 && h > 220) list.style.height = `${Math.max(220, h - extra)}px`;
   }
-  if (stick) list.scrollTop = list.scrollHeight;
+  if (pinned) list.scrollTop = list.scrollHeight;
+  else if (fresh) list.scrollTop = lastTop;          // список создан заново - туда же, где читали
 }
 const refit = () => { if (location.hash.startsWith('#chat')) fitList(); };
 window.addEventListener('resize', refit);
@@ -401,7 +410,9 @@ export function afterRender() {
   requestAnimationFrame(refit); setTimeout(refit, 350); document.fonts?.ready.then(refit);
   const list = document.getElementById('chat-list');
   const count = messages().length + (jobFor('chat') ? 1 : 0);
-  if (list && (entered || count !== lastCount)) list.scrollTop = list.scrollHeight;
+  if (entered) pinned = true;            // зашли в чат - к последним сообщениям
+  // новое сообщение прокручивает вниз, только если человек и так был внизу, а не читает старое
+  if (list && (entered || (count !== lastCount && pinned))) list.scrollTop = list.scrollHeight;
   entered = false; lastCount = count;
   // прочитано: снимаем точку на вкладке
   const hadDot = document.querySelector('a[href="#chat"] .dot');

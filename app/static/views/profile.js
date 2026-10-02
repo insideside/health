@@ -111,6 +111,7 @@ function initForm() {
     glass_ml: p.glass_ml || 250, milk_mode: p.milk_mode === 'hidden' ? 'hidden' : 'meal', reminders: clone(p.reminders || []), tone: p.tone || 'coach',
     ai: p.ai === 'off' ? 'off' : 'on',
     share_activity: p.share_activity !== false,
+    share_meals: !!p.share_meals,
   };
 }
 let snapshot = '', stamp = '';
@@ -815,6 +816,7 @@ function buildProfile(fm) {
     pace: fm.pace || 'normal', tone: fm.tone || 'coach', glass_ml: n(fm.glass_ml) || 250, milk_mode: fm.milk_mode === 'hidden' ? 'hidden' : 'meal',
     ai: fm.ai === 'off' ? 'off' : 'on',
     share_activity: fm.share_activity !== false,
+    share_meals: !!fm.share_meals,
   };
   if (fm.sex === 'f') data.cycle = { enabled: !!fm.cycle_on, last_start: fm.cycle_last || null, length: n(fm.cycle_len) || 28, period: n(fm.cycle_period) || 5 };
   data.setup_done = !!(data.sex && data.birth && data.height && weight);
