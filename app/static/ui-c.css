@@ -316,3 +316,8 @@
 .ops-dot.error { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .ops-dot.off, .ops-dot.unknown { background: transparent; border: 1.5px solid var(--ink-3); width: 9px; height: 9px; box-sizing: border-box; }
 .ops .notice.ops-err { font-style: normal; color: var(--ink); overflow-wrap: anywhere; }
+/* «Вместе» на телефоне: названия категорий («тренировки», «активность») не рвутся посреди слова */
+@media (max-width: 480px) {
+  .t-row { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .t-row > .t-cat { font-size: .66rem; letter-spacing: .03em; overflow-wrap: normal; word-break: normal; hyphens: none; }
+}

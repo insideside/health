@@ -104,7 +104,7 @@ function sourcesBlock() {
   const rows = m.sources.map(x => {
     const tail = [];
     if (x.status === 'ok' && x.ms != null && x.code !== 'github') tail.push(`ответ ${x.ms < 1000 ? `${x.ms} мс` : `${(x.ms / 1000).toFixed(1).replace('.', ',')} с`}`);
-    if (x.status !== 'ok' && x.status !== 'off' && x.status !== 'unknown') tail.push(x.last_ok ? `последний раз работало ${when(x.last_ok)}` : 'ни разу не работало при проверках');
+    if (x.status === 'error') tail.push(x.last_ok ? `последний раз работало ${when(x.last_ok)}` : 'ни разу не работало при проверках');
     return `<div class="ops-row"><span class="ops-dot ${esc(x.status)}" title="${esc(LEVEL[x.status] || '')}"></span>
       <div class="ops-main"><div class="ops-name"><b>${esc(x.name)}</b> <span class="note">${esc(x.purpose)}</span></div>
         <div class="small ops-msg">${esc(x.message)}</div>${tail.length ? `<div class="note">${esc(tail.join(', '))}</div>` : ''}</div></div>`;
