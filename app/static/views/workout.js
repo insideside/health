@@ -1,4 +1,5 @@
 import * as store from '../store.js';
+import * as PC from './pcopy.js';
 import * as C from '../coach.js';
 import * as P from '../plan.js';
 import { S, esc, fmt, dayTitle, WD, profile, CHECK, toast, field, select, input, openModal, closeModal, techHtml, jobFor, addJob, dateNav, afterChange, routeArg, glyph, detailsOpen } from '../ui.js';
@@ -103,7 +104,8 @@ function viewWorkout(date) {
       <div class="actions">${ownGym
         ? `<button class="btn solid" data-act="gym-log-open" data-date="${date}">Записать тренировку <span class="arrow">→</span></button>`
         : `<a class="btn" href="#generator/${date}">Тренировка на любой случай <span class="arrow">→</span></a>
-        <a class="btn ${prog ? 'quiet' : 'solid'}" href="#program">${prog ? 'Программа' : 'Составить программу'}</a>`}</div>
+        <a class="btn ${prog ? 'quiet' : 'solid'}" href="#program">${prog ? 'Программа' : 'Составить программу'}</a>`}
+        ${PC.copyButton(date)}</div>
       ${balanceCard(date)}`;
   }
   const d = w.data;

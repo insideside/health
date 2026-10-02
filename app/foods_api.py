@@ -42,11 +42,14 @@ def _json_gz(request: Request, data: dict) -> Response:
 def foods_all(request: Request, since: int = 0, u=Depends(current_user)):
     db.migrate_foods()
     now = db.now_ms()
+    # merged: слитые дубли (старый id → оставшийся, app/fooddedupe.py) - целиком, их немного; по ней устройство
+    # находит продукт для строк записей, где ещё стоит старый id
+    merged = {str(k): v for k, v in db.merged_map().items()}
     if since > 0:
         rows = db.foods_since(since)
         return _json_gz(request, {"foods": [compact(f) for f in rows if not f["deleted"]],
-                                  "deleted": [f["id"] for f in rows if f["deleted"]], "now": now, "full": False})
-    return _json_gz(request, {"foods": [compact(f) for f in db.all_foods()], "deleted": [], "now": now, "full": True})
+                                  "deleted": [f["id"] for f in rows if f["deleted"]], "merged": merged, "now": now, "full": False})
+    return _json_gz(request, {"foods": [compact(f) for f in db.all_foods()], "deleted": [], "merged": merged, "now": now, "full": True})
 
 
 @router.get("/api/foods/recent")
@@ -192,4 +195,42 @@ def partner_meals(date: str, u=Depends(current_user)):
                               "items": items, "totals": food.totals(items)})
         meals.sort(key=lambda m: m["time"] or "99")
         out.append({"id": pid, "name": row[0]["name"], "meals": meals})
+    return {"partners": out, "closed": closed}
+
+
+# ── тренировки и активности партнёра: скопировать к себе («сделали одно и то же») ──
+# Только при profile.share_training у партнёра («Можно копировать мои тренировки и активности»); личные занятия
+# (private в seed/activities.json: массаж, баня, медитация, дети) и заметки не отдаём никогда.
+def _private_types() -> set[str]:
+    return {a["id"] for a in db._seed_list("activities.json") if a.get("private")}
+
+
+EX_KEYS = ("id", "name", "unit", "sets", "reps", "rest_sec", "weight", "per_side", "log")
+
+
+@router.get("/api/partner/activities")
+def partner_activities(date: str, u=Depends(current_user)):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date or ""):
+        raise HTTPException(400, "Дата в виде ГГГГ-ММ-ДД")
+    private, out, closed = _private_types(), [], []
+    for pid in db.partner_ids(u["id"]):
+        row = db.q("SELECT name FROM users WHERE id = ?", (pid,))
+        if not row:
+            continue
+        prof = (db.get(f"profile:{pid}") or {}).get("data") or {}
+        if not prof.get("share_training"):
+            closed.append(row[0]["name"])
+            continue
+        acts = [{"id": r["id"], "type": r["data"].get("type"), "minutes": r["data"].get("minutes"),
+                 "intensity": r["data"].get("intensity") or "mid", "details": r["data"].get("details") or {}}
+                for r in db.list_kind(pid, "activity", date, date)
+                if r["data"].get("type") and r["data"].get("type") not in private and r["data"].get("minutes")]
+        wo = db.get(f"wo:{pid}:{date}")
+        workout = None
+        if wo and not wo["deleted"] and (wo["data"].get("exercises") or []):
+            d = wo["data"]
+            workout = {"title": d.get("title") or "Тренировка", "focus": d.get("focus"), "place": d.get("place"),
+                       "done": bool(d.get("done")),
+                       "exercises": [{k: e[k] for k in EX_KEYS if e.get(k) is not None} for e in d["exercises"] if isinstance(e, dict)]}
+        out.append({"id": pid, "name": row[0]["name"], "activities": acts, "workout": workout})
     return {"partners": out, "closed": closed}

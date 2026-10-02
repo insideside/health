@@ -21,10 +21,11 @@ import * as supp from './views/supp.js';
 import * as SPS from './supps.js';
 import * as advice from './views/advice.js';
 import * as report from './views/report.js';
+import * as pcopy from './views/pcopy.js';
 
 const BUILD = document.querySelector('meta[name=build]').content;
 const $app = document.getElementById('app');
-const VIEWS = [today, calendar, food, workout, chat, progress, profile, together, health, connect, about, install, fit, supp, advice, report];
+const VIEWS = [today, calendar, food, workout, chat, progress, profile, together, health, connect, about, install, fit, supp, advice, report, pcopy];
 
 const NAV = [['today', 'Сегодня'], ['calendar', 'Календарь'], ['food', 'Питание'], ['workout', 'Спорт'],
   ['chat', 'Тренер'], ['progress', 'Прогресс'], ['profile', 'Профиль']];
@@ -82,7 +83,33 @@ window.addEventListener('hashchange', () => {
 });
 
 const BADGE = '\u0000badge\u0000';
-let lastHtml = '', lastBadge = '';
+let lastHtml = '', lastBadge = '', lastView = '';
+
+// Точечное обновление DOM: from приводится к to узел за узлом. Другой тег или id - узел заменяется целиком;
+// текст и атрибуты - правятся на месте. style, который экран выставил сам (высота списка чата и т. п.), не стираем,
+// если в новой разметке его нет. Поле в фокусе не трогаем (рисование и так ждёт, пока человек печатает).
+function morph(from, to) {
+  const a = [...from.childNodes], b = [...to.childNodes];
+  for (let i = 0; i < b.length; i++) {
+    const x = a[i], y = b[i];
+    if (!x) { from.appendChild(y); continue; }
+    if (x.nodeType !== y.nodeType || x.nodeName !== y.nodeName || (x.nodeType === 1 && x.id !== y.id)) { from.replaceChild(y, x); continue; }
+    if (x.nodeType !== 1) { if (x.nodeValue !== y.nodeValue) x.nodeValue = y.nodeValue; continue; }
+    for (const at of [...x.attributes]) if (!y.hasAttribute(at.name) && at.name !== 'style') x.removeAttribute(at.name);
+    for (const at of [...y.attributes]) if (x.getAttribute(at.name) !== at.value) x.setAttribute(at.name, at.value);
+    if (x === document.activeElement) continue;
+    if (x.tagName === 'INPUT') {
+      if (x.type === 'checkbox' || x.type === 'radio') x.checked = y.checked;
+      else if (x.value !== y.value) x.value = y.value;
+      continue;
+    }
+    if (x.tagName === 'TEXTAREA') { if (x.value !== y.value) x.value = y.value; continue; }
+    if (x.tagName === 'DETAILS') x.open = y.open;
+    morph(x, y);
+    if (x.tagName === 'SELECT' && x.value !== y.value) x.value = y.value;
+  }
+  for (let i = a.length - 1; i >= b.length; i--) from.removeChild(a[i]);
+}
 // после ввода и нажатий DOM мог разойтись с прошлым HTML (набранный текст, раскрытые блоки) - тогда перерисовываем всегда
 let touched = false;
 for (const ev of ['input', 'change', 'click', 'submit', 'toggle']) document.addEventListener(ev, () => { touched = true; }, true);
@@ -93,7 +120,7 @@ function render() {
   let body;
   try { body = routes[view](arg); } catch (e) { console.error(e); body = `<div class="notice">Ошибка отрисовки: ${esc(e.message)}</div>`; }
   const y = window.scrollY;
-  const dot = k => (k === 'chat' && unreadChat() ? '<span class="dot"></span>' : '');
+  const dot = k => ((k === 'chat' && unreadChat()) || (k === 'food' && food.choicesCount()) ? '<span class="dot"></span>' : '');
   const html = `
     <header class="masthead">
       <a class="wordmark" href="#today"><b>Тренер<i>.</i></b></a>
@@ -110,13 +137,20 @@ function render() {
   // Фон (опрос раз в 15 с, каждая синхронизация) просит перерисовку и тогда, когда ничего не поменялось. Полная
   // замена страницы сбрасывает прокрутку внутренних областей, выделение, наведение - выглядит как перезагрузка.
   // Ничего не изменилось - не трогаем; изменилась только метка синхронизации в шапке - меняем только её.
-  const badge = syncBadge(), slot = $app.querySelector('.sync-slot');
+  // проблема сервера (копия не удалась, внешний источник не отвечает) - метка в шапке, подробности в «Как это работает»
+  const alert = store.state.online ? about.serverAlerts() : '';
+  const badge = (alert ? `<a class="sync conflict ops-alert" href="#about" title="${esc(alert)}">сервер: проблема</a>` : '') + syncBadge(),
+    slot = $app.querySelector('.sync-slot');
   if (html === lastHtml && slot && !touched) {
     if (badge !== lastBadge) { slot.innerHTML = badge; lastBadge = badge; }
     return;
   }
   lastHtml = html; lastBadge = badge; touched = false;
-  $app.innerHTML = html.replace(BADGE, badge);
+  // первая отрисовка и смена экрана - целиком; дальше точечно: меняются только отличающиеся тексты, атрибуты и узлы
+  // (часы в поле времени, «через 5 мин», цифры) - прокрутка областей, фокус, раскрытые блоки, наведение остаются
+  if (lastView !== view + '|' + arg || !$app.querySelector('.layout')) $app.innerHTML = html.replace(BADGE, badge);
+  else { const t = document.createElement('template'); t.innerHTML = html.replace(BADGE, badge); morph($app, t.content); }
+  lastView = view + '|' + arg;
   window.scrollTo(0, y);
   mhLastY = window.scrollY;
   applyMasthead();

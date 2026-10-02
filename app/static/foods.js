@@ -10,6 +10,7 @@ export const STATE_HINT = { dry: 'сухой, до варки', raw: 'сырой
 let byId = null;            // id → продукт
 let keyed = [];             // [{f, words, stems, full}] для поиска
 let byName = new Map();     // нормализованное имя → продукт
+let merged = new Map();     // слитый дубль → оставшийся продукт (сервер, app/fooddedupe.py): старые ссылки в записях
 let lastRefresh = 0, refreshing = null;
 
 export const norm = s => String(s ?? '').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}%.,\s-]/gu, ' ').replace(/\s+/g, ' ').trim();
@@ -27,6 +28,7 @@ function build() {
   byId = new Map();
   for (const f of cache?.items || []) byId.set(f.id, f);
   for (const p of pending) byId.set(p.id, p);
+  merged = new Map(Object.entries(cache?.merged || {}).map(([k, v]) => [Number(k), v]));
   keyed = [];
   byName = new Map();
   for (const f of byId.values()) {
@@ -39,7 +41,7 @@ function build() {
 function ensure() { if (!byId) { build(); usageCache = null; } }
 
 export function count() { ensure(); return byId.size; }
-export function get(id) { ensure(); return byId.get(id) || null; }
+export function get(id) { ensure(); return byId.get(id) || (merged.has(id) ? byId.get(merged.get(id)) : null) || null; }
 export function findByName(name) { ensure(); return byName.get(norm(name)) || null; }
 export const isMine = f => !!f && f.created_by === store.uid() && f.source !== 'seed' && f.source !== 'off';
 export const isStore = f => f?.source === 'off';    // товар из магазина (Open Food Facts)
@@ -54,7 +56,7 @@ export function usage() {
   const u = new Map();
   for (const r of recs) {
     for (const it of r.data.items || []) {
-      const f = (it.food_id != null && byId.get(it.food_id)) || byName.get(norm(it.name));
+      const f = (it.food_id != null && get(it.food_id)) || byName.get(norm(it.name));
       if (!f) continue;
       const cur = u.get(f.id) || { count: 0, last_grams: null, last_used: '' };
       cur.count++;
@@ -173,9 +175,25 @@ export function energyMismatch(v) {
 }
 
 // ── синхронизация справочника ──
-async function saveCache(items, ts) {
-  await store.setMeta('foods', { items, ts });
+async function saveCache(items, ts, mergedMap) {
+  const prev = store.getMeta('foods', null);
+  await store.setMeta('foods', { items, ts, merged: mergedMap || prev?.merged || {} });
   byId = null;
+}
+
+// «Не предлагать» в рационе хранится на устройстве по id продукта - слитый дубль меняем на оставшийся
+async function relinkExcluded(mergedMap) {
+  const ex = store.getMeta('mp_exclude', []) || [];
+  if (!ex.length || !mergedMap) return;
+  let hit = false;
+  const out = [];
+  for (const x of ex) {
+    const to = mergedMap[String(x.id)];
+    const id = to != null ? to : x.id;
+    if (to != null) hit = true;
+    if (!out.some(y => y.id === id)) out.push({ ...x, id });
+  }
+  if (hit) await store.setMeta('mp_exclude', out);
 }
 
 export async function refresh(force = false) {
@@ -187,13 +205,14 @@ export async function refresh(force = false) {
       const cache = store.getMeta('foods', null);
       const since = cache?.ts && !force ? cache.ts : 0;
       const res = await store.api(`/api/foods/all${since ? `?since=${since}` : ''}`);
-      if (res.full || !cache) await saveCache(res.foods, res.now);
+      if (res.full || !cache) await saveCache(res.foods, res.now, res.merged);
       else if (res.foods.length || res.deleted.length) {
         const m = new Map(cache.items.map(f => [f.id, f]));
         for (const id of res.deleted) m.delete(id);
         for (const f of res.foods) m.set(f.id, f);
-        await saveCache([...m.values()], res.now);
-      } else await store.setMeta('foods', { ...cache, ts: res.now });
+        await saveCache([...m.values()], res.now, res.merged);
+      } else await store.setMeta('foods', { ...cache, ts: res.now, ...(res.merged ? { merged: res.merged } : {}) });
+      if (res.merged) { byId = null; await relinkExcluded(res.merged); }
       lastRefresh = Date.now();
     } catch (e) { /* без сети — работаем с кэшем */ } finally { refreshing = null; }
   })();

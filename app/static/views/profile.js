@@ -112,6 +112,7 @@ function initForm() {
     ai: p.ai === 'off' ? 'off' : 'on',
     share_activity: p.share_activity !== false,
     share_meals: !!p.share_meals,
+    share_training: !!p.share_training,
   };
 }
 let snapshot = '', stamp = '';
@@ -817,6 +818,7 @@ function buildProfile(fm) {
     ai: fm.ai === 'off' ? 'off' : 'on',
     share_activity: fm.share_activity !== false,
     share_meals: !!fm.share_meals,
+    share_training: !!fm.share_training,
   };
   if (fm.sex === 'f') data.cycle = { enabled: !!fm.cycle_on, last_start: fm.cycle_last || null, length: n(fm.cycle_len) || 28, period: n(fm.cycle_period) || 5 };
   data.setup_done = !!(data.sex && data.birth && data.height && weight);

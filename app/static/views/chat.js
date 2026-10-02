@@ -26,6 +26,7 @@ let lastCount = -1, entered = true;
 // где человек оставил список: внизу (pinned - новые сообщения подтягивают вниз) или выше (lastTop). Перерисовка
 // страницы создаёт список заново - без этого он прыгал вниз, пока человек читал старые сообщения.
 let pinned = true, lastTop = 0;
+const watched = new WeakSet();          // списки, на которые уже повешен обработчик прокрутки
 window.addEventListener('hashchange', () => { if (location.hash.startsWith('#chat')) entered = true; });
 
 function messages() {
@@ -378,9 +379,9 @@ function fitList() {
   const tab = document.querySelector('.tabbar');
   const mobile = tab && getComputedStyle(tab).display !== 'none';
   comp.style.bottom = mobile ? `${tab.offsetHeight}px` : '';
-  const fresh = !list.dataset.watch;
+  const fresh = !watched.has(list);
   if (fresh) {
-    list.dataset.watch = '1';
+    watched.add(list);
     list.addEventListener('scroll', () => { pinned = nearBottom(list); lastTop = list.scrollTop; }, { passive: true });
   }
   if (mobile) {

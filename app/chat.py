@@ -373,7 +373,8 @@ async def job_chat(uid: str, inp: dict) -> dict:
                               "восстановление, мотивация.") + "\n\n" + STYLE + "\n\n" + ACTIONS_HELP +
               "\n\nДанные клиента (используй, когда к месту):\n" + _context(uid, text))
     # think=True: иначе модель рассуждает прямо в поле reply
-    out = await ask_json(system, text, CHAT_SCHEMA, temperature=0.7, think=True, history=_history(uid, inp["message_id"]))
+    out = await ask_json(system, text, CHAT_SCHEMA, temperature=0.7, think=True, history=_history(uid, inp["message_id"]),
+                         kind="chat", uid=uid)
     reply = (out.get("reply") or "").strip()
     if len(reply) > REPLY_MAX:
         # модель слила рассуждения в ответ - берём последний абзац (обычно это и есть ответ)

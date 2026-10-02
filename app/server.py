@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 
-from . import backup, brain, certs, chat, db, food, foods_api, health, norms, nutrition, updater, userdata, wan, weather
+from . import ailog, backup, brain, certs, chat, db, food, fooddedupe, foods_api, health, monitor, norms, nutrition, updater, userdata, wan, weather
 from . import sync as sync_mod
 from .ai import jobs, ollama
 from .userdata import COOKIE, bearer, current_user
@@ -47,13 +47,16 @@ def build_hash() -> str:
 async def lifespan(app: FastAPI):
     db.conn()
     db.seed_foods()
+    ailog.start()                  # учёт задач ИИ и однократное обучение по накопленным ответам
     await jobs.start()
     backup.start()
+    fooddedupe.start()             # дубли в справочнике продуктов: через минуту после старта и раз в сутки
+    monitor.start()
     yield
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-for _m in (chat, health, backup, nutrition, foods_api, brain, weather):
+for _m in (chat, health, backup, nutrition, foods_api, brain, weather, monitor, ailog):
     app.include_router(_m.router)
 
 
@@ -443,6 +446,8 @@ async def food_calc(request: Request, u=Depends(current_user)):
     if rest:                                   # то, что ИИ уже однажды разобрала, — из памяти, без ИИ
         more, rest = brain.resolve(rest)
         done += more
+        if more and not rest:                  # память, выученная у ИИ, ответила вместо модели (учёт: app/ailog.py)
+            ailog.record("food", u["id"], db.now_ms(), 0, cached=True)
     if not rest:
         jobs._save_food(saved, done)
         return {"done": True}

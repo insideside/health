@@ -122,7 +122,41 @@ export function privacyBody() {
     <p class="note">Сервер спрашивает прогноз по координатам города из профиля («Кардио» → «Город для погоды») - только координаты, без имени и записей.
       Без погоды тренер выбирает место для кардио по сезону.</p>
     <p class="note">Память тренера: ${num(count())} ${plural(count())} - разобранные ИИ фразы («тарелка борща»), синонимы и порции.
-      Общая для всех устройств и без личных данных: благодаря ей еда считается без ИИ, даже без сети.</p></div>`;
+      Общая для всех устройств и без личных данных: благодаря ей еда считается без ИИ, даже без сети.</p>
+    ${aiTeachBlock()}</div>`;
+}
+
+// ── «Чему ИИ научила приложение»: учёт задач ИИ (без содержимого), догадки без ИИ, готовые ответы (app/ailog.py) ──
+let aiStats = null, aiStatsLoading = false, aiStatsAt = 0;
+async function loadAiStats() {
+  if (aiStatsLoading || !store.state.online) return;
+  aiStatsLoading = true;
+  try { aiStats = await store.api('/api/ai/stats'); aiStatsAt = Date.now(); S.render(); }
+  catch (e) { aiStats = aiStats || { error: e.status === 404 ? 'old' : 'offline' }; aiStatsAt = Date.now(); }
+  finally { aiStatsLoading = false; }
+}
+const secs = s => s == null ? '-' : s < 60 ? `${Math.round(s)} с` : `${Math.round(s / 6) / 10} мин`.replace('.', ',');
+const times = n => { const a = n % 10, b = n % 100; return a >= 2 && a <= 4 && (b < 10 || b >= 20) ? 'раза' : 'раз'; };
+
+function aiTeachBlock() {
+  if (!aiStatsLoading && Date.now() - aiStatsAt > 60e3) loadAiStats();
+  const st = aiStats && !aiStats.error ? aiStats : null;
+  if (!st) return `<div class="br-ai"><b>Чему ИИ научила приложение</b>
+    <p class="note">${aiStats?.error === 'old' ? 'Сервер ещё не обновлён.' : store.state.online ? 'Загружаю…' : 'Видно, когда есть связь с сервером.'}</p></div>`;
+  const rows = (st.kinds || []).filter(k => k.n || k.answers);
+  const tr = k => `<tr><td>${esc(k.label)}</td><td class="mono">${num(k.n)}</td><td class="mono">${secs(k.avg_s)}</td>
+    <td class="mono">${k.cached ? num(k.cached) : '-'}</td><td class="mono">${k.shadow_pct == null ? '-' : `${k.shadow_pct} %`}</td></tr>`;
+  const pl = (n, one, few, many) => { const a = n % 10, c = n % 100; return `${num(n)} ${a === 1 && c !== 11 ? one : a >= 2 && a <= 4 && (c < 10 || c >= 20) ? few : many}`; };
+  const learned = [st.phrases && `${pl(st.phrases, 'фраза', 'фразы', 'фраз')} о еде`,
+    st.aliases && pl(st.aliases, 'другое название продукта', 'других названия продуктов', 'других названий продуктов'),
+    st.portions && pl(st.portions, 'размер порции', 'размера порций', 'размеров порций')].filter(Boolean).join(', ');
+  return `<div class="br-ai"><b>Чему ИИ научила приложение</b> <span class="note">за ${st.days} дней</span>
+    ${rows.length ? `<div class="br-ai-wrap"><table class="br-ai-t"><thead><tr><th>Что</th><th>Раз</th><th>Ждать</th><th>Без ИИ</th><th>Угадало бы само</th></tr></thead>
+      <tbody>${rows.map(tr).join('')}</tbody></table></div>` : '<p class="note">ИИ пока ни о чём не спрашивали.</p>'}
+    <p class="note">${learned ? `Запомнено: ${learned}. ` : ''}${st.answers ? `Готовых ответов: ${num(st.answers)}${st.reused ? `, взяты повторно ${num(st.reused)} ${times(st.reused)}` : ''}. ` : ''}
+      «Без ИИ» - сколько раз ответ нашёлся сразу, без ожидания. «Угадало бы само» - как часто собственная догадка приложения
+      совпала с ответом ИИ: когда совпадений станет много, эти задачи можно будет решать без ИИ.
+      Учитываются только время и объём запросов, без их содержания.</p></div>`;
 }
 const plural = n => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 'знание' : a >= 2 && a <= 4 && (b < 10 || b >= 20) ? 'знания' : 'знаний'; };
 
@@ -178,6 +212,12 @@ if (typeof document !== 'undefined' && !document.getElementById('brain-css')) {
 .an-actions{align-items:center;flex-wrap:wrap}.an-actions .btn{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .entry .tot .fd-calc{flex-basis:100%;font-family:var(--sans);font-size:12px;color:var(--ink-3)}
 .src-brain{color:var(--ink-3);font-size:12px;margin-left:4px}
-.br-priv .pf-chk{margin-top:10px}`;
+.br-priv .pf-chk{margin-top:10px}
+.br-ai{margin-top:14px;padding-top:10px;border-top:1px solid var(--rule-2);min-width:0}
+.br-ai-wrap{max-width:100%;overflow-x:auto;margin-top:6px}
+.br-ai-t{border-collapse:collapse;width:100%;font-size:14px}
+.br-ai-t th{font-family:var(--sans);font-weight:600;font-size:12px;color:var(--ink-3);text-align:right;padding:4px 6px;vertical-align:bottom}
+.br-ai-t td{padding:5px 6px;border-top:1px solid var(--rule-2);text-align:right;white-space:nowrap}
+.br-ai-t th:first-child,.br-ai-t td:first-child{text-align:left;padding-left:0;white-space:normal}`;
   document.head.appendChild(st);
 }

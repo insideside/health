@@ -19,7 +19,7 @@ import traceback
 import uuid
 from datetime import date, timedelta
 
-from .. import brain, db, food, norms, nutrition, userdata, websources
+from .. import ailog, brain, db, food, norms, nutrition, userdata, websources
 from . import ollama
 from .ollama import AIError, ask_json
 
@@ -181,18 +181,24 @@ async def job_food(uid: str, inp: dict) -> dict:
     idx = food.Index(uid)          # с историей: «гречка» без уточнения - в том состоянии, что человек ест обычно
     done, rest = food.quick_parse(rec["data"].get("text", ""), idx, uid=uid)
     rest = food.drop_covered(rest, rec["data"])
+    more = []
     if rest:                       # что ИИ уже разбирала раньше - из памяти «мозга», без модели
         more, rest = brain.resolve(rest, idx)
         done += more
     used_ai = bool(rest)
+    if more and not rest:          # память, выученная у ИИ, ответила вместо модели - в учёт как ответ без ИИ
+        ailog.record("food", uid, db.now_ms(), 0, cached=True)
     if rest:
+        # «в тени»: догадка без модели (нечёткое сравнение + порции) - только для статистики, никуда не пишется
+        guess = ailog.food_guess(rest, idx, uid)
         hints = sorted({k for chunk in rest
                         for k in difflib.get_close_matches(food.norm(food.parse_chunk(chunk)[0]),
                                                            idx.fuzzy, n=4, cutoff=0.5)})
         user = "Съедено:\n" + "\n".join(f"- {c}" for c in rest)
         if hints:
             user += "\n\nПодсказки - названия из справочника:\n" + ", ".join(hints)
-        out = await ask_json(FOOD_SYSTEM, user, FOOD_SCHEMA, temperature=0.1, think=True)
+        alog: dict = {}
+        out = await ask_json(FOOD_SYSTEM, user, FOOD_SCHEMA, temperature=0.1, think=True, kind="food", uid=uid, log=alog)
         items = [it for it in _dish_scale(out.get("items", [])) if float(it.get("grams") or 0) > 0]
         # продукта нет в справочнике (не ингредиент блюда с составом) - сначала ищем его в интернете: оценка ИИ
         # нужна, только если товар нигде не нашёлся
@@ -229,6 +235,7 @@ async def job_food(uid: str, inp: dict) -> dict:
                 row["dish"] = it["dish"]
         # «мозг»: в следующий раз - без ИИ (строки с выбором - после выбора человека)
         brain.learn_food_ai(rest, [r for r in ai_items if not r.get("choice")], idx)
+        ailog.save_food_shadow(alog.get("id"), guess, ai_items)
         done += ai_items
     return _save_food(rec, done, calc="ai" if used_ai else "db")
 
@@ -437,7 +444,15 @@ async def job_norms(uid: str, inp: dict) -> dict:
 
 text - 3–6 предложений: что означают нормы и насколько реальна цель.
 tips - 3–5 конкретных советов на ближайшие две недели."""
-    out = await ask_json(system, user, NORMS_SCHEMA, temperature=0.5, think=True)
+    # тот же вход (округлённые ккал/БЖУ, режим, цели, тон) - готовое пояснение из базы ответов, без модели
+    key = ailog.norms_key(t, goal, prof.get("tone"))
+    out = ailog.answer_get("norms", uid, key) if ailog.reuse_enabled("norms") else None
+    if out:
+        ailog.record("norms", uid, db.now_ms(), 0, cached=True)
+    else:
+        out = await ask_json(system, user, NORMS_SCHEMA, temperature=0.5, think=True, kind="norms", uid=uid)
+        if (out.get("text") or "").strip():
+            ailog.answer_put("norms", uid, key, {"text": out.get("text", ""), "tips": out.get("tips", [])}, ref=rec["id"])
     cur = db.get(rec["id"])["data"]
     db.server_put(uid, "target", rec["id"], {**cur, "explanation": out.get("text", ""), "tips": out.get("tips", [])})
     return {"target_id": rec["id"]}
@@ -846,7 +861,7 @@ async def job_program(uid: str, inp: dict) -> dict:
 - summary - 2–4 предложения: логика программы, как учтены активности и ограничения."""
     feedback = ""
     for attempt in range(2):
-        out = await ask_json(system, user + feedback, PROGRAM_SCHEMA, temperature=0.4)
+        out = await ask_json(system, user + feedback, PROGRAM_SCHEMA, temperature=0.4, kind="program", uid=uid)
         days = _program_days(out, by_id, weekdays, day_minutes)
         problems = []
         if len(days) < n_days:
@@ -1098,13 +1113,16 @@ async def job_weekly(uid: str, inp: dict) -> dict:
             "title - заголовок в 3–6 слов; text - разбор 5–8 предложений: питание (БЖУ к норме), сон, активность, "
             "самочувствие, вода и шаги - только то, по чему есть данные; next - 3 конкретные задачи на следующую неделю; "
             "day_tip - одна короткая рекомендация на завтра.")
-    out = await ask_json(system, user, WEEKLY_SCHEMA, temperature=0.6, think=True)
+    out = await ask_json(system, user, WEEKLY_SCHEMA, temperature=0.6, think=True, kind="weekly", uid=uid)
     rec_id = uuid.uuid4().hex
     db.server_put(uid, "coach", rec_id, {"kind": "weekly", "title": out.get("title", "Разбор недели"),
                                          "text": out.get("text", ""), "next": out.get("next", []),
                                          "day_tip": out.get("day_tip", ""), "grade": st["grade"],
                                          "emoji_grade": GRADE_EMOJI[st["grade"]], "stats": st, "monday": monday,
                                          "created": db.now_ms()}, end.isoformat())
+    # разбор недели не переиспользуем (каждая неделя своя) - только копим в базе ответов
+    ailog.answer_put("weekly", uid, ailog.weekly_key({"monday": monday, "grade": st["grade"]}),
+                     {k: out.get(k) for k in ("title", "text", "next", "day_tip")} | {"grade": st["grade"]}, ref=rec_id)
     return {"record_id": rec_id}
 
 
@@ -1237,7 +1255,7 @@ title - короткое название блюда; steps - 2–4 коротк
 note - одно-два предложения: чем этот день хорош под цель. Без рассуждений.
 
 Продукты: {'; '.join(names[:140])}"""
-    out = await ask_json(system, user, MEALDAY_SCHEMA, temperature=0.5)
+    out = await ask_json(system, user, MEALDAY_SCHEMA, temperature=0.5, kind="mealplan_day", uid=uid)
     by_key = {str(s.get("key")): s for s in (out.get("slots") or []) if isinstance(s, dict)}
     slots_out, dropped_all = [], []
     for s in slots_in:
@@ -1301,7 +1319,7 @@ name - СТРОГО дословно из списка; title - короткое
 note - ОДНО короткое предложение: что можно заменять. Без рассуждений.
 
 Продукты: {'; '.join(names)}"""
-    out = await ask_json(system, user, MEALPLAN_SCHEMA, temperature=0.5)
+    out = await ask_json(system, user, MEALPLAN_SCHEMA, temperature=0.5, kind="mealplan", uid=uid)
     days_out = []
     start = date.fromisoformat(inp.get("start") or date.today().isoformat())
     for i, d in enumerate(out.get("days", [])[:n]):
@@ -1380,7 +1398,7 @@ async def job_recipe(uid: str, inp: dict) -> dict:
 Ингредиенты - в граммах НА ВЕСЬ РЕЦЕПТ, в том виде, в каком кладёшь (сырые крупы, сырое мясо);
 kcal, p, f, c - на 100 г ингредиента; name - обычное название с состоянием («Гречка сырая», «Куриная грудка сырая»).
 steps - 4–8 коротких шагов; time_min - общее время; portions - порций; tip - один совет, как сделать блюдо полезнее под цель."""
-    out = await ask_json(system, user, RECIPE_SCHEMA, temperature=0.5)
+    out = await ask_json(system, user, RECIPE_SCHEMA, temperature=0.5, kind="recipe", uid=uid)
     idx = food.Index()
     rows = _food_rows(out.get("ingredients") or [], idx)
     if not rows:
@@ -1479,7 +1497,7 @@ async def job_analysis(uid: str, inp: dict) -> dict:
                if scope == "body" else "")
             + "title - 3–6 слов; text - 4–7 предложений: общая картина и тренд; worked - что сработало (2–4 пункта, с цифрами); "
             "didnt - что не сработало или мешает (1–4 пункта); recommendations - 3–5 конкретных шагов на следующий месяц.")
-    out = await ask_json(system, user, ANALYSIS_SCHEMA, temperature=0.5, think=True)
+    out = await ask_json(system, user, ANALYSIS_SCHEMA, temperature=0.5, think=True, kind="analysis", uid=uid)
     rec_id = uuid.uuid4().hex
     db.server_put(uid, "coach", rec_id, {"kind": "analysis", "title": out.get("title", "Анализ истории"),
                                          "text": out.get("text", ""), "worked": out.get("worked", []),
@@ -1707,7 +1725,7 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
             ("\n\nАвтоматические замечания:\n" + "\n".join(notes) if notes else ""))
     model_ok = True
     try:
-        out = await ask_json(LOOKUP_SYSTEM, user, LOOKUP_SCHEMA, temperature=0.1, think=True)
+        out = await ask_json(LOOKUP_SYSTEM, user, LOOKUP_SCHEMA, temperature=0.1, think=True, kind="foodlookup", uid=uid)
     except AIError as e:
         # без модели - середина по источникам в нужном состоянии, с честной низкой уверенностью
         model_ok = False

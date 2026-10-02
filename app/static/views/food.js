@@ -1,6 +1,6 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
-import { S, esc, num, dec, fmt, dayTitle, profile, goal, toast, field, fval, select, openModal, closeModal, isModalOpen, jobFor, addJob, jobNote, dateNav, isBackdated, afterChange, nowHM, glyph, aiOff, AI_OFF_NOTE, aiOffHint } from '../ui.js';
+import { S, esc, num, dec, fmt, plural, dayTitle, profile, goal, toast, field, fval, select, openModal, closeModal, isModalOpen, jobFor, addJob, jobNote, dateNav, isBackdated, afterChange, nowHM, glyph, aiOff, AI_OFF_NOTE, aiOffHint } from '../ui.js';
 import { H } from './today.js';
 import * as foods from '../foods.js';
 import * as FP from '../foodparse.js';
@@ -395,6 +395,9 @@ function customView() {
       ${lk.warnings?.length ? `<ul class="fp-warn">${lk.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
       <p class="note a-tight">Проверьте цифры с упаковкой и поправьте, если нужно.</p></div>` : ''}
     <div class="fp-form">
+      <div class="field fp-label"><span class="smallcaps">Этикетка</span>
+        <textarea class="control" id="fp-label" data-fp-label rows="2" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Нажмите сюда → «Сканировать текст» и наведите камеру на таблицу «Пищевая ценность»">${esc(c.label || '')}</textarea>
+        <p class="note a-tight" id="fp-label-hint">${c.labelNote ? esc(c.labelNote) : 'На iPhone и iPad: в поле нажмите значок сканирования над клавиатурой (или долгое нажатие → «Сканировать текст»). Ккал, белки, жиры и углеводы подставятся сами - сверьте с упаковкой. Можно и вставить текст.'}</p></div>
       ${field('Название', `<input class="control" data-fp="name" value="${v('name')}" placeholder="например: Творог Простоквашино 5%" maxlength="80">`)}
       <div class="field"><span class="smallcaps">Состояние</span>${stateChips('custom', c.state || '')}</div>
       <label class="chk"><input type="checkbox" data-fp="perPortion" ${per ? 'checked' : ''}>на упаковке указано на порцию</label>
@@ -558,6 +561,21 @@ document.addEventListener('input', e => {
     return;
   }
   if (el.id === 'fp-time') { P.time = el.value; return; }
+  if (el.id === 'fp-label') {
+    // текст этикетки (сканирование камерой вставляет его целиком) → поля КБЖУ; на порцию - галочка и вес порции
+    const c = P.custom, L = FP.parseLabel(el.value);
+    c.label = el.value;
+    if (!L) { c.labelNote = el.value.trim() ? 'Пока не вижу цифр белков, жиров и углеводов - отсканируйте таблицу целиком.' : ''; const h = document.getElementById('fp-label-hint'); if (h && c.labelNote) h.textContent = c.labelNote; return; }
+    for (const k of ['kcal', 'p', 'f', 'c']) if (L[k] != null) c[k] = String(L[k]);
+    const was = !!c.perPortion;
+    c.perPortion = !L.per100;
+    if (L.portion) c.portion = String(L.portion);
+    c.labelNote = `С этикетки: ${L.kcal ?? '?'} ккал · Б ${L.p ?? '?'} · Ж ${L.f ?? '?'} · У ${L.c ?? '?'}${L.per100 ? ' на 100 г' : ` на порцию${L.portion ? ` ${L.portion} г` : ''}`} - проверьте.`;
+    if (was !== c.perPortion) { paint('fp-label'); return; }
+    for (const k of ['kcal', 'p', 'f', 'c']) { const inp = document.querySelector(`#modal [data-fp="${k}"]`); if (inp && c[k] != null) inp.value = c[k]; }
+    const h = document.getElementById('fp-label-hint'); if (h) h.textContent = c.labelNote;
+    return;
+  }
   if (el.dataset.fp) {
     P.custom[el.dataset.fp] = el.type === 'checkbox' ? el.checked : el.value;
     if (el.type === 'checkbox') { paint(); return; }
@@ -619,6 +637,12 @@ async function pollLookup() {
 // по одному продукту за раз; выбранное уходит в общий справочник ──
 const choiceLater = new Set();          // «Позже» в этом сеансе: `${id записи}:${строка}`
 const choiceSeen = new Set();           // сами показываем каждый выбор один раз за сеанс; дальше - ссылка в строке
+// сколько строк ждут выбора (значок на вкладке «Питание»; «Позже» не прячет - выбрать всё равно нужно)
+export function choicesCount() {
+  let n = 0;
+  for (const r of store.list('food', store.uid(), r => (r.data.items || []).some(i => i?.choice))) n += r.data.items.filter(i => i?.choice).length;
+  return n;
+}
 function pendingChoices() {
   const out = [];
   for (const r of store.list('food', store.uid(), r => (r.data.items || []).some(i => i?.choice))) {
@@ -628,14 +652,14 @@ function pendingChoices() {
 }
 function choiceHtml(all) {
   const { r, i } = all[0], it = r.data.items[i], ch = it.choice, ai = ch.ai || {};
-  return `<div class="modal-head"><div class="kicker smallcaps">Уточните продукт${all.length > 1 ? ` · ещё ${all.length - 1} после этого` : ''}</div><h2>${esc(ch.query || it.name)}</h2></div>
+  return `<div class="modal-head"><div class="kicker smallcaps">Уточнение продуктов${all.length > 1 ? ` · 1 из ${all.length}` : ''}</div><h2>${esc(ch.query || it.name)}</h2></div>
     <div class="modal-body fp">
       <p class="note a-tight">${esc(MEAL_NAME[r.data.meal] || 'Запись')} · ${esc(fmt(r.date, { day: 'numeric', month: 'long' }))}: «${esc((r.data.text || '').slice(0, 90))}» · ${num(it.grams)} г.</p>
-      <p class="note a-tight">В источниках для этого товара заметно разные цифры. Выберите вариант, который совпадает с упаковкой - он сохранится в общий справочник.</p>
+      <p class="note a-tight">${ch.ai ? 'В источниках для этого товара заметно разные цифры. Выберите вариант, который совпадает с упаковкой - он сохранится в общий справочник.' : 'Под это название подходят несколько товаров из справочника с разными цифрами. Какой из них?'}</p>
       ${(near => ch.options.map((v, o) => variantCard(v, `data-act="fc-pick" data-id="${esc(r.id)}" data-i="${i}" data-o="${o}"`, ai, o === near)).join(''))(nearestTo(ch.options, ai))}
-      <div class="raised fp-var"><div class="fp-var-t">Оценка ИИ</div>
+      ${ch.ai ? `<div class="raised fp-var"><div class="fp-var-t">Оценка ИИ</div>
         <div class="mono">${num(ai.kcal)} ккал · Б ${dec(ai.p)} · Ж ${dec(ai.f)} · У ${dec(ai.c)} <span class="muted">на 100 г</span></div>
-        <div class="a-row-btns"><button type="button" class="btn quiet" data-act="fc-ai" data-id="${esc(r.id)}" data-i="${i}">Оставить оценку ИИ</button></div></div>
+        <div class="a-row-btns"><button type="button" class="btn quiet" data-act="fc-ai" data-id="${esc(r.id)}" data-i="${i}">Оставить оценку ИИ</button></div></div>` : ''}
     </div>
     <div class="modal-foot"><button type="button" class="btn quiet" data-act="fc-later" data-id="${esc(r.id)}" data-i="${i}">Позже</button></div>`;
 }
@@ -648,6 +672,8 @@ function openChoice() {
 }
 // фон экрана: есть что выбрать, окно свободно, человек ничего не вводит - показываем
 function askChoices() {
+  // само - только на «Питании»: на других экранах окно мешало бы; там видна точка на вкладке
+  if (!location.hash.startsWith('#food')) return;
   if (isModalOpen() || S.pressing || document.activeElement?.matches?.('input, textarea, select')) return;
   if (pendingChoices().some(({ r, i }) => !choiceSeen.has(`${r.id}:${i}`))) openChoice();
 }
@@ -708,10 +734,10 @@ const pickerActions = {
   'fc-pick': async el => {
     const v = store.get(el.dataset.id)?.data.items?.[Number(el.dataset.i)]?.choice?.options?.[Number(el.dataset.o)];
     if (!v) return openChoice();
-    let f;
-    try { f = await saveVariant(v); } catch (e) { return toast(e.message, 6000); }
-    await applyChoice(el, f, v, 'web');
-    toast('Сохранено в общий справочник');
+    let f = v.food_id != null ? foods.get(v.food_id) : null;      // вариант из справочника - этот же товар
+    if (!f) { try { f = await saveVariant(v); } catch (e) { return toast(e.message, 6000); } }
+    await applyChoice(el, f, v, v.food_id != null ? 'db' : 'web');
+    if (v.food_id == null) toast('Сохранено в общий справочник');
   },
   'fc-ai': async el => {
     const it = store.get(el.dataset.id)?.data.items?.[Number(el.dataset.i)];
@@ -1017,6 +1043,7 @@ function viewFood(date) {
     ${!cheat && (sc.score !== null || sc.lines.length) ? `<div class="raised a-card a-fscore">
       <div class="a-fs-num"><b class="mono ${sc.score === null ? '' : `g-${sc.score >= 75 ? 'good' : sc.score >= 50 ? 'ok' : 'bad'}-t`}">${sc.score ?? '-'}</b><span class="smallcaps muted">оценка</span></div>
       <ul class="a-flines">${sc.lines.slice(0, 5).map(([cls, t]) => `<li class="${cls}">${esc(t)}</li>`).join('')}</ul></div>` : ''}
+    ${(n => n ? `<div class="notice fc-bar"><span>Уточнение продуктов: ${n} ${plural(n, 'продукт', 'продукта', 'продуктов')} - в источниках разные цифры, выберите, что совпадает с упаковкой.</span> <button type="button" class="btn" data-act="fc-open">Уточнить</button></div>` : '')(choicesCount())}
     <div class="inset food-add">
       <textarea class="control" data-form="food" data-key="text" placeholder="гречка 200 г, 2 яйца, кофе с молоком" aria-label="Что съели" data-enter="food-add">${esc(fval('food', 'text'))}</textarea>
       <div class="actions">${select('food', 'meal', defMeal, MEALS, 'aria-label="Приём пищи" data-rerender')}

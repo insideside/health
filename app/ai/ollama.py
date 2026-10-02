@@ -1,9 +1,12 @@
 """Минимальный клиент Ollama: один запрос - один JSON по схеме."""
 import json
 import os
+import time
 from urllib.parse import urlparse
 
 import httpx
+
+from .. import ailog
 
 URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 # ИИ только на этом компьютере: личные данные уходят в модель, и отправлять их куда-то ещё нельзя.
@@ -32,8 +35,34 @@ async def status() -> dict:
 
 
 async def ask_json(system: str, user: str, schema: dict, temperature: float = 0.3, think: bool = False,
-                   history: list[dict] | None = None) -> dict:
-    """history - прошлые реплики [{role: user|assistant, content}] между системным промптом и вопросом (чат)."""
+                   history: list[dict] | None = None, kind: str = "other", uid: str | None = None,
+                   log: dict | None = None) -> dict:
+    """history - прошлые реплики [{role: user|assistant, content}] между системным промптом и вопросом (чат).
+    kind/uid - для учёта задач ИИ (app/ailog.py: вид, кто, время, размеры - без содержимого). В log (если передан)
+    кладётся id строки учёта - по нему вызывающий допишет сравнение «в тени»."""
+    started, t0 = int(time.time() * 1000), time.monotonic()
+    prompt_chars = len(system) + len(user) + sum(len(str(h.get("content") or "")) for h in history or [])
+
+    def _log(ok: bool, answer_chars: int | None = None, error: str | None = None) -> None:
+        try:
+            lid = ailog.record(kind, uid, started, int((time.monotonic() - t0) * 1000), prompt_chars, answer_chars,
+                               think, ok, error, MODEL)
+            if log is not None:
+                log["id"] = lid
+        except Exception:  # noqa: BLE001 - учёт не ломает задачу
+            pass
+
+    try:
+        out, n = await _ask(system, user, schema, temperature, think, history)
+    except AIError as e:
+        _log(False, error=str(e))
+        raise
+    _log(True, n)
+    return out
+
+
+async def _ask(system: str, user: str, schema: dict, temperature: float, think: bool,
+               history: list[dict] | None) -> tuple[dict, int]:
     body = {
         "model": MODEL,
         "messages": [{"role": "system", "content": system}, *(history or []), {"role": "user", "content": user}],
@@ -54,6 +83,6 @@ async def ask_json(system: str, user: str, schema: dict, temperature: float = 0.
         raise AIError(f"Ollama {r.status_code}: {r.text[:300]}")
     content = r.json().get("message", {}).get("content", "")
     try:
-        return json.loads(content)
+        return json.loads(content), len(content)
     except json.JSONDecodeError:
         raise AIError("Модель вернула не JSON")

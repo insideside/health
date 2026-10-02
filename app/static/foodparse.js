@@ -262,6 +262,50 @@ function brandWords(list) {
   }
   return new Set([...inBrand].filter(([w, n]) => n >= 2 && n >= 0.4 * inName.get(w) && w.length > 3 && !common.has(w) && !STOP.has(w)).map(([w]) => w));
 }
+// товар с брендом из текста («сосиски папа может») по справочнику товаров (как Index.branded): все слова запроса
+// есть в «название + бренд», процент жирности тот же; название целиком - этот товар, иначе все подходящие; цифры
+// почти одинаковые - самый популярный, заметно разные - варианты на выбор человеку (окно «Уточнение продуктов»)
+const PCT_RE = /(\d+(?:[.,]\d+)?)\s*%/g;
+const pcts = t => new Set([...String(t).matchAll(PCT_RE)].map(m => m[1].replace(',', '.')));
+export const near = (a, b) => Math.abs(a.kcal - b.kcal) <= Math.max(15, 0.12 * Math.max(a.kcal, b.kcal))
+  && ['p', 'f', 'c'].every(k => Math.abs(a[k] - b[k]) <= Math.max(3, 0.15 * Math.max(a[k], b[k])));
+function branded(name) {
+  const I = index(), q = bagOf(name);
+  if (!q.size || ![...q].some(w => /[a-z]{3}/.test(w) || I.brands.has(w))) return [null, []];
+  I.storeBags ||= I.list.filter(f => f.brand).map(f => [bagOf(`${f.name} ${f.brand}`), f]);
+  const want = pcts(name), exact = [], fits = [];
+  for (const [b, f] of I.storeBags) {
+    if (!subset(q, b) || (want.size && !subset(want, pcts(f.name)))) continue;
+    (b.size === q.size ? exact : fits).push(f);
+  }
+  const all = exact.length ? exact : fits;
+  if (!all.length) return [null, []];
+  const groups = [];
+  for (const f of all) { const g = groups.find(g => near(g[0], f)); if (g) g.push(f); else groups.push([f]); }
+  return groups.length === 1 ? [all[0], []] : [null, groups.slice(0, 4).map(g => g[0])];
+}
+export const choiceOptions = opts => opts.map(f => ({ title: f.name, titles: [f.name], brand: f.brand || '', food_id: f.id,
+  kcal: f.kcal, p: f.p, f: f.f, c: f.c, sources: [{ site: 'справочник товаров', title: f.name }] }));
+function brandedItem(chunk) {
+  const [clean] = prepare(chunk);
+  const [name, n, unit] = parseChunk(clean);
+  const [hit, opts] = branded(name);
+  const f = withPiece(hit || opts[0], chunk);
+  const g = f ? gramsFor(f, n, unit) : null;
+  if (!g) return null;
+  const it = itemFrom(f, g, chunk, 'db');
+  if (!hit) it.choice = { query: name, ai: null, options: choiceOptions(opts) };
+  return [it];
+}
+
+// процент жирности в запросе другой, чем у продукта («молоко 2,5%» - не «Молоко 3,2%»; как food.pct_clash)
+function pctClash(n, f) {
+  const want = pcts(n);
+  if (!want.size) return false;
+  const have = pcts([f.name, ...(f.aliases || [])].join(' '));
+  return have.size > 0 && ![...want].every(x => have.has(x));
+}
+
 // в запросе бренд, которого у продукта нет: «йогурт активиа» - не «Йогурт натуральный» (как Index.misses_brand)
 function missesBrand(n, f) {
   const have = bagOf([f.name, ...(f.aliases || []), f.brand || ''].join(' '));
@@ -289,7 +333,7 @@ function index() {
     if (!bases.has(b)) bases.set(b, []);
     bases.get(b).push(f);
   }
-  idx = { keys, stems, bases, byId, bags, size: list.length, brands: brandWords(list) };
+  idx = { keys, stems, bases, byId, bags, size: list.length, brands: brandWords(list), list, storeBags: null };
   idxKey = key;
   return idx;
 }
@@ -312,7 +356,8 @@ function close(name, keys) {
   if (name.length < 4) return null;
   let best = null, bestR = 0.86;
   for (const [k, f] of keys) {
-    if (Math.abs(k.length - name.length) > 3 || k[0] !== name[0]) continue;
+    // товары из магазина - только точно (как food.Index.fuzzy на сервере): бренды и проценты не угадываем
+    if (f.source === 'off' || Math.abs(k.length - name.length) > 3 || k[0] !== name[0]) continue;
     const r = 1 - lev(name, k) / Math.max(name.length, k.length);
     if (r >= bestR) { bestR = r; best = f; }
   }
@@ -378,7 +423,7 @@ export function match(name, { raw = false, alias = true, onlyAlias = false } = {
     f = fid != null ? I.byId.get(fid) || null : null;
   }
   if (!f && !onlyAlias) f = bagMatch(n) || close(n, I.keys);
-  if (f && missesBrand(n, f)) return null;
+  if (f && (missesBrand(n, f) || pctClash(n, f))) return null;
   if (f && !raw && !STATE_WORDS.test(n)) f = preferUsed(f);
   return f;
 }
@@ -501,7 +546,7 @@ export function parse(text) {
     }
     for (const chunk of splitWeak(seg)) {
       if (composite(chunk)) { rest.push(chunk); continue; }
-      const got = ready() ? parsePiece(chunk) : null;
+      const got = ready() ? parsePiece(chunk) || brandedItem(chunk) : null;
       if (got?.rest) { items.push(...got.items); rest.push(got.rest); } else if (got) items.push(...got); else rest.push(chunk);
     }
   }
@@ -522,4 +567,27 @@ export function localCalc(text) {
   if (items.length && !rest.length) return { items, totals: totals(items), status: 'calculated', calc: 'local', unresolved: null, partial: null };
   if (items.length) return { items, totals: totals(items), status: 'raw', unresolved: rest, partial: true };
   return { unresolved: rest.length ? rest : null };
+}
+
+// ── этикетка: текст таблицы «Пищевая ценность» (iPhone «Сканировать текст», вставка) → КБЖУ ──
+// Понимает «Белки 12,5 г», «бел. 12», «Б 12», «Protein 12 g», калории «250 ккал» / «1046 кДж» (переводим),
+// колонку «на 100 г» и «на порцию 30 г»: если на этикетке есть 100 г - берём первую колонку (она обычно на 100 г).
+const LBL_NUM = '(\\d+(?:[.,]\\d+)?)';
+const LBL = {
+  p: new RegExp(`(?:белк\\p{L}*|бел\\.|protein\\p{L}*|(?<!\\p{L})б(?!\\p{L}))[^\\d\\n]{0,24}?${LBL_NUM}`, 'iu'),
+  f: new RegExp(`(?<!насыщ\\p{L}*\\s{0,3})(?:жир\\p{L}*|жир\\.|fat\\p{L}*|(?<!\\p{L})ж(?!\\p{L}))[^\\d\\n]{0,24}?${LBL_NUM}`, 'iu'),
+  c: new RegExp(`(?:углевод\\p{L}*|угл\\.|carbohydrate\\p{L}*|carbs?|(?<!\\p{L})у(?!\\p{L}))[^\\d\\n]{0,24}?${LBL_NUM}`, 'iu'),
+};
+export function parseLabel(text) {
+  const t = String(text || '').replace(/ /g, ' ');
+  if (t.trim().length < 6) return null;
+  const n = m => (m ? Number(m[1].replace(',', '.')) : null);
+  const out = { p: n(LBL.p.exec(t)), f: n(LBL.f.exec(t)), c: n(LBL.c.exec(t)) };
+  const kcal = /(\d+(?:[.,]\d+)?)\s*(?:к?кал|kcal)(?!\p{L})/iu.exec(t), kj = /(\d+(?:[.,]\d+)?)\s*(?:кдж|kj)(?!\p{L})/iu.exec(t);
+  out.kcal = kcal ? n(kcal) : kj ? Math.round(n(kj) / 4.184) : null;
+  const found = ['kcal', 'p', 'f', 'c'].filter(k => out[k] != null).length;
+  if (out.kcal == null && out.p != null && out.f != null && out.c != null) out.kcal = Math.round(4 * out.p + 4 * out.c + 9 * out.f);
+  const per100 = /100\s*(?:г|гр|g|мл|ml)(?!\p{L})/iu.test(t);
+  const portion = /порци\p{L}*\D{0,12}(\d+(?:[.,]\d+)?)\s*(?:г|гр|g|мл)/iu.exec(t) || /(\d+(?:[.,]\d+)?)\s*(?:г|гр|g)\s*\)?\s*(?:порци|serving)/iu.exec(t);
+  return found >= 2 ? { ...out, found, per100: per100 || !portion, portion: per100 ? null : n(portion) } : null;
 }

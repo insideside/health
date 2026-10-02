@@ -381,6 +381,41 @@ def base_name(name: str) -> str:
 
 
 _brands_cache: list = [None, frozenset()]
+_store_cache: list = [None, []]
+
+
+PCT_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*%")
+
+
+def pct_clash(name: str, f: dict) -> bool:
+    """Процент жирности в запросе другой, чем у продукта: «молоко 2,5%» - не «Молоко 3,2%» (как pctClash на клиенте)."""
+    want = {x.replace(",", ".") for x in PCT_RE.findall(name)}
+    if not want:
+        return False
+    have = {x.replace(",", ".") for x in PCT_RE.findall(" ".join([f["name"], *(f.get("aliases") or [])]))}
+    return bool(have) and not want <= have
+
+
+def store_bags(foods: list[dict]) -> list[tuple[frozenset, dict]]:
+    """Основы слов «название + бренд» у товаров с брендом (порядок справочника: товары из магазина - от популярных)."""
+    key = (len(foods), max((f.get("updated") or 0 for f in foods), default=0))
+    if _store_cache[0] != key:
+        _store_cache[:] = [key, [(bag(f"{f['name']} {f['brand']}"), f) for f in foods if f.get("brand")]]
+    return _store_cache[1]
+
+
+def near(a: dict, b: dict) -> bool:
+    """Цифры почти одинаковые (как websources.close): ккал ±12 %, Б/Ж/У ±3 г или 15 %."""
+    if abs(a["kcal"] - b["kcal"]) > max(15, 0.12 * max(a["kcal"], b["kcal"])):
+        return False
+    return all(abs(a[k] - b[k]) <= max(3, 0.15 * max(a[k], b[k])) for k in ("p", "f", "c"))
+
+
+def choice_options(opts: list[dict]) -> list[dict]:
+    """Варианты из справочника для окна «Уточнение продуктов» (тот же вид, что варианты из интернета)."""
+    return [{"title": f["name"], "titles": [f["name"]], "brand": f.get("brand") or "", "food_id": f["id"],
+             **{k: f[k] for k in ("kcal", "p", "f", "c")}, "sources": [{"site": "справочник товаров", "title": f["name"]}]}
+            for f in opts]
 
 
 def brand_words(foods: list[dict]) -> frozenset:
@@ -427,6 +462,34 @@ class Index:
             _brands_cache[:] = [key, brand_words(self.foods)]
         self.brand_words = _brands_cache[1]
         self.usage = usage(uid, self) if uid else {}
+
+    def branded(self, name: str) -> tuple[dict | None, list[dict]]:
+        """Товар с брендом из текста («сосиски папа может») - по справочнику товаров, без сети и ИИ: все слова
+        запроса есть в названии с брендом, лишних слов меньше всего. → (товар, []) - подошёл один или все
+        подходящие с близкими цифрами (берём самый популярный); (None, варианты) - цифры заметно разные, выбирает
+        человек; (None, []) - бренда в запросе нет или ничего не подошло. Как branded в foodparse.js."""
+        q = bag(name)
+        if not q or not any(w in self.brand_words or re.search(r"[a-z]{3}", w) for w in q):
+            return None, []
+        pct = PCT_RE.findall(name)
+        exact, fits = [], []
+        for b, f in store_bags(self.foods):
+            if q <= b and (not pct or {x.replace(",", ".") for x in pct} <= {x.replace(",", ".") for x in PCT_RE.findall(f["name"])}):
+                (exact if b == q else fits).append(f)
+        # название целиком - этот товар; иначе все подходящие («йогурт активиа» - любой вкус), выбирает человек,
+        # если цифры у них заметно разные
+        fits = exact or fits
+        if not fits:
+            return None, []
+        groups: list[list[dict]] = []
+        for f in fits:
+            for g in groups:
+                if near(g[0], f):
+                    g.append(f)
+                    break
+            else:
+                groups.append([f])
+        return (fits[0], []) if len(groups) == 1 else (None, [g[0] for g in groups[:4]])
 
     def misses_brand(self, name: str, f: dict) -> bool:
         """В запросе бренд, которого у продукта нет: «йогурт активиа» → «Йогурт натуральный» - другой товар
@@ -491,7 +554,7 @@ class Index:
         if not name:
             return None
         f = self._raw_match(name)
-        if f and self.misses_brand(name, f):
+        if f and (self.misses_brand(name, f) or pct_clash(name, f)):
             return None
         if f and self.usage and not STATE_WORDS.search(name):
             f = self.prefer_used(f)
@@ -600,6 +663,19 @@ def quick_parse(text: str, idx: Index | None = None, uid: str | None = None) -> 
             clean, small = prepare(chunk)
             name, n, unit = parse_chunk(clean)
             food = with_piece(idx.match(name), chunk, pieces)
+            if not food:
+                # товар с брендом («сосиски папа может 2 шт») - в справочнике товаров; разные цифры - выбор человека
+                hit, opts = idx.branded(name)
+                if hit:
+                    food = with_piece(hit, chunk, pieces)
+                elif opts:
+                    f0 = with_piece(opts[0], chunk, pieces)
+                    g = grams_for(f0, n, unit)
+                    if g:
+                        row = item_from(f0, g, chunk)
+                        row["choice"] = {"query": name, "ai": None, "options": choice_options(opts)}
+                        done.append(row)
+                        continue
             grams = (food.get("portions") or {}).get("горсть", SMALL_G) if food and small else grams_for(food, n, unit) if food else None
             if food and grams:
                 done.append(item_from(food, grams, chunk))

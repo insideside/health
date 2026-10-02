@@ -303,6 +303,7 @@ FOOD_COLS = {  # новые колонки (миграция для старых
     "brand": "TEXT", "created_by": "TEXT", "created_at": "INTEGER", "updated": "INTEGER NOT NULL DEFAULT 0",
     "verified": "INTEGER NOT NULL DEFAULT 0", "deleted": "INTEGER NOT NULL DEFAULT 0",
     "code": "TEXT",                                  # штрихкод (товары из Open Food Facts)
+    "merged_into": "INTEGER",                        # дубль слит в этот продукт (app/fooddedupe.py), строка deleted
 }
 _foods_migrated = False
 
@@ -409,7 +410,8 @@ def food_json(r: sqlite3.Row) -> dict:
             "kcal": r["kcal"], "p": r["p"], "f": r["f"], "c": r["c"],
             "portions": json.loads(r["portions"] or "{}"), "cooked_ratio": r["cooked_ratio"],
             "source": r["source"], "brand": r["brand"], "code": r["code"], "created_by": r["created_by"],
-            "verified": bool(r["verified"]), "updated": r["updated"], "deleted": bool(r["deleted"])}
+            "verified": bool(r["verified"]), "updated": r["updated"], "deleted": bool(r["deleted"]),
+            "merged_into": r["merged_into"] if "merged_into" in r.keys() else None}
 
 
 def all_foods(include_deleted: bool = False) -> list[dict]:
@@ -456,11 +458,57 @@ def save_food(fields: dict, uid: str | None, fid: int | None = None) -> dict:
             cur = c.execute(f"INSERT INTO foods ({cols}) VALUES ({','.join('?' * len(vals))})", tuple(vals.values()))
             fid = cur.lastrowid
         else:
+            row = c.execute("SELECT merged_into, deleted FROM foods WHERE id = ?", (fid,)).fetchone()
+            if row and row["deleted"] and row["merged_into"]:
+                # имя слитого дубля: те же цифры - отдаём оставшийся продукт, а не воскрешаем дубль
+                into = merged_target(row["merged_into"], c)
+                alive = c.execute("SELECT * FROM foods WHERE id = ? AND deleted = 0", (into,)).fetchone()
+                if alive and _close(vals, alive):
+                    return food_json(alive)
+            vals["merged_into"] = None
             if uid:
                 vals["created_by"] = uid           # восстановленная удалённая строка переходит к добавившему
             sets = ",".join(f"{k} = ?" for k in vals)
             c.execute(f"UPDATE foods SET {sets} WHERE id = ?", (*vals.values(), fid))
     return food_by_id(fid)
+
+
+def _close(a, b) -> bool:
+    """Как websources.close: калории в пределах 12 %, Б/Ж/У - 3 г или 15 %."""
+    try:
+        ka, kb = float(a["kcal"]), float(b["kcal"])
+        if abs(ka - kb) > max(15, 0.12 * max(ka, kb)):
+            return False
+        return all(abs(float(a[k]) - float(b[k])) <= max(3, 0.15 * max(float(a[k]), float(b[k]))) for k in ("p", "f", "c"))
+    except (TypeError, ValueError, KeyError):
+        return False
+
+
+def merged_target(fid: int, c: sqlite3.Connection | None = None) -> int:
+    """Куда в итоге слит продукт (цепочка слияний); не слит - он сам."""
+    run = c.execute if c is not None else (lambda sql, args: conn().execute(sql, args))
+    seen = {fid}
+    while True:
+        row = run("SELECT merged_into FROM foods WHERE id = ?", (fid,)).fetchone()
+        nxt = row["merged_into"] if row else None
+        if not nxt or nxt in seen:
+            return fid
+        seen.add(nxt)
+        fid = nxt
+
+
+def merged_map() -> dict[int, int]:
+    """Слитые дубли: старый id → оставшийся (с учётом цепочек). Клиент перекидывает по ней старые ссылки."""
+    migrate_foods()
+    raw = {r["id"]: r["merged_into"] for r in q("SELECT id, merged_into FROM foods WHERE merged_into IS NOT NULL")}
+    out = {}
+    for fid in raw:
+        to, seen = fid, {fid}
+        while to in raw and raw[to] not in seen:
+            to = raw[to]
+            seen.add(to)
+        out[fid] = to
+    return out
 
 
 def delete_food(fid: int) -> None:

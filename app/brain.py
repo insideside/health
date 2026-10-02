@@ -239,9 +239,11 @@ def portion_grams(food_id: int, unit: str | None, n: float | None) -> float | No
 
 # ── обучение на ответах ИИ (ai/jobs.py → job_food) ──
 
-def learn_food_ai(rest: list[str], ai_items: list[dict], idx: "food.Index") -> list[dict]:
+def learn_food_ai(rest: list[str], ai_items: list[dict], idx: "food.Index", source: str = "ai",
+                  signal: str = "observe") -> list[dict]:
     """Ответ ИИ по нераспознанным кускам → фразы, синонимы и порции. ai_items — позиции уже с food_id.
-    Возвращает те же позиции с пометкой phrase/pn (по ним клиент пришлёт поправку, если человек изменит граммы)."""
+    Возвращает те же позиции с пометкой phrase/pn (по ним клиент пришлёт поправку, если человек изменит граммы).
+    source/signal — для обучения по истории (app/ailog.py): граммы, поправленные человеком, — user/correct."""
     ensure()
     groups: dict[str, list[dict]] = {}
     for it in ai_items:
@@ -263,15 +265,15 @@ def learn_food_ai(rest: list[str], ai_items: list[dict], idx: "food.Index") -> l
         if not n or not all(foods) or not impersonal(name, foods):
             continue
         key = f"{base}|{unit}"
-        learn("food_phrase", key, {"items": [{"food_id": it["food_id"], "g": round(it["grams"] / n, 4)} for it in ok]}, "ai")
+        learn("food_phrase", key, {"items": [{"food_id": it["food_id"], "g": round(it["grams"] / n, 4)} for it in ok]}, source, signal)
         for it in ok:
             it["phrase"], it["pn"] = key, n
         if len(ok) == 1:
             f = foods[0]
             if food.stem(name) not in {food.stem(k) for k in [f["name"], *f.get("aliases", [])]}:
-                learn("food_alias", base, {"food_id": f["id"]}, "ai")
+                learn("food_alias", base, {"food_id": f["id"]}, source, signal)
             if unit and unit != "g":
-                learn("portion", f"{f['id']}|{unit}", {"g": round(ok[0]["grams"] / n, 1)}, "ai")
+                learn("portion", f"{f['id']}|{unit}", {"g": round(ok[0]["grams"] / n, 1)}, source, signal)
         out += ok
     return out
 

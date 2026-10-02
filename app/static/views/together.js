@@ -221,7 +221,7 @@ export function competeBody() {
     <div><label class="chk pf-chk"><input type="checkbox" data-act="pf-compete" ${cp.enabled ? 'checked' : ''}>Делиться прогрессом с партнёром</label></div>
     <div class="pf-sub"><label class="chk pf-chk"><input type="checkbox" data-act="pf-compete-score" ${cp.score ? 'checked' : ''} ${cp.enabled ? '' : 'disabled'}>Соревнование: считать очки и победы в неделе</label></div>
     <p class="note">${p ? `${esc(p.name)}: прогресс ${pc.enabled ? 'виден' : 'пока не виден'}${pc.enabled ? `, соревнование ${pc.score ? 'включено' : 'выключено'}` : ''}. Без соревнования видно только, как у кого идут дела, без очков и победителей; счёт недели появится, когда соревнование включат оба.` : 'Партнёра на сервере пока нет.'}
-      Партнёр увидит только выбранное ниже. Никогда не передаются: вес и замеры, самочувствие, цикл, курение и алкоголь, добавки; питание - только если ниже разрешено копировать приёмы пищи.</p>
+      Партнёр увидит только выбранное ниже. Никогда не передаются: вес и замеры, самочувствие, цикл, курение и алкоголь, добавки; питание, тренировки и активности - только если ниже разрешено их копировать.</p>
     <div class="field"><span class="smallcaps">Что показывать</span>
       <div class="chips">${C.COMPETE_CATS.map(c => `<button type="button" class="chip ${cp.show.includes(c.key) ? 'on' : ''}" data-act="pf-compete-show" data-k="${c.key}" title="${esc(SHOW_HINT[c.key])}">${esc(c.label)}</button>`).join('')}</div></div>
     <p class="note">Выключение сразу убирает шаги, сон и активность из ваших сводок за последние 8 недель. Оценка дня и опыт видны партнёру всегда.</p>
@@ -231,6 +231,9 @@ export function competeBody() {
     <div class="field pf-share"><span class="smallcaps">Питание</span>
       <label class="chk pf-chk"><input type="checkbox" data-form="profile" data-key="share_meals" ${(S.forms.profile?.share_meals ?? profile().share_meals) ? 'checked' : ''}>можно копировать мои приёмы пищи</label>
       <p class="note">Партнёры по группе смогут посмотреть ваши посчитанные приёмы пищи за выбранный день и скопировать себе (например, когда ели одно и то же). Сами записи у вас не меняются, в ленту и сводки еда не попадает. Сохранится кнопкой «Сохранить» внизу профиля.</p></div>
+    <div class="field pf-share"><span class="smallcaps">Тренировки и активности</span>
+      <label class="chk pf-chk"><input type="checkbox" data-form="profile" data-key="share_training" ${(S.forms.profile?.share_training ?? profile().share_training) ? 'checked' : ''}>можно копировать мои тренировки и активности</label>
+      <p class="note">Партнёры по группе смогут скопировать себе вашу тренировку (упражнения, подходы, веса) или активность (вид, минуты, интенсивность) за выбранный день - когда занимались вместе. Личное (массаж, баня, медитация, занятия с детьми) и заметки не видны. Сохранится кнопкой «Сохранить» внизу профиля.</p></div>
     ${pairBody(p)}
     <div class="actions"><a class="link" href="#together">Открыть «Вместе» →</a> <a class="link" href="#feed">Лента →</a></div></div>`;
 }

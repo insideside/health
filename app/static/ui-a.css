@@ -530,3 +530,4 @@ details.mp-pantry > summary { cursor: pointer; font: 700 12px var(--sans); lette
 .fp-var-t { font-weight: 600; overflow-wrap: anywhere; }
 .fp-var .mono { overflow-wrap: anywhere; }
 .fp-var .a-row-btns { margin-top: 4px; }
+.fc-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }

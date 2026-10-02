@@ -166,6 +166,10 @@ def relevant(query: str, title: str, brand: str = "") -> bool:
     if not words:
         return bool(lat)
     have = {food.stem(w) for w in hay.split()}
+    # бренд кириллицей («активиа», «простоквашино») - как латиница: обязателен («Актибио» - другой товар)
+    brands = food._brands_cache[1]
+    if any(w in brands and not any(_same_word(w, h) for h in have) for w in words):
+        return False
     hit = sum(1 for w in words if any(h.startswith(w[:max(3, len(w) - 1)]) or w.startswith(h) for h in have if len(h) > 2))
     return hit * 2 >= len(words)
 

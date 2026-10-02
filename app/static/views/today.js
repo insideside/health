@@ -1,4 +1,5 @@
 import * as store from '../store.js';
+import * as PC from './pcopy.js';
 import * as C from '../coach.js';
 import * as P from '../plan.js';
 import { S, ctxAttrs, plural, WD, esc, num, fmt, dayTitle, profile, CHECK, toast, ring, field, fval, input, textarea, openModal, closeModal, techHtml, dateNav, isBackdated, afterChange, glyph, MOOD_GLYPH, nowHM } from '../ui.js';
@@ -903,7 +904,7 @@ function activitiesBlock(date) {
   const total = list.reduce((a, r) => a + (Number(r.data.minutes) || 0), 0);
   return `<div class="section" data-dom="move"><div class="section-title"><span class="smallcaps">Активности</span>${total ? `<span class="note"><span class="mono">${total}</span> мин за день</span>` : ''}</div>
     ${list.length ? `<div class="checklist">${list.map(r => activityRow(r)).join('')}</div>` : '<p class="empty a-tight">Сегодня пока без активностей. Велосипед, бассейн, танцы, массаж - всё считается.</p>'}
-    <div class="a-row-btns"><button class="btn" data-act="td-ac-open" data-date="${date}">+ Активность</button>
+    <div class="a-row-btns"><button class="btn" data-act="td-ac-open" data-date="${date}">+ Активность</button>${PC.copyButton(date)}
       ${typical.slice(0, 4).map(a => `<button class="btn quiet" data-act="td-ac-open" data-date="${date}" data-type="${esc(a.type)}" data-min="${a.minutes || ''}" data-int="${a.intensity || ''}">${esc(activityName(a.type))}${a.minutes ? ` · ${a.minutes} мин` : ''}</button>`).join('')}</div></div>`;
 }
 function activityRow(r) {

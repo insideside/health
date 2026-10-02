@@ -299,3 +299,20 @@
 .confirm-layer .modal { width: min(400px, 100%); }
 .confirm-layer .modal-head { padding-bottom: 6px; }
 .confirm-layer .modal-head h2 { font-size: 20px; }
+
+/* «Как это работает» → «Состояние сервера»: резервные копии и внешние источники (views/about.js) */
+.ops .ops-sub { margin: 14px 0 4px; color: var(--ink-2); }
+.ops .ops-sub:first-of-type { margin-top: 4px; }
+.ops .ops-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 4px; }
+.ops .ops-row { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+.ops .ops-main { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ops .ops-msg { margin-top: 2px; }
+.ops-dot { display: inline-block; flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; margin: 6px 8px 0 0;
+  background: var(--ink-3); vertical-align: 1px; }
+.ops .ops-row .ops-dot { margin-right: 0; }
+.ops p .ops-dot { margin-top: 0; }
+.ops-dot.ok { background: var(--c3); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c3) 20%, transparent); }
+.ops-dot.warn { background: var(--c5); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c5) 22%, transparent); }
+.ops-dot.error { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ops-dot.off, .ops-dot.unknown { background: transparent; border: 1.5px solid var(--ink-3); width: 9px; height: 9px; box-sizing: border-box; }
+.ops .notice.ops-err { font-style: normal; color: var(--ink); overflow-wrap: anywhere; }
