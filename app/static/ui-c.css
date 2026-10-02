@@ -271,3 +271,25 @@
 .fi-cover .chk { white-space: normal; align-items: flex-start; margin-top: 6px; }
 .fi-cover .note { margin: 6px 0 0; }
 .fi-modal .fi-pcs { margin-top: 14px; }
+
+/* строка продукта в записи еды: название и кнопки, ниже - пять равных полей «г · ккал · Б · Ж · У» с подписями
+   сверху. На телефоне поля 16 px (иначе iOS увеличивает страницу) - в один ряд с подписями слева они не помещались */
+.fi { grid-template-columns: minmax(0, 1fr) auto auto; }
+.fi .nm { white-space: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.3; }
+.fi .mac-edit { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; max-width: 440px; margin-top: 4px; }
+.fi .mac-f { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; }
+.fi .mac-f .mac-l { font: 700 10px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding-left: 2px; }
+.fi .mac-f input.control, .fi .mac-f input.control[data-k="kcal"] { width: 100%; min-width: 0; box-sizing: border-box; padding: 3px 5px; }
+@media (hover: none) and (pointer: coarse) {
+  .fi .mac-f input.control, .fi .mac-f input.control[data-k="kcal"] { width: 100%; min-height: 36px; padding: 2px 4px; }
+}
+
+/* поле времени в форме еды - компактное: «12:30» не требует всей строки (общее правило для time/date на iOS
+   в app.css задаёт width: 100% и перебивало .a-time) */
+.food-add .actions input.control.a-time[type="time"] { width: 104px; flex: none; }
+
+/* телефон и узкое окно: кнопки записи («в избранное», «Изменить», «Удалить») прижаты влево - они переносятся под
+   текст записи, а справа у них пустое место. Если помещаются в строку с текстом - текст растягивается и они у края */
+@media (max-width: 900px) {
+  .a-entry-btns { margin-left: 0; }
+}

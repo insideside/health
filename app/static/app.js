@@ -121,26 +121,56 @@ function applyMasthead() {
 for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
 document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
-// iOS (режим приложения): после закрытия клавиатуры панель вкладок с position: fixed иногда остаётся
-// приподнятой над низом экрана, пока страницу не прокрутят. Пока клавиатура открыта - панель прячем
-// (она и так закрыта клавиатурой), а после закрытия показываем заново и сдвигаем прокрутку на пиксель -
-// браузер пересчитывает положение закреплённых элементов.
+// iOS (режим приложения): после закрытия клавиатуры панель вкладок с position: fixed «отклеивается» - висит выше
+// низа экрана. Причина (iOS 26): window.innerHeight, visualViewport.height и 100dvh остаются уменьшенными до конца
+// сеанса. Пока клавиатура открыта - панель прячем (она и так под клавиатурой); после закрытия, если высота окна
+// меньше прежней для этой ширины, заставляем WebKit перемерить экран: body на мгновение display: none →
+// синхронная перекладка → обратно (без отрисовки между ними; прокрутку возвращаем). Кнопка «Готово» прячет
+// клавиатуру, не снимая фокус с поля, - такое замечаем по росту visualViewport и снимаем фокус сами.
 const isTyping = () => !!document.activeElement?.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select, [contenteditable="true"]');
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const fullH = new Map();          // ширина окна → наибольшая высота (поворот экрана меняет ширину)
+const noteHeight = () => { const w = Math.round(window.innerWidth); fullH.set(w, Math.max(fullH.get(w) || 0, window.innerHeight)); };
+noteHeight();
+function healViewport() {
+  if (isTyping()) return;
+  document.documentElement.classList.remove('kb-open');
+  const full = fullH.get(Math.round(window.innerWidth)) || 0;
+  if (IOS && (full - window.innerHeight > 4 || (window.visualViewport?.offsetTop || 0) > 1)) {
+    const y = window.scrollY, b = document.body;
+    // прокрутка внутри (лента чата, окно) при display: none сбрасывается - запоминаем и возвращаем
+    const inner = [...document.querySelectorAll('.chat-list, .modal-body, .modal')].map(el => [el, el.scrollTop]);
+    b.style.display = 'none';
+    void b.offsetHeight;                // синхронная перекладка - WebKit пересчитывает размеры окна
+    b.style.display = '';
+    window.scrollTo(0, y);
+    for (const [el, t] of inner) el.scrollTop = t;
+  }
+  window.scrollBy(0, 1); window.scrollBy(0, -1);     // и закреплённые элементы - на место
+  noteHeight();
+}
+let vvLast = window.visualViewport?.height || 0;
 function syncKeyboard() {
   const vv = window.visualViewport;
-  const open = isTyping() && !!vv && vv.height < window.innerHeight * 0.85;
+  if (!vv) return;
+  const full = fullH.get(Math.round(window.innerWidth)) || window.innerHeight;
+  const open = isTyping() && vv.height < full * 0.8;
+  // «Готово» над клавиатурой: клавиатура закрылась (видимая часть выросла), а поле всё ещё в фокусе
+  if (isTyping() && !open && vv.height - vvLast > 120) document.activeElement.blur();
+  vvLast = vv.height;
   const root = document.documentElement, was = root.classList.contains('kb-open');
-  if (open === was) return;
+  if (open === was) { if (!open && !isTyping()) noteHeight(); return; }
   root.classList.toggle('kb-open', open);
-  if (!open) requestAnimationFrame(() => { window.scrollBy(0, 1); window.scrollBy(0, -1); });
+  if (!open) setTimeout(healViewport, 140);
 }
 window.visualViewport?.addEventListener('resize', syncKeyboard);
+window.addEventListener('resize', () => { if (!isTyping()) noteHeight(); });
 document.addEventListener('focusin', () => setTimeout(syncKeyboard, 350));
-document.addEventListener('focusout', () => setTimeout(() => {
-  syncKeyboard();
-  // клавиатура закрылась, а resize не пришёл (бывает на iOS) - всё равно поправить панель
-  if (!isTyping()) { document.documentElement.classList.remove('kb-open'); window.scrollBy(0, 1); window.scrollBy(0, -1); }
-}, 300));
+document.addEventListener('focusout', () => { setTimeout(() => { syncKeyboard(); healViewport(); }, 140); setTimeout(healViewport, 600); });
+// вернулись в приложение (из фона, из другого приложения) - тоже бывает «отклеено»
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(healViewport, 250); });
+window.addEventListener('pageshow', () => setTimeout(healViewport, 250));
+window.addEventListener('orientationchange', () => setTimeout(healViewport, 400));
 
 window.addEventListener('scroll', () => {
   const y = window.scrollY, dy = y - mhLastY;

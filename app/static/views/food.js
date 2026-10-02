@@ -919,10 +919,10 @@ function foodEntry(e, win) {
       data-act="${act}" data-k="${k}" data-id="${e.id}" data-i="${i}" aria-label="${label === 'ккал' ? 'Калории' : label}: ${esc(name)}"></label>`;
   const per100 = it => { const k = it.grams ? 100 / it.grams : 0; return { kcal: it.kcal * k, p: it.p * k, f: it.f * k, c: it.c * k }; };
   const items = (d.items || []).map((it, i) => { const is = itemState(it); const p100 = per100(it);
-    const macRow = `<div class="mac mac-edit">${macF('ккал', 'kcal', it.kcal, it.name, i, 'food-macro')}${macF('Б', 'p', it.p, it.name, i, 'food-macro')}${macF('Ж', 'f', it.f, it.name, i, 'food-macro')}${macF('У', 'c', it.c, it.name, i, 'food-macro')}</div>
+    // одна строка из пяти равных полей: граммы и КБЖУ съеденного (подписи сверху - помещается и на телефоне)
+    const macRow = `<div class="mac mac-edit"><label class="mac-f mac-g"><span class="mac-l">г</span><input class="control mono g-in" type="number" inputmode="numeric" min="0" value="${it.grams}" data-act="food-grams" data-id="${e.id}" data-i="${i}" aria-label="граммы: ${esc(it.name)}"></label>${macF('ккал', 'kcal', it.kcal, it.name, i, 'food-macro')}${macF('Б', 'p', it.p, it.name, i, 'food-macro')}${macF('Ж', 'f', it.f, it.name, i, 'food-macro')}${macF('У', 'c', it.c, it.name, i, 'food-macro')}</div>
         ${it.grams ? `<div class="mac-calc note">на 100 г: ${num(Math.round(p100.kcal))} ккал · Б ${dec(p100.p)} · Ж ${dec(p100.f)} · У ${dec(p100.c)}</div>` : ''}`;
     return `<div class="fi"><div class="ell nm">${esc(it.name)}${stBadge(is.st)}${it.source === 'ai' ? '<span class="src-ai" title="Оценка ИИ: продукта нет в справочнике">≈ИИ</span>' : it.source === 'brain' ? '<span class="src-brain" title="Так эту фразу раньше разобрала ИИ - теперь считается без неё">память</span>' : it.source === 'manual' ? '<span class="src-brain" title="БЖУ заданы вручную">своё</span>' : ''}</div>
-    <label class="g"><input class="control g-in" type="number" inputmode="numeric" value="${it.grams}" data-act="food-grams" data-id="${e.id}" data-i="${i}" aria-label="граммы: ${esc(it.name)}"> г</label>
     <button class="btn quiet a-mini fi-edit" data-act="fi-open" data-id="${e.id}" data-i="${i}" aria-label="Править продукт: ${esc(it.name)}" title="Править: название, вес, КБЖУ на 100 г">${glyph('pencil')}</button>
     <button class="btn quiet a-mini fi-del" data-act="food-item-del" data-id="${e.id}" data-i="${i}" aria-label="Убрать из записи: ${esc(it.name)}" title="Убрать эту строку">${glyph('cross')}</button>
     ${macRow}
@@ -935,8 +935,8 @@ function foodEntry(e, win) {
       <div class="a-entry-btns"><button class="btn quiet a-star ${fav ? 'on' : ''}" data-act="fd-fav" data-id="${e.id}" aria-label="${fav ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${!!fav}" title="${fav ? 'В избранном' : 'В избранное'}">${glyph('star', { fill: !!fav })}</button>
         <button class="btn quiet" data-act="food-edit" data-id="${e.id}">Изменить</button><button class="btn danger" data-act="food-del" data-id="${e.id}">Удалить</button></div></div>
     ${items ? `<div class='fis'>${items}</div>` : ''}
-    ${!job && !['supp', 'drink'].includes(d.calc) ? `<div class="a-row-btns fi-add"><button class="btn quiet a-mini" data-act="fi-new" data-id="${e.id}">+ Добавить продукт</button>
-      <button class="btn quiet a-mini" data-act="food-item-add" data-id="${e.id}">+ из справочника</button>${d.edited ? '<span class="note">изменено вручную</span>' : ''}</div>` : ''}
+    ${!job && !['supp', 'drink'].includes(d.calc) ? `<div class="a-row-btns fi-add"><button class="btn quiet a-mini" data-act="food-item-add" data-id="${e.id}">+ из справочника</button>
+      <button class="btn quiet a-mini" data-act="fi-new" data-id="${e.id}">+ новый продукт</button>${d.edited ? '<span class="note">изменено вручную</span>' : ''}</div>` : ''}
     ${d.totals ? `<div class="tot"><span>итого ${num(d.totals.kcal)} ккал</span><span>Б ${dec(d.totals.p)} · Ж ${dec(d.totals.f)} · У ${dec(d.totals.c)}</span>${calcLabel(d)}</div>` : ''}
     ${status}</div>`;
 }
@@ -986,7 +986,7 @@ const aiErr = e => e.status === 404 || e.status === 400 ? 'Эта функция
 // ── правка одного продукта в записи: название, вес, КБЖУ на 100 г и съеденное (одно пересчитывает другое) ──
 const MK = [['kcal', 'ккал'], ['p', 'белки'], ['f', 'жиры'], ['c', 'углеводы']];
 const rnd = (k, v) => k === 'kcal' ? Math.round(v) : Math.round(v * 10) / 10;
-// i = -1 - новая строка: «+ Добавить продукт» руками (название, вес, КБЖУ)
+// i = -1 - новая строка: «+ новый продукт» руками (название, вес, КБЖУ)
 function fiModal(r, i) {
   const fresh = i < 0;
   const it = fresh ? { name: '', grams: 100, kcal: 0, p: 0, f: 0, c: 0 } : r.data.items[i], g = Number(it.grams) || 0;
@@ -1043,7 +1043,9 @@ export const actions = {
     // сначала локально (справочник + память): знакомое считается сразу, даже без сети
     const loc = FP.localCalc(text);
     const rec = await addEntry(el.dataset.date, { meal, text, status: 'raw', time, ...loc });
-    S.forms.food = { meal };
+    // форма сразу предлагает следующий приём (завтрак → обед → ужин → перекус по внесённому за день, см. defMeal);
+    // выбор «как только что» не держим - иначе он менялся бы лишь после ухода со страницы
+    S.forms.food = {};
     document.activeElement?.blur?.();       // иначе экран ждёт ухода из поля и новая запись не видна
     S.render();
     if (rec.data.out_of_window) toast('Записал. Это вне окна питания - отмечу, но без упрёков.');
