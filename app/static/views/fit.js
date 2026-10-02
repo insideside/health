@@ -298,7 +298,6 @@ export const actions = {
   },
   'mx-del': async el => {
     const id = el.dataset.ex, name = exName(id);
-    if (!confirm(`Удалить своё упражнение «${name}»? В прошедших тренировках оно останется.`)) return;
     const it = clItem(id);
     if (it) await store.patch(it.id, { active: false });
     await MX.remove(id);
@@ -406,6 +405,10 @@ export async function background({ hidden } = {}) {
   await PF.loadWeather();
   if (store.getMeta('weather', null)?.saved_at !== before) S.render();
 }
+
+export const confirms = {
+  'mx-del': el => ({ title: 'Удалить своё упражнение?', text: `«${exName(el.dataset.ex)}» пропадёт из каталога и чек-листа. В прошедших тренировках оно останется.` }),
+};
 
 export const changes = {
   'swp-q': el => {

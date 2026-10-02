@@ -158,6 +158,10 @@ function view() {
 
 export const routes = { health: () => view() };
 
+export const confirms = {
+  'hg-rotate': () => ({ title: 'Выпустить новый токен?', ok: 'Выпустить', danger: false, text: 'Старый токен перестанет работать: его нужно заменить в команде «Здоровье» на iPhone.' }),
+};
+
 export const actions = {
   // готовая команда: сервер собирает её с вашим адресом и токеном и подписывает (на Mac); iPhone откроет «Команды»
   'hg-shortcut': async () => {
@@ -198,7 +202,6 @@ export const actions = {
     catch (e) { toast('Не получилось скопировать - выделите и скопируйте вручную'); }
   },
   'hg-rotate': async el => {
-    if (el.dataset.confirm !== '1') { el.dataset.confirm = '1'; el.textContent = 'Точно? Старый токен перестанет работать'; return; }
     await loadToken(true);
     toast(tokenError || 'Новый токен выпущен - замените его в команде');
     S.render();

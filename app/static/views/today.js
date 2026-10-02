@@ -1455,6 +1455,12 @@ export const actions = {
   },
 };
 
+export const confirms = {
+  'td-ac-del': el => { const r = store.get(el.dataset.id); const n = r ? activityName(r.data.type) : ''; return { title: 'Удалить активность?', text: `${n ? `«${n}»${r.data.minutes ? `, ${r.data.minutes} мин` : ''} пропадёт` : 'Активность пропадёт'} из дня.` }; },
+  'cup-rm': el => { const r = store.get(el.dataset.id); return { title: 'Удалить чашку?', text: `${r?.data.time ? `Чашка в ${r.data.time} пропадёт` : 'Чашка пропадёт'} из дня${r?.data.food_id ? ' вместе с молоком в записи еды' : ''}.` }; },
+  'td-nap-rm': () => ({ title: 'Убрать дневной сон?', ok: 'Убрать', text: 'Запись о дневном сне пропадёт из дня.' }),
+};
+
 export const changes = {
   'cup-time': async el => {
     if (!el.value) return;

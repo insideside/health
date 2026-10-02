@@ -178,7 +178,6 @@ export const actions = {
   },
   'cn-revoke': async el => {
     const d = devices?.find(x => x.id === el.dataset.id);
-    if (el.dataset.confirm !== '1') { el.dataset.confirm = '1'; el.textContent = d?.current ? 'Точно? Нужно будет войти снова' : 'Точно отключить?'; return; }
     await store.api(`/api/auth/devices/${el.dataset.id}`, undefined, 'DELETE');
     if (d?.current) await store.setMeta('device_token', null);
     devices = devices.filter(x => x.id !== el.dataset.id);
@@ -187,7 +186,6 @@ export const actions = {
   },
   'cn-all': () => { S.forms.cn_all = true; S.render(); },
   'cn-revoke-others': async el => {
-    if (el.dataset.confirm !== '1') { el.dataset.confirm = '1'; el.textContent = 'Точно? Остальным придётся войти заново'; return; }
     const r = await store.api('/api/auth/devices', undefined, 'DELETE');
     devices = devices.filter(x => x.current);
     toast(`Отключено устройств: ${r.revoked}`);
@@ -204,6 +202,16 @@ export const actions = {
     } catch (e) { toast(e.message); }
     finally { busy = false; S.render(); }
   },
+};
+
+export const confirms = {
+  'cn-remove': el => ({ title: 'Убрать адрес?', ok: 'Убрать', text: `${String(el.dataset.url || '').replace(/^https?:\/\//, '')} исчезнет из списка адресов.` }),
+  'cn-revoke': el => {
+    const d = devices?.find(x => x.id === el.dataset.id);
+    return d?.current ? { title: 'Отозвать доступ этого устройства?', ok: 'Отозвать', text: 'Нужно будет войти снова.' }
+      : { title: 'Отключить устройство?', ok: 'Отключить', text: `${d?.label ? `«${d.label}» ` : 'Устройство '}потеряет доступ, ему придётся войти заново.` };
+  },
+  'cn-revoke-others': () => ({ title: 'Отключить все остальные устройства?', ok: 'Отключить', text: 'Остальным придётся войти заново. Это устройство останется.' }),
 };
 
 export function afterRender() {

@@ -671,7 +671,7 @@ const pickerActions = {
   'fp-del-own': async el => {
     const id = idOf(el.dataset.id);
     const f = foods.get(id);
-    if (!f || !confirm(`Удалить «${f.name}» из справочника? Записи еды останутся.`)) return;
+    if (!f) return;
     try { await foods.remove(id); } catch (e) { return toast(e.status === 0 ? 'Удалить можно, когда есть связь' : e.message); }
     P.sel = null;
     paint('fp-q');
@@ -1227,6 +1227,7 @@ export const actions = {
     const per0 = k => (prev.grams ? (prev[k] || 0) * 100 / prev.grams : 0);
     const same = name === prev.name && MK.every(([k]) => Math.abs(per[k] - per0(k)) <= (k === 'kcal' ? 1.5 : 0.25));
     const fd = typeof it.food_id === 'number' ? foods.get(it.food_id) : null;
+    delete it.base100;
     if (!same) { it.source = 'manual'; delete it.food_id; delete it.state; }
     // новая строка вместо непосчитанной части текста: та часть больше не ждёт ИИ
     const covered = new Set([...document.querySelectorAll('.fi-cover [data-cover]:checked')].map(x => Number(x.dataset.cover)));
@@ -1273,16 +1274,48 @@ function itemsTotals(items) {
   return totals;
 }
 
+// значения на 100 г строки (it.base100 - запомнены при первой правке граммов; иначе из текущих чисел и веса)
+const MACS = ['kcal', 'p', 'f', 'c', 'fiber'];
+function base100(it) {
+  if (it.base100) return it.base100;
+  if (!(it.grams > 0)) return null;
+  const o = {};
+  for (const m of MACS) if (it[m] !== undefined) o[m] = (Number(it[m]) || 0) * 100 / it.grams;
+  return o;
+}
+
+// подтверждение перед удалением (app.js, ui.confirmAction)
+const shortText = (t, n = 70) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 2)}…` : t; };
+const itemDelSpec = el => {
+  const r = store.get(el.dataset.id), items = r?.data.items || [], it = items[Number(el.dataset.i)];
+  if (!it) return null;
+  return { title: 'Убрать продукт из записи?', ok: 'Убрать',
+    text: `«${it.name}»${it.grams ? `, ${it.grams} г` : ''} пропадёт из записи${items.length <= 1 ? '. Это последняя строка: запись удалится целиком' : ''}.` };
+};
+export const confirms = {
+  'food-del': el => { const r = store.get(el.dataset.id); return { title: 'Удалить запись о еде?', text: `${r?.data.text ? `«${shortText(r.data.text)}» пропадёт` : 'Запись пропадёт'} из дня вместе с КБЖУ.` }; },
+  'food-item-del': itemDelSpec,
+  'fi-remove': itemDelSpec,
+  'fp-del-own': el => { const f = foods.get(idOf(el.dataset.id)); return f ? { title: 'Удалить продукт из справочника?', text: `«${f.name}» пропадёт из справочника. Записи еды останутся.` } : null; },
+  'mp-pantry-rm': el => { const x = MPL.pantry().find(p => String(p.id) === String(el.dataset.id)); return { title: 'Убрать продукт из списка?', ok: 'Убрать', text: x ? `«${x.name}» больше не считается «есть дома».` : '' }; },
+  'mp-pantry-clear': () => ({ title: 'Очистить список «Что есть дома»?', ok: 'Очистить', text: 'Все отмеченные продукты уберутся из списка.' }),
+};
+
 export const changes = {
   'mp-wt': el => { MP.wt = el.value; S.render(); },
   'food-grams': async el => {
     const r = store.get(el.dataset.id);
+    if (!r) return;
+    const raw = String(el.value).trim();
+    if (raw === '') return;                         // поле стёрто, чтобы набрать другое число - пока ничего не меняем
     const items = structuredClone(r.data.items), it = items[Number(el.dataset.i)];
-    const g = Math.max(0, Number(el.value) || 0);
-    if (it.grams) {
-      const k = g / it.grams;
-      it.kcal = Math.round(it.kcal * k);
-      ['p', 'f', 'c', 'fiber'].forEach(m => { if (it[m] !== undefined) it[m] = Math.round(it[m] * k * 10) / 10; });
+    const g = Math.max(0, Number(raw.replace(',', '.')) || 0);
+    // КБЖУ считаем от значений на 100 г, а не от прошлого результата: поле сохраняется и на промежуточных числах
+    // («150» набирают как 1 → 15 → 150), и каждое округление, и ноль, стирали бы цифры безвозвратно
+    const b = base100(it);
+    if (b) {
+      it.base100 = b;
+      for (const m of MACS) if (b[m] !== undefined) it[m] = m === 'kcal' ? Math.round(b[m] * g / 100) : Math.round(b[m] * g / 100 * 10) / 10;
     }
     it.grams = g;
     await store.patch(r.id, { items, totals: itemsTotals(items) });
@@ -1295,6 +1328,7 @@ export const changes = {
     const items = structuredClone(r.data.items), it = items[Number(el.dataset.i)];
     const k = el.dataset.k, v = Math.max(0, Number(el.value) || 0);
     it[k] = k === 'kcal' ? Math.round(v) : Math.round(v * 10) / 10;
+    delete it.base100;                              // числа заданы руками - новая основа на 100 г
     it.source = 'manual';
     delete it.food_id;
     delete it.state;

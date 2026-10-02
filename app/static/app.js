@@ -3,7 +3,7 @@
 // afterRender (после отрисовки) и background (раз в цикл опроса, пока приложение открыто).
 import * as store from './store.js';
 import * as C from './coach.js';
-import { S, ExMap, esc, svg, ring, field, toast, openModal, closeModal, showTech, afterChange, isModalOpen, glyph, exCtx, profile as userProfile } from './ui.js';
+import { S, ExMap, esc, svg, ring, field, toast, openModal, closeModal, confirmAction, showTech, afterChange, isModalOpen, glyph, exCtx, profile as userProfile } from './ui.js';
 import * as today from './views/today.js';
 import * as calendar from './views/calendar.js';
 import * as food from './views/food.js';
@@ -36,6 +36,9 @@ const NAV_OF = { feed: 'progress', advice: 'chat', install: 'profile', about: 'p
 const routes = Object.assign({}, ...VIEWS.map(v => v.routes || {}));
 const actions = Object.assign({}, ...VIEWS.map(v => v.actions || {}));
 const changes = Object.assign({}, ...VIEWS.map(v => v.changes || {}));
+// действия, которые стирают данные: сначала окно подтверждения (ui.confirmAction), и только потом сам обработчик.
+// Экран описывает окно функцией `confirms[act] = el => ({ title, text, ok }) | null`; все кнопки удаления - здесь.
+const confirms = Object.assign({}, ...VIEWS.map(v => v.confirms || {}));
 
 // ── маршрут и перерисовка ──
 function route() {
@@ -470,7 +473,10 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el || !actions[el.dataset.act] || el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
   e.preventDefault();
-  Promise.resolve(actions[el.dataset.act](el, e)).catch(err => { console.error(err); toast(err.message || 'Ошибка'); });
+  const run = () => Promise.resolve(actions[el.dataset.act](el, e)).catch(err => { console.error(err); toast(err.message || 'Ошибка'); });
+  const spec = confirms[el.dataset.act]?.(el);
+  if (spec) confirmAction(spec).then(ok => { if (ok) run(); });
+  else run();
 });
 
 document.addEventListener('submit', e => {
@@ -487,6 +493,27 @@ function setFormValue(el) {
   f[el.dataset.key] = el.type === 'checkbox' ? el.checked : el.value;
 }
 document.addEventListener('input', e => { if (e.target.dataset?.form) setFormValue(e.target); });
+
+// Тап по полю ввода выделяет всё его содержимое: чтобы заменить число или слово, не нужно стирать по символу.
+// Только когда человек сам перешёл в поле (pointerdown на поле, которое ещё не в фокусе): программный фокус после
+// перерисовки (поиск продукта, подходы) курсор в конец не двигает; повторный тап в поле ставит курсор как обычно.
+// Многострочные поля (textarea), время/дата и флажки не затрагиваются. На iOS курсор ставится при отпускании пальца -
+// выделение повторяем через 40 и 150 мс; в браузере компьютера отпускание мыши не должно снимать выделение.
+const SELECT_ON_TAP = 'input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=file]):not([type=color]):not([type=time]):not([type=date]):not([type=datetime-local]):not([type=hidden]):not([readonly]):not([data-no-select])';
+let tapEl = null, tapAt = 0;
+const selectAll = el => { try { el.select(); } catch (err) { try { el.setSelectionRange(0, String(el.value).length); } catch (e2) { /* number без выделения - ничего */ } } };
+document.addEventListener('pointerdown', e => {
+  const el = e.target.closest?.(SELECT_ON_TAP);
+  if (el && document.activeElement !== el) { tapEl = el; tapAt = Date.now(); } else tapEl = null;
+}, true);
+document.addEventListener('focusin', e => {
+  const el = e.target;
+  if (el !== tapEl || Date.now() - tapAt > 800) return;
+  selectAll(el);
+  for (const ms of [40, 150]) setTimeout(() => { if (document.activeElement === el && tapEl === el) selectAll(el); }, ms);
+});
+document.addEventListener('mouseup', e => { if (tapEl && e.target === tapEl) { e.preventDefault(); } }, true);
+document.addEventListener('input', () => { tapEl = null; }, true);      // начали печатать - больше не выделяем
 
 // ── автосохранение полей ──
 // Поля с обработчиком изменений (время сна, шаги, подходы, граммы, замеры…) сохраняют не только по

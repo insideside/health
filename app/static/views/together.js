@@ -306,6 +306,10 @@ function viewFeed() {
 
 export const routes = { together: arg => viewTogether(arg), feed: () => viewFeed() };
 
+export const confirms = {
+  'feed-del': el => ({ title: 'Убрать карточку из ленты?', ok: 'Убрать', text: el.dataset.kind === 'hl' ? 'Карточка пропадёт из ленты у всех.' : 'Карточка скроется из ленты у всех, в вашей статистике она останется.' }),
+};
+
 export const actions = {
   'together-enable': async () => {
     await setCompete({ enabled: true });

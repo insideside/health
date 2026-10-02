@@ -155,6 +155,31 @@ export function openModal(html) {
 export function closeModal() { const m = $modal(); m.hidden = true; m.innerHTML = ''; }
 export function isModalOpen() { return !$modal().hidden; }
 
+// ── подтверждение удаления ──
+// Отдельным слоем поверх страницы и поверх уже открытого окна (то, что под ним - формы, введённое, - остаётся
+// как было, «Отмена» просто возвращает к нему). → Promise<boolean>. Esc и тап мимо - отмена; фокус на «Отмена»,
+// чтобы случайный Enter ничего не удалил. Вызывается из app.js для действий из `confirms` экранов (views/*.js).
+export function confirmAction({ title, text = '', ok = 'Удалить', cancel = 'Отмена', danger = true } = {}) {
+  return new Promise(resolve => {
+    const layer = document.createElement('div');
+    layer.className = 'modal-backdrop confirm-layer';
+    layer.innerHTML = `<div class="modal confirm" role="alertdialog" aria-modal="true" aria-labelledby="cf-title">
+      <div class="modal-head"><h2 id="cf-title">${esc(title)}</h2></div>
+      ${text ? `<div class="modal-body"><p class="note" style="margin:0">${esc(text)}</p></div>` : ''}
+      <div class="modal-foot"><button type="button" class="btn quiet" data-cf="no">${esc(cancel)}</button>
+        <button type="button" class="btn ${danger ? 'danger' : 'solid'}" data-cf="yes">${esc(ok)}</button></div></div>`;
+    const onKey = e => { if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); done(false); } };
+    const done = v => { document.removeEventListener('keydown', onKey, true); layer.remove(); resolve(v); };
+    layer.addEventListener('click', e => {
+      const b = e.target.closest('[data-cf]');
+      if (b) done(b.dataset.cf === 'yes'); else if (e.target === layer) done(false);
+    });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(layer);
+    layer.querySelector('[data-cf="no"]').focus();
+  });
+}
+
 // ── раскрывающиеся <details> переживают перерисовку ──
 // render() целиком заменяет innerHTML - без этого любой <details> открытый вручную (не через data-act)
 // схлопывается на следующей же перерисовке (сихронизация, таймер, фоновая задача). Ключ - что угодно

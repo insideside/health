@@ -293,3 +293,9 @@
 @media (max-width: 900px) {
   .a-entry-btns { margin-left: 0; }
 }
+
+/* окно подтверждения удаления (ui.confirmAction): над обычным окном (z-index 60) */
+.confirm-layer { z-index: 80; }
+.confirm-layer .modal { width: min(400px, 100%); }
+.confirm-layer .modal-head { padding-bottom: 6px; }
+.confirm-layer .modal-head h2 { font-size: 20px; }

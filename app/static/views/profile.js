@@ -1039,7 +1039,6 @@ export const actions = {
     }
   },
   'pf-token-new': el => {
-    if (health.token && el.dataset.confirm !== '1') { el.dataset.confirm = '1'; el.textContent = 'Старый перестанет работать. Точно?'; return; }
     return loadToken(!!health.token);
   },
   'pf-export': async () => {
@@ -1081,7 +1080,6 @@ export const actions = {
     await afterChange(C.today());
   },
   'item-del': async el => {
-    if (el.dataset.confirm !== '1') { el.dataset.confirm = '1'; el.textContent = 'Точно?'; return; }
     await store.remove(el.dataset.id);
     await afterChange(C.today());
   },
@@ -1114,6 +1112,17 @@ export const actions = {
     location.hash = '';
     location.reload();
   },
+};
+
+export const confirms = {
+  'pf-token-new': () => (health.token ? { title: 'Выпустить новый токен?', ok: 'Выпустить', danger: false, text: 'Старый токен перестанет работать: его нужно заменить в команде «Здоровье» на iPhone.' } : null),
+  'item-del': el => { const it = store.get(el.dataset.id); return { title: 'Удалить пункт чек-листа?', text: `${it ? `«${it.data.title}» пропадёт` : 'Пункт пропадёт'} из ежедневного чек-листа.` }; },
+  'grp-del': el => { const g = adminGroups.groups?.find(x => String(x.id) === String(el.dataset.id)); return { title: 'Удалить группу?', text: `${g ? `Группа «${g.name}» удалится. ` : ''}Участники останутся, но общая видимость по этой группе пропадёт.` }; },
+  'pf-act-del': el => { const a = form().activities?.[Number(el.dataset.i)]; return { title: 'Убрать занятие из профиля?', ok: 'Убрать', text: a ? `«${actName(a)}» больше не попадёт в план недели.` : '' }; },
+  'pf-rem-del': () => ({ title: 'Удалить напоминание?', text: 'Оно перестанет появляться у тренера.' }),
+  'pf-gm-del': el => { const m = GL.metric(el.dataset.m); return { title: 'Убрать цель?', ok: 'Убрать', text: m ? `Цель «${m.label}» пропадёт из списка целей.` : '' }; },
+  'pf-city-clear': () => ({ title: 'Убрать город?', ok: 'Убрать', text: 'Без города погода не учитывается в плане кардио.' }),
+  logout: () => ({ title: 'Выйти из аккаунта?', ok: 'Выйти', text: 'Данные на этом устройстве сотрутся, правки, ещё не дошедшие до сервера, пропадут. На сервере всё сохранено: при следующем входе данные загрузятся.' }),
 };
 
 export const changes = {

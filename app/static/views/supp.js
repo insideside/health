@@ -210,6 +210,11 @@ function confirmStop(el) {
   return false;
 }
 
+export const confirms = {
+  'sp-rm': () => ({ title: 'Удалить приём?', text: 'Отметка приёма добавки пропадёт из дня.' }),
+  'sp-remove': el => { const s = (store.get(`profile:${store.uid()}`)?.data.supplements || []).find(x => SP.keyOf(x) === el.dataset.key); return { title: 'Убрать добавку из плана?', ok: 'Убрать', text: `${s ? `«${SP.nameOf?.(s) || s.name || 'Добавка'}» уберётся` : 'Добавка уберётся'} из плана. Прошлые отметки остаются в истории.` }; },
+};
+
 export const changes = {
   'sp-time': async el => { if (el.value) { await SP.setTime(el.dataset.id, el.value); await rerender(el.dataset.date); } },
   'sp-dose': async el => {
