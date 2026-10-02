@@ -198,7 +198,7 @@ function syncBadge() {
   // модель на сервере спит: запросы к ИИ ждут в очереди (у кого ИИ выключена в профиле - метка не нужна)
   const sleep = store.state.online && store.state.ai === false && userProfile().ai !== 'off'
     ? `<button class="sync ai-sleep" data-act="ai-sleep" title="ИИ на сервере не запущена">ИИ спит</button>` : '';
-  const upd = updateReady ? '<button class="sync update" data-act="app-update" title="Есть новая версия приложения - обновить сейчас">обновление</button>' : '';
+  const upd = updateReady ? '<button class="sync update" data-act="app-update-local" title="Есть новая версия приложения - обновить сейчас">обновление</button>' : '';
   return `${sleep}${upd}<button class="sync ${cls}" data-act="sync-panel" title="Синхронизация и обновление">${text}</button>`;
 }
 
@@ -327,7 +327,7 @@ function syncPanel() {
         : '<p class="note">Конфликтов нет: изменения с разных устройств дополняют друг друга.</p>'}
       <div class="actions"><button class="btn quiet" data-act="cn-open">Адреса сервера${store.usingMirror() ? ' · сейчас запасной' : ''} <span class="arrow">→</span></button>
         <button class="btn quiet" data-act="app-update" ${store.state.online ? '' : 'disabled'}>Обновить приложение</button></div>
-      <p class="note">${store.state.online ? '«Обновить приложение» загрузит свежую версию, если что-то выглядит странно; ваши данные не пропадут.' : 'Обновить приложение можно, когда сервер на связи: без него после перезагрузки оно бы не открылось.'}</p>
+      <p class="note">${store.state.online ? '«Обновить приложение» проверит новую версию на GitHub (если сервер установлен оттуда) и загрузит свежую версию экрана; ваши данные не пропадут.' : 'Обновить приложение можно, когда сервер на связи: без него после перезагрузки оно бы не открылось.'}</p>
     <p class="note"><a class="link" href="#about" data-act="close-go">Что работает без сети, а что - только с сервером</a></p>
     </div>
     <div class="modal-foot"><button class="btn quiet" data-act="close">Закрыть</button>
@@ -429,7 +429,9 @@ Object.assign(actions, {
     if (isModalOpen() && document.querySelector('.modal h2')?.textContent === 'Синхронизация') syncPanel();
   },
   // без связи не сбрасываем кэш оболочки: после перезагрузки приложение не открылось бы вовсе
-  'app-update': () => store.state.online ? applyUpdate() : toast('Без связи с сервером обновить нельзя - приложение работает из кэша'),
+  'app-update': () => store.state.online ? updateApp() : toast('Без связи с сервером обновить нельзя - приложение работает из кэша'),
+  'app-update-local': () => { closeModal(); applyUpdate(); },
+  'app-update-git': () => updateFromGit(),
   'conflict-pick': el => {
     const c = store.conflicts().find(x => x.id === el.dataset.id);
     if (!c) return;
@@ -695,6 +697,64 @@ let updateReady = false;
 function safeToReload() {
   return !isEditing() && !pendingSaves.size && !store.pendingCount() && !store.getMeta('draft_profile') && !isModalOpen();
 }
+// «Обновить приложение»: если сервер установлен из git - сначала новые версии с GitHub (git pull на сервере и его
+// перезапуск, как «Проверить обновления» в «Как это работает»), потом экран; иначе - только экран с этого сервера.
+let gitBusy = false;
+async function updateApp() {
+  if (gitBusy) return;
+  gitBusy = true;
+  toast('Проверяю обновления…', 2500);
+  let st = null;
+  try { st = await store.api('/api/update/check?force=1'); } catch (e) { st = null; }   // старый сервер, нет связи
+  gitBusy = false;
+  if (!st?.available) return applyUpdate();                       // не из git - как раньше
+  if (st.offline) { toast('GitHub недоступен - обновляю только экран с этого компьютера', 4000); return applyUpdate(); }
+  if (!st.behind) { toast('С GitHub уже последняя версия', 2500); return applyUpdate(); }
+  const n = st.behind, word = n === 1 ? 'изменение' : n < 5 ? 'изменения' : 'изменений';
+  const when = d => (d ? new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' }).format(new Date(d)) : '');
+  openModal(`<div class="modal-head"><div class="kicker smallcaps">Обновление приложения</div><h2>Доступно ${n} ${word}</h2></div>
+    <div class="modal-body">
+      <ul class="small up-list">${st.commits.slice(0, 8).map(c => `<li>${esc(c.subject)} <span class="note">${esc(when(c.date))}</span></li>`).join('')}</ul>
+      ${st.dirty?.length ? `<div class="notice">В папке приложения на компьютере изменены файлы (${esc(st.dirty.slice(0, 4).join(', '))}) - обновление их перезаписало бы. Сохраните их отдельно, тогда обновление станет доступно.</div>`
+        : `<p class="note">Сервер скачает новую версию${st.dependencies_changed ? ' и библиотеки' : ''} и перезапустится - примерно минута. Данные не затрагиваются. Потом приложение перезагрузится само; телефоны и планшеты обновятся, когда будет удобно. Обновляет владелец или человек у самого компьютера.</p>`}
+    </div>
+    <div class="modal-foot"><button class="btn quiet" data-act="close">${st.dirty?.length ? 'Закрыть' : 'Отмена'}</button>
+      ${st.dirty?.length ? '' : '<button class="btn solid" data-act="app-update-git">Обновить</button>'}</div>`);
+}
+async function updateFromGit() {
+  if (gitBusy) return;
+  gitBusy = true;
+  openModal(`<div class="modal-head"><div class="kicker smallcaps">Обновление приложения</div><h2>Обновляю…</h2></div>
+    <div class="modal-body"><p class="small"><span class="spinner"></span> <span id="upd-step">Скачиваю новую версию на компьютер…</span></p>
+      <p class="note">Не закрывайте приложение - после перезапуска сервера оно перезагрузится само.</p></div>`);
+  const step = t => { const el = document.getElementById('upd-step'); if (el) el.textContent = t; };
+  try {
+    flushSaves();
+    try { await store.sync(); } catch (e) { /* правки останутся в очереди */ }
+    const r = await store.api('/api/update/apply', {});
+    if (!r.restarting) { gitBusy = false; closeModal(); toast(r.message || 'Уже последняя версия'); return applyUpdate(); }
+    step('Сервер перезапускается…');
+    // ждём, пока поднимется новая версия: сначала сервер должен пропасть (перезапуск через ~1,5 с), потом ответить
+    // с новым коммитом; если «пропал» мы не заметили - не раньше чем через 20 с
+    const want = r.to?.hash, t0 = Date.now();
+    let down = false;
+    while (Date.now() - t0 < 4 * 60e3) {
+      await new Promise(res => setTimeout(res, 2500));
+      try {
+        const v = await store.api('/api/version');
+        if ((down || Date.now() - t0 > 20e3) && (!want || v.commit?.hash === want)) { step('Готово - перезагружаю'); return applyUpdate(); }
+      } catch (e) { down = true; }
+    }
+    gitBusy = false;
+    closeModal();
+    toast('Сервер долго не отвечает после обновления. Проверьте компьютер с Тренером и откройте приложение заново.', 8000);
+  } catch (e) {
+    gitBusy = false;
+    closeModal();
+    toast(e.status === 403 ? 'Обновить с GitHub может владелец (первый аккаунт) или человек у самого компьютера' : e.message || 'Не получилось обновить', 7000);
+  }
+}
+
 async function applyUpdate() {
   flushSaves();
   try { if (store.state.online) await store.sync(); } catch (e) { /* правки останутся в очереди на устройстве */ }
