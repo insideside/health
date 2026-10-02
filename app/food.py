@@ -80,7 +80,9 @@ def _macro_from(nums: list[float]) -> dict:
 
 
 # запятая-разделитель списка (не десятичная: «12,5»)
-WEAK_COMMA_RE = re.compile(r"(?<!\d),|,(?!\d)")
+# запятая внутри скобок - тоже нет: «шарлотка (яблоки, яйца, мука) 180 г» - состав одного блюда
+IN_PAREN = r"(?![^()]*\))"
+WEAK_COMMA_RE = re.compile(rf"(?<!\d),{IN_PAREN}|,(?!\d){IN_PAREN}")
 # кусок - только количество: «200г», «- 30 гр.», «1 шт» (хвост к блюду с КБЖУ, а не отдельное блюдо)
 BARE_QTY_RE = re.compile(r"^[\s\-–(]*\d+(?:[.,]\d+)?\s*(?:г|гр|грамм\w*|кг|мл|л|шт|штук\w*)?\.?[\s)]*$", re.I)
 PH_RE = re.compile(r"\x00(\d+)\x00")
@@ -183,7 +185,7 @@ def split_strong(text: str) -> list[str]:
     слабая граница (см. split): у составного блюда через запятую часто перечислены его части
     («рис с креветками, яйцом и луком»), а не отдельные блюда."""
     text = QTY_DOT_RE.sub(r"\1, ", text or "")   # запятая внутри числа («молоко 1,5%») уже защищена этим шагом
-    return [p.strip() for p in re.split(r"[;\n+]", text) if p and p.strip()]
+    return [p.strip() for p in re.split(r"[;\n]|\+(?![^()]*\))", text) if p and p.strip()]
 
 
 def split(text: str) -> list[str]:
@@ -192,7 +194,7 @@ def split(text: str) -> list[str]:
 
 def split_weak(text: str) -> list[str]:
     """Один кусок «между точками с запятой» → отдельные продукты: по запятой и «и» перед числом."""
-    parts = [p.strip() for p in re.split(r"(?<!\d),|,(?!\d)|\s+и\s+(?=\d)", text) if p and p.strip()]
+    parts = [p.strip() for p in re.split(rf"(?<!\d),{IN_PAREN}|,(?!\d){IN_PAREN}|\s+и\s+(?=\d){IN_PAREN}", text) if p and p.strip()]
     out: list[str] = []
     for p in parts:
         # кусок без количества, который начинается с предлога или причастия, - уточнение предыдущего продукта
@@ -292,6 +294,18 @@ def pieces_of(uid: str | None) -> dict:
         return {}
 
 
+def composite(chunk: str) -> bool:
+    """В скобках перечислен состав («шарлотка (яблоки, яйца, мука, сахар) 180 г»): блюдо из нескольких продуктов,
+    вес после скобок - на всё блюдо. Такое понимает только ИИ: по справочнику нашлось бы одно слово вне скобок.
+    Скобки с состоянием («(в сухом виде)») - не состав."""
+    for inner in PAREN_RE.findall(chunk or ""):
+        if any(re.search(pat, inner, re.I) for pat, _ in STATE_HINT):
+            continue
+        if len([w for w in re.split(r",|\s+и\s+|\s*\+\s*", inner) if re.search(r"[^\W\d_]{2,}", w)]) >= 2:
+            return True
+    return False
+
+
 def prepare(chunk: str) -> tuple[str, bool]:
     """→ (кусок для разбора, «немного»). Состояние из скобок важнее слов снаружи: «рис отварной 40 г (в сухом виде)» - сухой."""
     hint = None
@@ -366,6 +380,27 @@ def base_name(name: str) -> str:
     return stem(STATE_WORDS.sub(" ", norm(name)))
 
 
+_brands_cache: list = [None, frozenset()]
+
+
+def brand_words(foods: list[dict]) -> frozenset:
+    """Основы слов-брендов из товаров: слово стоит в бренде хотя бы в 40 % случаев, где встречается
+    («простоквашин» 54 из 54, «может» 20 из 21), и его нет в названиях базовых продуктов («домашн» - 9 из 65).
+    Как brandWords в foodparse.js."""
+    common = {w for x in foods if x.get("source") == "seed" for w in bag(x["name"])}
+    in_name: dict[str, int] = {}
+    in_brand: dict[str, int] = {}
+    for x in foods:
+        if x.get("brand"):
+            bw = bag(x["brand"])
+            for w in bw:
+                in_brand[w] = in_brand.get(w, 0) + 1
+            for w in bag(x["name"]) | bw:
+                in_name[w] = in_name.get(w, 0) + 1
+    return frozenset(w for w, n in in_brand.items() if n >= 2 and n >= 0.4 * in_name[w] and len(w) > 3
+                     and w not in common and w not in STOP)
+
+
 class Index:
     def __init__(self, uid: str | None = None):
         self.foods = db.all_foods()
@@ -387,7 +422,17 @@ class Index:
                     if b:
                         self.bags.append((b, f))
             self.bases.setdefault(base_name(f["name"]), []).append(f)
+        key = (len(self.foods), max((f.get("updated") or 0 for f in self.foods), default=0))
+        if _brands_cache[0] != key:             # слова брендов меняются только вместе со справочником
+            _brands_cache[:] = [key, brand_words(self.foods)]
+        self.brand_words = _brands_cache[1]
         self.usage = usage(uid, self) if uid else {}
+
+    def misses_brand(self, name: str, f: dict) -> bool:
+        """В запросе бренд, которого у продукта нет: «йогурт активиа» → «Йогурт натуральный» - другой товар
+        с другими цифрами, такое совпадение не засчитываем (ищем товар или спрашиваем ИИ)."""
+        extra = bag(name) - bag(" ".join([f["name"], *(f.get("aliases") or []), f.get("brand") or ""]))
+        return any(re.search(r"[a-z]{3}", w) or w in self.brand_words for w in extra)
 
     def _raw_match(self, name: str) -> dict | None:
         if name in self.keys:
@@ -446,6 +491,8 @@ class Index:
         if not name:
             return None
         f = self._raw_match(name)
+        if f and self.misses_brand(name, f):
+            return None
         if f and self.usage and not STATE_WORDS.search(name):
             f = self.prefer_used(f)
         return f
@@ -547,6 +594,9 @@ def quick_parse(text: str, idx: Index | None = None, uid: str | None = None) -> 
             done.append(_macro_item(seg, name, _macro_grams(n, unit, food), macro, idx, uid))
             continue
         for chunk in split_weak(seg):
+            if composite(chunk):
+                rest.append(chunk)
+                continue
             clean, small = prepare(chunk)
             name, n, unit = parse_chunk(clean)
             food = with_piece(idx.match(name), chunk, pieces)

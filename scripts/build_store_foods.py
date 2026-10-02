@@ -23,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "app" / "seed" / "foods_store.json"
+EXTRA = Path(__file__).resolve().parent / "store_extra.json"
 CSV_URL = "https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz"
 COUNTRIES = {"en:russia", "en:belarus", "en:kazakhstan"}
 
@@ -152,19 +153,38 @@ def nutr_of(r: dict) -> dict | None:
 NOT_RU = re.compile(r"[іїєґʼ’']|ъ(?![еёюя])", re.I)
 
 
-def wanted(r: dict) -> bool:
-    """Товар продаётся в России / Беларуси / Казахстане или описан по-русски, и название - по-русски."""
-    name = r.get("product_name") or ""
-    if not CYR.search(name) or NOT_RU.search(name):
-        return False
+LAT = re.compile(r"^[A-Za-z0-9 %&'.,+\-/()]+$")
+SPORT_TAGS = {"en:protein-powders", "en:protein-bars", "en:bodybuilding-supplements", "en:sports-nutrition"}
+
+
+def ru_shelf(r: dict) -> bool:
     return r.get("lang") == "ru" or bool(COUNTRIES & set((r.get("countries_tags") or "").split(",")))
+
+
+def sport_world(r: dict) -> bool:
+    """Спортпит из любой страны (протеин, батончики): такие банки везут к нам как есть, с английским названием.
+    Только известные (≥ 3 сканирований), чтобы не тащить случайные товары."""
+    return bool(SPORT_TAGS & set((r.get("categories_tags") or "").split(","))) and (num(r.get("unique_scans_n")) or 0) >= 3
+
+
+def wanted(r: dict) -> bool:
+    """Товар продаётся в России / Беларуси / Казахстане или описан по-русски: название по-русски или латиницей
+    (Snickers, Activia, Fitness - на упаковке латиница); плюс популярный спортпит из других стран (латиницей)."""
+    name = r.get("product_name") or ""
+    if NOT_RU.search(name):
+        return False
+    if CYR.search(name):
+        return ru_shelf(r) or sport_world(r)
+    # латиница - только у товаров, описанных по-английски или по-русски: иначе это «Arachidi e cioccolato»
+    return r.get("lang") in ("en", "ru") and bool(LAT.match(name)) and bool(re.search(r"[A-Za-z]{3}", name)) \
+        and (ru_shelf(r) or sport_world(r))
 
 
 def build(rows) -> list[dict]:
     best: dict[str, tuple] = {}
     for r in rows:
         name = clean(r["product_name"])
-        if len(name) < 3 or not CYR.search(name):
+        if len(name) < 3:
             continue
         n = nutr_of(r)
         if not n:
@@ -217,10 +237,13 @@ def read_parquet(path: str):
       SELECT code, product_name, brands, quantity, unique_scans_n, completeness, categories_tags, countries_tags, lang,
              list_filter(nutriments, x -> x.name IN ('energy-kcal', 'energy', 'proteins', 'fat', 'carbohydrates')) AS nutr
       FROM '{path}'
-      WHERE (list_has_any(countries_tags, ['en:russia', 'en:belarus', 'en:kazakhstan']) OR lang = 'ru')""")
+      WHERE (list_has_any(countries_tags, ['en:russia', 'en:belarus', 'en:kazakhstan']) OR lang = 'ru'
+             OR (list_has_any(categories_tags, ['en:protein-powders', 'en:protein-bars', 'en:bodybuilding-supplements',
+                                                'en:sports-nutrition']) AND unique_scans_n >= 3))""")
     for code, names, brands, qty, scans, compl, cats, countries, lang, nutr in rel.fetchall():
         name = next((x["text"] for lg in ("ru", "main") for x in names or [] if x.get("lang") == lg and CYR.search(x.get("text") or "")), "") \
-            or next((x["text"] for x in names or [] if CYR.search(x.get("text") or "")), "")
+            or next((x["text"] for x in names or [] if CYR.search(x.get("text") or "")), "") \
+            or next((x["text"] for lg in ("en", "main") for x in names or [] if x.get("lang") == lg and LAT.match(x.get("text") or "")), "")
         r = {"code": code, "product_name": name, "brands": brands, "quantity": qty, "unique_scans_n": scans, "completeness": compl,
              "categories_tags": ",".join(cats or []), "countries_tags": ",".join(countries or []), "lang": lang,
              "energy-kcal_100g": None, "energy_100g": None, "proteins_100g": None, "fat_100g": None, "carbohydrates_100g": None}
@@ -238,6 +261,9 @@ def main():
     a = ap.parse_args()
     rows = list(read_parquet(a.parquet) if a.parquet else read_rows(a.csv))
     items = build(rows)[: a.limit]
+    # товары, которых нет в Open Food Facts, - вручную по данным производителя (scripts/store_extra.json, с note)
+    have = {x["name"].lower() for x in items}
+    items += [x for x in json.loads(EXTRA.read_text(encoding="utf-8")) if x["name"].lower() not in have]
     OUT.write_text(json.dumps(items, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{len(rows)} товаров в выборке → {len(items)} в {OUT.relative_to(ROOT)} ({OUT.stat().st_size // 1024} КБ)")
     # вес 1 шт (штучная упаковка или как у такого же продукта базового справочника) - scripts/store_pieces.py

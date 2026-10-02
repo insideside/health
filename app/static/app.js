@@ -131,6 +131,7 @@ document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preven
 // синхронная перекладка → обратно (без отрисовки между ними; прокрутку возвращаем). Кнопка «Готово» прячет
 // клавиатуру, не снимая фокус с поля, - такое замечаем по росту visualViewport и снимаем фокус сами.
 const isTyping = () => !!document.activeElement?.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select, [contenteditable="true"]');
+const hasPicker = () => !!document.activeElement?.matches?.('select, input[type=time], input[type=date], input[type=datetime-local], input[type=month], input[type=week], input[type=color], input[type=file]');
 const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const fullH = new Map();          // ширина окна → наибольшая высота (поворот экрана меняет ширину)
 const noteHeight = () => { const w = Math.round(window.innerWidth); fullH.set(w, Math.max(fullH.get(w) || 0, window.innerHeight)); };
@@ -159,7 +160,9 @@ function syncKeyboard() {
   const full = fullH.get(Math.round(window.innerWidth)) || window.innerHeight;
   const open = isTyping() && vv.height < full * 0.8;
   // «Готово» над клавиатурой: клавиатура закрылась (видимая часть выросла), а поле всё ещё в фокусе
-  if (isTyping() && !open && vv.height - vvLast > 120) document.activeElement.blur();
+  // Только у поля с клавиатурой: переход из текста в поле времени/даты или список тоже закрывает клавиатуру,
+  // а их колесо выбора от blur() сразу схлопывается
+  if (isTyping() && !hasPicker() && !open && vv.height - vvLast > 120) document.activeElement.blur();
   vvLast = vv.height;
   const root = document.documentElement, was = root.classList.contains('kb-open');
   if (open === was) { if (!open && !isTyping()) noteHeight(); return; }

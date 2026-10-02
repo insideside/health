@@ -115,7 +115,7 @@ export function privacyBody() {
     <p class="note">Недельные цифры без имени - сон, шаги, тренировки, белок, изменения веса и замеров - попадут в общие выводы
       «что на что влияет» у людей вашего типа. Другие не увидят ваших записей: только средние по группе от 3 человек.
       Сравнение с другими доступно тем, кто делится.</p>
-    <label class="chk pf-chk"><input type="checkbox" data-act="br-web" ${st?.web_lookup ? 'checked' : ''} ${!st || st.web_forced_off ? 'disabled' : ''}>Искать продукты в интернете (Open Food Facts)</label>
+    <label class="chk pf-chk"><input type="checkbox" data-act="br-web" ${st?.web_lookup ? 'checked' : ''} ${!st || st.web_forced_off ? 'disabled' : ''}>Искать продукты в интернете (Open Food Facts и сайты-счётчики калорий, уходит только название)</label>
     <p class="note">${st?.web_forced_off ? 'Выключено на сервере (TRAINER_NO_WEB=1).' : !st ? (store.state.online ? 'Загружаю настройки сервера…' : 'Настройка доступна, когда есть связь с сервером.') : ''}
       При поиске уходит только название продукта, без данных о вас. Настройка общая для всех на этом сервере.</p>
     <label class="chk pf-chk"><input type="checkbox" data-act="br-weather" ${st?.weather ? 'checked' : ''} ${!st || st.web_forced_off || st.weather === undefined ? 'disabled' : ''}>Погода для «Сегодня» (Open-Meteo)</label>

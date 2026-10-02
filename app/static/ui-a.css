@@ -522,3 +522,11 @@ details.mp-pantry > summary { cursor: pointer; font: 700 12px var(--sans); lette
 .fx-mx > .field + .field, .fx-mx > .field + .note { margin-top: 16px; }
 .fx-mx > .field > .chips { margin-top: 6px; }
 .fx-mx > .field > .note { margin: 10px 0 0; }
+
+/* варианты значений из интернета (Найти с ИИ, окно «Уточните продукт») */
+.fp-vars { margin-top: 12px; display: grid; gap: 8px; }
+.fp-var { padding: 10px 12px; min-width: 0; display: grid; gap: 4px; margin-top: 8px; }
+.fp-vars .fp-var { margin-top: 0; }
+.fp-var-t { font-weight: 600; overflow-wrap: anywhere; }
+.fp-var .mono { overflow-wrap: anywhere; }
+.fp-var .a-row-btns { margin-top: 4px; }

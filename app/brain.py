@@ -305,7 +305,7 @@ def web_forced_off() -> bool:
 
 
 def web_allowed() -> bool:
-    """Единственный выход сервера в интернет — поиск продукта в Open Food Facts. Выключается здесь."""
+    """Поиск продукта в интернете (Open Food Facts и сайты-счётчики, app/websources.py). Выключается здесь."""
     if web_forced_off():
         return False
     rows = db.q("SELECT value FROM meta WHERE key = 'web_lookup'")

@@ -19,7 +19,7 @@ import traceback
 import uuid
 from datetime import date, timedelta
 
-from .. import brain, db, food, norms, nutrition, userdata
+from .. import brain, db, food, norms, nutrition, userdata, websources
 from . import ollama
 from .ollama import AIError, ask_json
 
@@ -138,8 +138,9 @@ FOOD_SCHEMA = {
         "properties": {
             "text": {"type": "string"}, "name": {"type": "string"}, "grams": {"type": "number"},
             "kcal": {"type": "number"}, "p": {"type": "number"}, "f": {"type": "number"}, "c": {"type": "number"},
+            "dish": {"type": "string"}, "dish_grams": {"type": "number"},
         },
-        "required": ["text", "name", "grams", "kcal", "p", "f", "c"],
+        "required": ["text", "name", "grams", "kcal", "p", "f", "c", "dish", "dish_grams"],
     }}},
     "required": ["items"],
 }
@@ -148,7 +149,9 @@ FOOD_SYSTEM = """Ты диетолог. Пользователь пишет, ч�
 Для каждого продукта или блюда верни:
 - text - исходный фрагмент;
 - name - каноническое название по-русски, как в таблицах калорийности, с состоянием (варёный, жареный, сырой).
-  Если среди подсказок есть подходящее название - используй его дословно;
+  Если среди подсказок есть подходящее название - используй его дословно. Но если в тексте назван бренд или
+  конкретный товар («сосиски Папа может сочный гриль», «йогурт Активиа», «батончик Bombbar») - name с брендом и
+  видом товара, как на упаковке, а не общая подсказка («Сосиски»): у товаров свои цифры;
 - grams - сколько съедено в граммах. Если вес не указан - оцени по типичной порции
   (яйцо 55 г, ломтик хлеба 30 г, тарелка супа 300 г, чашка кофе 200 мл ≈ 200 г);
 - kcal, p, f, c - калории, белки, жиры, углеводы НА 100 г продукта (не на порцию).
@@ -156,7 +159,19 @@ FOOD_SYSTEM = """Ты диетолог. Пользователь пишет, ч�
 Продукты, поданные вместе («курица с картошкой», «ножки с оливками», «омлет с сыром и помидорами», «гречка, котлета») -
 отдельные позиции: у каждой свои граммы (для добавки без веса - типичная небольшая порция).
 Ничего не пропускай: каждый продукт, упомянутый в тексте, должен попасть в ответ. «Без сахара», «без масла» - не продукт.
-Не выдумывай продукты, которых нет в тексте."""
+Не выдумывай продукты, которых нет в тексте.
+
+Блюдо с составом. Если после названия блюда в скобках (или словами «из …», «состав: …») перечислены ингредиенты,
+это ОДНО блюдо, а не отдельно съеденные продукты: «шарлотка (яблоки, яйца, мука, сахар) 180 гр» - съели 180 г шарлотки,
+в которой есть яблоки, яйца, мука и сахар. Вес после скобок - вес всего блюда, а не последнего ингредиента.
+Сначала подумай, что это за блюдо и по какому обычному рецепту его готовят (сколько в нём каждого ингредиента
+по отношению к другим), затем верни КАЖДЫЙ ингредиент отдельной позицией:
+- dish - название блюда («шарлотка»), dish_grams - вес всего блюда из текста (если не указан - типичная порция);
+- grams - доля ингредиента в этом весе по рецепту; сумма grams ингредиентов блюда = dish_grams;
+- kcal, p, f, c - на 100 г ингредиента в том виде, в каком он идёт в блюдо (мука и сахар - сухие, яйца - сырые).
+Само блюдо («шарлотка») отдельной позицией НЕ возвращай - только его ингредиенты, иначе оно посчитается дважды.
+Ингредиенты, которых в обычном рецепте не бывает, не добавляй; перечисленные в скобках - не пропускай.
+У продуктов, которые не входят в блюдо с составом, dish - пустая строка, dish_grams - 0."""
 
 
 async def job_food(uid: str, inp: dict) -> dict:
@@ -177,24 +192,82 @@ async def job_food(uid: str, inp: dict) -> dict:
         user = "Съедено:\n" + "\n".join(f"- {c}" for c in rest)
         if hints:
             user += "\n\nПодсказки - названия из справочника:\n" + ", ".join(hints)
-        out = await ask_json(FOOD_SYSTEM, user, FOOD_SCHEMA, temperature=0.1)
+        out = await ask_json(FOOD_SYSTEM, user, FOOD_SCHEMA, temperature=0.1, think=True)
+        items = [it for it in _dish_scale(out.get("items", [])) if float(it.get("grams") or 0) > 0]
+        # продукта нет в справочнике (не ингредиент блюда с составом) - сначала ищем его в интернете: оценка ИИ
+        # нужна, только если товар нигде не нашёлся
+        unknown = list(dict.fromkeys(it["name"] for it in items if not it.get("dish") and not _known(idx, it)))[:6]
+        found = dict(zip(unknown, await asyncio.gather(*[web_variants(n) for n in unknown]))) if unknown else {}
         ai_items = []
-        for it in out.get("items", []):
+        for it in items:
             grams = max(0.0, float(it.get("grams") or 0))
-            if not grams:
-                continue
-            known = idx.match(it["name"])
+            text = it.get("text") or it["name"]
+            known = _known(idx, it)
             if known:
-                ai_items.append(food.item_from(known, grams, it.get("text") or it["name"], source="db"))
-            else:
-                per100 = {k: max(0.0, float(it.get(k) or 0)) for k in ("kcal", "p", "f", "c")}
-                db.learn_food(it["name"], per100, uid=uid)
-                learned = db.food_by_name(it["name"])      # id нужен, чтобы запомнить фразу для всех устройств
-                ai_items.append(food.item_from({**(learned or {}), "name": it["name"], **per100}, grams,
-                                               it.get("text") or it["name"], source="ai"))
-        brain.learn_food_ai(rest, ai_items, idx)            # «мозг»: в следующий раз - без ИИ
+                ai_items.append(food.item_from(known, grams, text, source="db"))
+                continue
+            per100 = {k: max(0.0, float(it.get(k) or 0)) for k in ("kcal", "p", "f", "c")}
+            _, vs, _ = found.get(it["name"]) or ([], [], None)
+            if len(vs) == 1:
+                # источники согласны (разночтения минимальные) - берём их и сразу пополняем общий справочник
+                v = vs[0]
+                saved = save_found(uid, v["title"] if len(v["titles"]) == 1 else it["name"], v, v["sources"], brand=v.get("brand"))
+                ai_items.append(food.item_from(saved, grams, text, source="web"))
+                continue
+            if len(vs) > 1:
+                # источники расходятся - пока оценка ИИ, а выбирает человек (окно на устройстве, views/food.js)
+                row = food.item_from({"name": it["name"], **per100}, grams, text, source="ai")
+                row["choice"] = {"query": it["name"], "ai": per100,
+                                 "options": [{k: v[k] for k in ("title", "titles", "brand", "kcal", "p", "f", "c", "sources")} for v in vs]}
+                ai_items.append(row)
+                continue
+            db.learn_food(it["name"], per100, uid=uid)
+            learned = db.food_by_name(it["name"])      # id нужен, чтобы запомнить фразу для всех устройств
+            ai_items.append(food.item_from({**(learned or {}), "name": it["name"], **per100}, grams, text, source="ai"))
+        for it, row in zip(items, ai_items):
+            if it.get("dish"):                              # ингредиент блюда с составом - подпись в строке
+                row["dish"] = it["dish"]
+        # «мозг»: в следующий раз - без ИИ (строки с выбором - после выбора человека)
+        brain.learn_food_ai(rest, [r for r in ai_items if not r.get("choice")], idx)
         done += ai_items
     return _save_food(rec, done, calc="ai" if used_ai else "db")
+
+
+def _known(idx: food.Index, it: dict) -> dict | None:
+    """Продукт справочника для строки ИИ - если он про то же самое. Общий продукт («Сосиски») для товара с брендом
+    («сосиски Папа может сочный гриль») - не то же: у товара свои цифры, его ищем в интернете. Бренд в названии от
+    ИИ проверяет сам idx.match (misses_brand), здесь - и по исходному тексту: два лишних слова и больше."""
+    f = idx.match(it["name"])
+    if not f or it.get("dish"):
+        return f
+    have = food.bag(" ".join([f["name"], *(f.get("aliases") or []), f.get("brand") or ""]))
+    said = food.bag(food.parse_chunk(food.prepare(it.get("text") or it["name"])[0])[0]) | food.bag(it["name"])
+    extra = {w for w in said - have if len(w) > 2 and not food.STATE_WORDS.fullmatch(w)}
+    return None if len(extra) >= 2 or any(re.search(r"[a-z]", w) or w in idx.brand_words for w in extra) else f
+
+
+def _dish_scale(items: list[dict]) -> list[dict]:
+    """Ингредиенты блюда с составом: сумма их граммов = вес блюда (модель может ошибиться в арифметике).
+    Пропорции рецепта - её, сумма - из текста."""
+    groups: dict[str, list[dict]] = {}
+    for it in items:
+        d = str(it.get("dish") or "").strip()
+        it["dish"] = d
+        if d:
+            groups.setdefault(d.lower(), []).append(it)
+    drop = set()
+    for key, parts in groups.items():
+        # само блюдо рядом со своими ингредиентами - посчиталось бы дважды
+        whole = [x for x in parts if food.stem(food.norm(x.get("name") or "")) == food.stem(food.norm(key))]
+        if whole and len(whole) < len(parts):
+            drop.update(id(x) for x in whole)
+            parts[:] = [x for x in parts if id(x) not in drop]
+        total = max((float(x.get("dish_grams") or 0) for x in parts), default=0)
+        got = sum(max(0.0, float(x.get("grams") or 0)) for x in parts)
+        if total > 0 and got > 0 and abs(got - total) > 1:
+            for x in parts:
+                x["grams"] = round(max(0.0, float(x.get("grams") or 0)) * total / got)
+    return [it for it in items if id(it) not in drop]
 
 
 def _save_food(rec: dict, items: list[dict], calc: str = "db") -> dict:
@@ -1470,7 +1543,7 @@ def _num(v) -> float | None:
 
 async def off_search(query: str, n: int = 10) -> tuple[list[dict], str | None]:
     """Open Food Facts: до n товаров с БЖУ на 100 г. Без сети - ([], причина).
-    Единственный выход сервера в интернет: уходит только название продукта (см. docs/PRIVACY.md)."""
+    Уходит только название продукта (см. docs/PRIVACY.md)."""
     import httpx
     if not brain.web_allowed():
         return [], "поиск в интернете выключен в настройках приватности"
@@ -1512,6 +1585,49 @@ async def off_search(query: str, n: int = 10) -> tuple[list[dict], str | None]:
                     "url": f"https://world.openfoodfacts.org/product/{pr['code']}" if pr.get("code") else None,
                     **{k: round(v, 1) for k, v in vals.items()}, "fiber": round(_num(nu.get("fiber_100g")) or 0, 1)})
     return out, None
+
+
+def _per100_ok(w: dict) -> bool:
+    """Карточка Open Food Facts годится для сравнения: значения на 100 г, Б+Ж+У не больше 100, калории сходятся."""
+    if w.get("per") not in ("100g", "100 g", "", None) or w["p"] + w["f"] + w["c"] > 102:
+        return False
+    mm = food.energy_mismatch(w["kcal"], w["p"], w["f"], w["c"], w.get("fiber") or 0)
+    return mm is None or mm <= 0.35
+
+
+def _with_brand(x: dict) -> str:
+    """«Сочные» + бренд «Папа может» → «Сочные, Папа может»: в справочнике название должно быть понятно само."""
+    t, b = x["title"], (x.get("brand") or "").strip()
+    return f"{t}, {b}" if b and b.lower() not in t.lower() else t
+
+
+async def web_variants(query: str) -> tuple[list[dict], list[dict], str | None]:
+    """Товар в интернете: Open Food Facts + сайты-счётчики (websources). → (кандидаты про этот товар, лучшие
+    первыми; варианты значений - больше одного, если источники заметно расходятся; ошибка, если не ответил никто)."""
+    if not brain.web_allowed():
+        return [], [], None
+    q = food.STATE_WORDS.sub(" ", food.norm(query)).strip() or query
+    (off, off_err), (site, site_err) = await asyncio.gather(off_search(q, 10), websources.search(q))
+    cands = [{**x, "site": "Open Food Facts", "title": _with_brand(x)} for x in off if _per100_ok(x)] + site
+    rel = websources.pick(query, cands)
+    return rel, websources.variants(rel), (f"{off_err}; {site_err}" if off_err and site_err else None)
+
+
+def save_found(uid: str, name: str, vals: dict, sources: list[dict], state: str | None = None,
+               group: str | None = None, brand: str | None = None) -> dict:
+    """Найденное в интернете - сразу в общий справочник сервера (его видят все). Такое имя уже есть - возвращаем его."""
+    name = re.sub(r"\s+", " ", name).strip(" ,.")[:80]
+    name = name[:1].upper() + name[1:]
+    cur = db.food_by_name(name)
+    if cur and not cur["deleted"]:
+        return cur
+    sites = list(dict.fromkeys(x.get("site") or "Open Food Facts" for x in sources))[:3]
+    saved = db.save_food({"name": name, "state": state or db.guess_state(name, group) or "as_sold", "group": group,
+                          **{k: vals[k] for k in ("kcal", "p", "f", "c")}, "brand": brand or None,
+                          "note": ("по данным: " + ", ".join(sites)) if sites else None, "source": "web"},
+                         uid, cur["id"] if cur else None)
+    brain.on_food_saved(uid, saved)
+    return saved
 
 
 def local_candidates(query: str, idx: food.Index, n: int = 6) -> list[dict]:
@@ -1567,6 +1683,11 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
         web += [m for m in more if (m["title"], m["kcal"]) not in seen]
         for i, w in enumerate(web):
             w["label"] = f"off{i + 1}"
+    # сайты-счётчики (websources): российские бренды, которых нет в Open Food Facts
+    site, site_err = (await websources.search(off_q)) if brain.web_allowed() else ([], None)
+    web += [{**x, "label": f"web{i + 1}", "quantity": "", "per": "100g", "serving": ""} for i, x in enumerate(site)]
+    if web_err and site:
+        web_err = None
     notes = []
     for w in web:
         if w["per"] not in ("100g", "100 g", ""):
@@ -1576,12 +1697,13 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
         mm = food.energy_mismatch(w["kcal"], w["p"], w["f"], w["c"], w.get("fiber") or 0)
         if mm is not None and mm > 0.25:
             notes.append(f"{w['label']}: калории не сходятся с БЖУ")
-    line = lambda x: (f"[{x['label']}] {x['title']}" + (f" ({x['brand']})" if x.get("brand") else "")
+    line = lambda x: (f"[{x['label']}] {x['title']}" + (f" ({x['brand']})" if x.get("brand") else "") + (f" [{x['site']}]" if x.get("site") else "")
                       + (f", состояние {x['state']}" if x.get("state") else "") + (f", {x['quantity']}" if x.get("quantity") else "")
                       + f": {x['kcal']:g} ккал, Б {x['p']:g}, Ж {x['f']:g}, У {x['c']:g}" + (f", клетчатка {x['fiber']:g}" if x.get("fiber") else "") + (f" - {x['note']}" if x.get("note") else ""))
     user = (f"Запрос: «{query}». Нужное состояние: {state + ' - ' + food.STATE_RU[state] if state else 'не указано, выбери подходящее'}.\n\n"
             "Локальный справочник:\n" + ("\n".join(map(line, local)) or "- ничего") +
-            "\n\nOpen Food Facts (на 100 г, по данным карточек):\n" + ("\n".join(map(line, web)) or f"- нет данных{': ' + web_err if web_err else ''}") +
+            "\n\nИнтернет: Open Food Facts и сайты-счётчики калорий (на 100 г, по данным карточек, их вносят люди):\n"
+            + ("\n".join(map(line, web)) or f"- нет данных{': ' + web_err if web_err else ''}") +
             ("\n\nАвтоматические замечания:\n" + "\n".join(notes) if notes else ""))
     model_ok = True
     try:
@@ -1598,7 +1720,7 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
                "warnings": []}
     by_label = {x["label"]: x for x in [*local, *web]}
     # метки источников (db2, off3) человеку ничего не скажут - подставляем названия
-    unlabel = lambda t: re.sub(r"\[?\b(db|off)\d+\b\]?", lambda m: "«" + by_label[m.group(0).strip("[]")]["title"] + "»"
+    unlabel = lambda t: re.sub(r"\[?\b(db|off|web)\d+\b\]?", lambda m: "«" + by_label[m.group(0).strip("[]")]["title"] + "»"
                                 if m.group(0).strip("[]") in by_label else m.group(0), t)
     out["warnings"] = [unlabel(w) for w in out.get("warnings") or [] if isinstance(w, str)]
     out["reasoning_short"] = unlabel(out.get("reasoning_short") or "")
@@ -1623,11 +1745,27 @@ async def job_foodlookup(uid: str, inp: dict) -> dict:
     if checks:
         conf = "low" if conf != "high" or len(checks) > 1 else "mid"
     used = {str(x).strip("[] ") for x in out.get("used_sources") or []}
-    sources = [{k: x.get(k) for k in ("label", "kind", "title", "brand", "url", "kcal", "p", "f", "c", "state", "id")}
+    sources = [{k: x.get(k) for k in ("label", "kind", "site", "title", "brand", "url", "kcal", "p", "f", "c", "state", "id")}
                | {"used": x["label"] in used} for x in by_label.values()]
     name = re.sub(r"\s*\(?\b(dry|raw|cooked|as_sold|fresh)\b\)?", "", out.get("name") or query).strip(" ,") or query
+    # варианты из интернета: заметно разные значения одного товара - выбирает человек; одно (или источники
+    # согласны) - сразу в общий справочник
+    rel = websources.pick(query, [{**x, "site": x.get("site") or "Open Food Facts", "title": _with_brand(x)} for x in web if _per100_ok(x)])
+    vs = websources.variants(rel)
+    saved = None
+    if len(vs) == 1:
+        v = vs[0]
+        nm = v["title"] if len(v["titles"]) == 1 else name
+        # такой товар уже есть в справочнике с теми же цифрами - его и берём, без дубля
+        same = next((db.food_by_id(x["id"]) for x in local if x.get("id") and websources.relevant(query, x["title"])
+                     and websources.close(x, v)), None)
+        saved = same or save_found(uid, nm, v, v["sources"], state=res_state, group=group, brand=v.get("brand"))
+        vals = {k: saved[k] for k in ("kcal", "p", "f", "c")}
+        name = saved["name"]
     brain.note_lookup(uid, query, name[:80])   # если человек сохранит этот продукт - запрос станет синонимом
     return {"query": query, "name": name[:80], "state": res_state or "as_sold", "group": group,
+            "variants": [{k: v[k] for k in ("title", "titles", "brand", "kcal", "p", "f", "c", "sources")} for v in vs] if len(vs) > 1 else [],
+            "saved_id": saved["id"] if saved else None,
             **vals, "confidence": conf, "sources": sources, "web": bool(web), "web_error": web_err, "model": model_ok,
             "source": "web" if any(by_label.get(l, {}).get("kind") == "off" for l in used) else "ai",
             "reasoning_short": (out.get("reasoning_short") or "").strip()[:400], "warnings": warnings[:8],

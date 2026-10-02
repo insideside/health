@@ -43,14 +43,15 @@ const CONT_RE = /^(?:(?:с|со|в|во|на|под|без|из|по)\s|[а-яё
 // у составного блюда через запятую часто перечислены его части («рис с креветками, яйцом и луком»), а не отдельные блюда.
 export function splitStrong(text) {
   // запятая внутри числа («молоко 1,5%») уже защищена этой заменой
-  return String(text || '').replace(QTY_DOT_RE, '$1, ').split(/[;\n+]/).map(p => (p || '').trim()).filter(Boolean);
+  return String(text || '').replace(QTY_DOT_RE, '$1, ').split(/[;\n]|\+(?![^()]*\))/).map(p => (p || '').trim()).filter(Boolean);
 }
 export function split(text) {
   return splitStrong(text).flatMap(splitWeak);
 }
 // один кусок «между ;/переносами строк» → отдельные продукты: по запятой и «и» перед числом
 export function splitWeak(text) {
-  const parts = String(text || '').split(/(?<!\d),|,(?!\d)|\s+и\s+(?=\d)/).map(p => (p || '').trim()).filter(Boolean);
+  // запятая внутри скобок - не граница: «шарлотка (яблоки, яйца, мука) 180 г» - состав одного блюда
+  const parts = String(text || '').split(/(?<!\d),(?![^()]*\))|,(?!\d)(?![^()]*\))|\s+и\s+(?=\d)(?![^()]*\))/).map(p => (p || '').trim()).filter(Boolean);
   const out = [];
   for (const p of parts) {
     // кусок без количества, который начинается с предлога или причастия, - уточнение предыдущего продукта
@@ -111,7 +112,7 @@ function macroFrom(ns) {
 // количества (части составного блюда: «рис с креветками, яйцом и луком фри кбжу …») и куски после него, где только
 // количество («…кбжу 250/30/5/10, 200г»). Куски со своим количеством («слива 72 гр.») - отдельные продукты, с КБЖУ
 // null, дальше - по справочнику. Нет чисел вовсе - null.
-const WEAK_COMMA_RE = /(?<!\d),|,(?!\d)/u;
+const WEAK_COMMA_RE = /(?<!\d),(?![^()]*\))|,(?!\d)(?![^()]*\))/u;   // и не внутри скобок (состав блюда)
 const BARE_QTY_RE = /^[\s\-–(]*\d+(?:[.,]\d+)?\s*(?:г|гр|грамм[\p{L}]*|кг|мл|л|шт|штук[\p{L}]*)?\.?[\s)]*$/iu;
 const PH_RE = /\u0000(\d+)\u0000/gu;
 const hasQty = p => QTY_RE.test(p) || BARE_UNIT_RE.test(p);
@@ -196,6 +197,15 @@ export function withPiece(food, chunk) {
   return g && g !== Number(food.portions?.['шт']) ? { ...food, piece_g: g } : food;
 }
 
+// в скобках перечислен состав блюда («шарлотка (яблоки, яйца, мука, сахар) 180 г») - разбирает ИИ (= food.composite)
+export function composite(chunk) {
+  for (const m of String(chunk || '').matchAll(/\(([^)]*)\)/g)) {
+    if (STATE_HINT.some(([re]) => re.test(m[1]))) continue;
+    if (m[1].split(/,|\s+и\s+|\s*\+\s*/).filter(w => /\p{L}{2,}/u.test(w)).length >= 2) return true;
+  }
+  return false;
+}
+
 export function prepare(chunk) {
   let hint = null;
   for (const m of String(chunk).matchAll(/\(([^)]*)\)/g)) {
@@ -239,6 +249,25 @@ const STOP = new Set(['с', 'со', 'и', 'в', 'во', 'на', 'из', 'по', 
 const bagOf = name => new Set(stem(name).split(' ').filter(w => w && !STOP.has(w) && !/^\d+$/.test(w)));
 const subset = (a, b) => [...a].every(x => b.has(x));
 
+// основы слов-брендов из товаров (как food.brand_words): слово стоит в бренде хотя бы в 40 % случаев, где
+// встречается («простоквашин», «может»), и его нет в названиях базовых продуктов («домашн»)
+function brandWords(list) {
+  const common = new Set(), inName = new Map(), inBrand = new Map(), inc = (m, w) => m.set(w, (m.get(w) || 0) + 1);
+  for (const x of list) if (x.source === 'seed') bagOf(x.name).forEach(w => common.add(w));
+  for (const x of list) {
+    if (!x.brand) continue;
+    const bw = bagOf(x.brand);
+    bw.forEach(w => inc(inBrand, w));
+    new Set([...bagOf(x.name), ...bw]).forEach(w => inc(inName, w));
+  }
+  return new Set([...inBrand].filter(([w, n]) => n >= 2 && n >= 0.4 * inName.get(w) && w.length > 3 && !common.has(w) && !STOP.has(w)).map(([w]) => w));
+}
+// в запросе бренд, которого у продукта нет: «йогурт активиа» - не «Йогурт натуральный» (как Index.misses_brand)
+function missesBrand(n, f) {
+  const have = bagOf([f.name, ...(f.aliases || []), f.brand || ''].join(' '));
+  return [...bagOf(n)].some(w => !have.has(w) && (/[a-z]{3}/.test(w) || index().brands.has(w)));
+}
+
 // ── индекс справочника (перестраивается, когда меняется кэш foods.js) ──
 let idx = null, idxKey = '';
 function index() {
@@ -260,7 +289,7 @@ function index() {
     if (!bases.has(b)) bases.set(b, []);
     bases.get(b).push(f);
   }
-  idx = { keys, stems, bases, byId, bags, size: list.length };
+  idx = { keys, stems, bases, byId, bags, size: list.length, brands: brandWords(list) };
   idxKey = key;
   return idx;
 }
@@ -349,6 +378,7 @@ export function match(name, { raw = false, alias = true, onlyAlias = false } = {
     f = fid != null ? I.byId.get(fid) || null : null;
   }
   if (!f && !onlyAlias) f = bagMatch(n) || close(n, I.keys);
+  if (f && missesBrand(n, f)) return null;
   if (f && !raw && !STATE_WORDS.test(n)) f = preferUsed(f);
   return f;
 }
@@ -470,6 +500,7 @@ export function parse(text) {
       continue;
     }
     for (const chunk of splitWeak(seg)) {
+      if (composite(chunk)) { rest.push(chunk); continue; }
       const got = ready() ? parsePiece(chunk) : null;
       if (got?.rest) { items.push(...got.items); rest.push(got.rest); } else if (got) items.push(...got); else rest.push(chunk);
     }

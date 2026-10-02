@@ -1,6 +1,6 @@
 import * as store from '../store.js';
 import * as C from '../coach.js';
-import { S, esc, num, dec, fmt, dayTitle, profile, goal, toast, field, fval, select, openModal, closeModal, jobFor, addJob, jobNote, dateNav, isBackdated, afterChange, nowHM, glyph, aiOff, AI_OFF_NOTE, aiOffHint } from '../ui.js';
+import { S, esc, num, dec, fmt, dayTitle, profile, goal, toast, field, fval, select, openModal, closeModal, isModalOpen, jobFor, addJob, jobNote, dateNav, isBackdated, afterChange, nowHM, glyph, aiOff, AI_OFF_NOTE, aiOffHint } from '../ui.js';
 import { H } from './today.js';
 import * as foods from '../foods.js';
 import * as FP from '../foodparse.js';
@@ -348,7 +348,7 @@ function sumItems(items) {
 function resultRow(f) {
   const on = P.sel === f.id;
   return `<div class="fp-item ${on ? 'on' : ''}"><button type="button" class="fp-row" data-act="fp-sel" data-id="${esc(f.id)}" aria-expanded="${on}">
-      <span class="fp-nm"><span class="fp-name">${esc(f.name)}</span>${stBadge(f.state)}${f.generic ? '<span class="fp-gen">≈ в среднем</span>' : ''}${f.brand && !f.name.toLowerCase().includes(f.brand.toLowerCase()) ? `<span class="fp-brand">${esc(f.brand)}</span>` : ''}${foods.isMine(f) ? '<span class="fp-mine">моё</span>' : foods.isStore(f) ? '<span class="fp-mine" title="Товар из магазина, данные Open Food Facts">магазин</span>' : f.source !== 'seed' && f.source ? '<span class="fp-mine">общее</span>' : ''}</span>
+      <span class="fp-nm"><span class="fp-name">${esc(f.name)}</span>${stBadge(f.state)}${f.generic ? '<span class="fp-gen">≈ в среднем</span>' : ''}${f.brand && !f.name.toLowerCase().includes(f.brand.toLowerCase()) ? `<span class="fp-brand">${esc(f.brand)}</span>` : ''}${foods.isMine(f) ? '<span class="fp-mine">моё</span>' : foods.isStore(f) ? `<span class="fp-mine" title="Товар из магазина, ${esc(f.note || 'данные Open Food Facts')}">магазин</span>` : f.source !== 'seed' && f.source ? '<span class="fp-mine">общее</span>' : ''}</span>
       <span class="fp-k mono">${num(f.kcal)}<small> ккал</small></span>
       ${f.note ? `<span class="fp-note">${esc(f.note)}</span>` : ''}</button>
     ${on ? selEditor(f) : ''}</div>`;
@@ -420,7 +420,7 @@ function aiView() {
   return `<div class="fp-form">
     ${field('Какой продукт', `<input class="control" id="fp-aiq" data-fpai="query" value="${esc(a.query ?? P.q)}" placeholder="например: гречка, творог 5%, батончик Bombbar" maxlength="120">`)}
     <div class="field"><span class="smallcaps">В каком виде будете взвешивать</span>${stateChips('ai', a.state || '')}</div>
-    <p class="note a-tight">ИИ сверит справочник и Open Food Facts и проверит, что цифры - для этого состояния (гречка сухая ≠ варёная).</p>
+    <p class="note a-tight">ИИ сверит справочник, Open Food Facts и сайты-счётчики калорий и проверит, что цифры - для этого состояния (гречка сухая ≠ варёная). Найденное попадает в общий справочник.</p>
     <div class="a-row-btns"><button type="button" class="btn" data-act="fp-ai-go" ${a.job || aiOff() ? 'disabled' : ''}${aiOff() ? ` title="${AI_OFF_NOTE}"` : ''}>${a.job ? 'Ищу…' : 'Найти БЖУ'}</button></div>
     ${a.job ? `<div class="notice"><span class="spinner"></span> ИИ ищет и проверяет значения${a.ahead ? ` · в очереди ${a.ahead}` : ''}… Это до минуты.</div>` : ''}
     ${a.error ? `<p class="err">${esc(a.error)}</p>` : ''}
@@ -430,9 +430,45 @@ function aiView() {
       ${r.warnings?.length ? `<ul class="fp-warn">${r.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
       ${r.reasoning_short ? `<p class="note a-tight">${esc(r.reasoning_short)}</p>` : ''}
       ${(twin => twin ? `<p class="note a-tight">Почти совпадает со справочником: «${esc(twin.title)}» - <button type="button" class="a-linkbtn" data-act="fp-sel" data-id="${esc(twin.id)}" data-back="1">взять его</button>, чтобы не плодить дубли.</p>` : '')((r.local || []).find(x => x.state === r.state && x.kcal && Math.abs(x.kcal - r.kcal) / x.kcal < 0.05 && foods.get(x.id)))}
-      ${r.sources?.length ? `<details class="fp-src"><summary>Источники (${r.sources.length})${r.web ? '' : ' · Open Food Facts недоступен'}</summary><ul>${r.sources.map(s => `<li class="${s.used ? 'used' : ''}">${s.used ? glyph('check') + ' ' : ''}${s.kind === 'off' ? 'OFF' : 'справочник'}: ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}${s.brand ? ` (${esc(s.brand)})` : ''} <span class="mono muted">${num(s.kcal)} ккал · Б ${dec(s.p)} · Ж ${dec(s.f)} · У ${dec(s.c)}</span>${s.kind === 'db' && s.id != null && foods.get(s.id) ? ` <button type="button" class="a-linkbtn" data-act="fp-sel" data-id="${esc(s.id)}" data-back="1">взять</button>` : ''}</li>`).join('')}</ul></details>` : ''}
-      <div class="a-row-btns"><button type="button" class="btn" data-act="fp-ai-accept">Проверить и сохранить</button></div></div>` : ''}
+      ${r.sources?.length ? `<details class="fp-src"><summary>Источники (${r.sources.length})${r.web ? '' : ' · Open Food Facts недоступен'}</summary><ul>${r.sources.map(s => `<li class="${s.used ? 'used' : ''}">${s.used ? glyph('check') + ' ' : ''}${s.kind === 'off' ? 'OFF' : s.kind === 'site' ? esc(s.site || 'сайт') : 'справочник'}: ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}${s.brand ? ` (${esc(s.brand)})` : ''} <span class="mono muted">${num(s.kcal)} ккал · Б ${dec(s.p)} · Ж ${dec(s.f)} · У ${dec(s.c)}</span>${s.kind === 'db' && s.id != null && foods.get(s.id) ? ` <button type="button" class="a-linkbtn" data-act="fp-sel" data-id="${esc(s.id)}" data-back="1">взять</button>` : ''}</li>`).join('')}</ul></details>` : ''}
+      ${r.variants?.length ? '' : r.saved_id ? `<p class="note a-tight">${glyph('check')} Нашлось в интернете и сохранено в общий справочник - теперь он есть у всех.</p>
+        <div class="a-row-btns"><button type="button" class="btn" data-act="fp-sel" data-id="${esc(r.saved_id)}" data-back="1">Выбрать и указать граммы</button></div>`
+        : `<div class="a-row-btns"><button type="button" class="btn" data-act="fp-ai-accept">Проверить и сохранить</button></div>`}</div>
+      ${r.variants?.length ? `<div class="fp-vars"><p class="note a-tight"><b>В источниках разные цифры для этого товара.</b> Выберите, что совпадает с вашей упаковкой - вариант сохранится в общий справочник.</p>
+        ${(near => r.variants.map((v, i) => variantCard(v, `data-act="fp-var-pick" data-i="${i}"`, r, i === near)).join(''))(nearestTo(r.variants, r))}</div>` : ''}` : ''}
   </div>`;
+}
+
+// вариант значений из интернета: название(я) товара, КБЖУ на 100 г, сайты-источники
+function variantCard(v, attrs, ai, near = false) {
+  const sites = [...new Set((v.sources || []).map(x => x.site))];
+  const link = (v.sources || []).find(x => x.url);
+  return `<div class="raised fp-var">
+    <div class="fp-var-t">${esc(v.titles?.length > 1 ? v.titles.slice(0, 3).join(' · ') : v.title)}${v.brand && !v.title.toLowerCase().includes(v.brand.toLowerCase()) ? ` <span class="fp-brand">${esc(v.brand)}</span>` : ''}</div>
+    <div class="mono">${num(v.kcal)} ккал · Б ${dec(v.p)} · Ж ${dec(v.f)} · У ${dec(v.c)} <span class="muted">на 100 г</span></div>
+    <div class="note a-tight">${esc(sites.join(', '))}${(v.sources || []).length > 1 ? ` · совпадают ${v.sources.length}` : ''}${link ? ` · <a href="${esc(link.url)}" target="_blank" rel="noopener">открыть</a>` : ''}${near ? ' · <b>ближе всего к оценке ИИ</b>' : ''}</div>
+    <div class="a-row-btns"><button type="button" class="btn" ${attrs}>Выбрать</button></div></div>`;
+}
+
+// вариант, ближе всех к оценке ИИ (по калориям) - если он вообще близок (±15 %)
+function nearestTo(vars, ai) {
+  if (!ai?.kcal) return -1;
+  let best = -1, d = Infinity;
+  vars.forEach((v, i) => { const x = Math.abs(v.kcal - ai.kcal); if (x < d) { d = x; best = i; } });
+  return d <= Math.max(15, ai.kcal * 0.15) ? best : -1;
+}
+
+// выбранный вариант → в общий справочник; такое название уже есть - берём его
+async function saveVariant(v, extra = {}) {
+  const sites = [...new Set((v.sources || []).map(x => x.site))].slice(0, 3);
+  const t = String(v.title).trim().slice(0, 80);
+  const fields = { name: t.charAt(0).toUpperCase() + t.slice(1), kcal: v.kcal, p: v.p, f: v.f, c: v.c, brand: v.brand || null,
+    note: sites.length ? 'по данным: ' + sites.join(', ') : null, source: 'web', ...extra };
+  try { return (await foods.save(fields, { force: true })).food; }
+  catch (e) {
+    if (e.status === 409) { await foods.refresh(true); return foods.findByName(fields.name); }
+    throw e;
+  }
 }
 
 function basketHtml() {
@@ -570,7 +606,7 @@ async function pollLookup() {
   try {
     const s = await store.api(`/api/ai/jobs/${a.job}`);
     a.ahead = s.ahead;
-    if (s.status === 'done') { a.job = null; a.result = s.result; }
+    if (s.status === 'done') { a.job = null; a.result = s.result; if (s.result?.saved_id) await foods.refresh(true); }
     else if (s.status === 'error') { a.job = null; a.error = s.error; }
   } catch (e) { if (e.status === 404) { a.job = null; a.error = 'Задача потерялась - попробуйте ещё раз'; } }
   if (isPickerOpen() && P.view === 'ai') paint();
@@ -578,7 +614,77 @@ async function pollLookup() {
   else if (!isPickerOpen() && a.result) toast('БЖУ найдены - откройте «Добавить продукт» → «Найти с ИИ»', 5000);
 }
 
+// ── строки записи, где источники в интернете расходятся (job_food кладёт item.choice): человек выбирает сам,
+// по одному продукту за раз; выбранное уходит в общий справочник ──
+const choiceLater = new Set();          // «Позже» в этом сеансе: `${id записи}:${строка}`
+const choiceSeen = new Set();           // сами показываем каждый выбор один раз за сеанс; дальше - ссылка в строке
+function pendingChoices() {
+  const out = [];
+  for (const r of store.list('food', store.uid(), r => (r.data.items || []).some(i => i?.choice))) {
+    r.data.items.forEach((it, i) => { if (it?.choice && !choiceLater.has(`${r.id}:${i}`)) out.push({ r, i }); });
+  }
+  return out;
+}
+function choiceHtml(all) {
+  const { r, i } = all[0], it = r.data.items[i], ch = it.choice, ai = ch.ai || {};
+  return `<div class="modal-head"><div class="kicker smallcaps">Уточните продукт${all.length > 1 ? ` · ещё ${all.length - 1} после этого` : ''}</div><h2>${esc(ch.query || it.name)}</h2></div>
+    <div class="modal-body fp">
+      <p class="note a-tight">${esc(MEAL_NAME[r.data.meal] || 'Запись')} · ${esc(fmt(r.date, { day: 'numeric', month: 'long' }))}: «${esc((r.data.text || '').slice(0, 90))}» · ${num(it.grams)} г.</p>
+      <p class="note a-tight">В источниках для этого товара заметно разные цифры. Выберите вариант, который совпадает с упаковкой - он сохранится в общий справочник.</p>
+      ${(near => ch.options.map((v, o) => variantCard(v, `data-act="fc-pick" data-id="${esc(r.id)}" data-i="${i}" data-o="${o}"`, ai, o === near)).join(''))(nearestTo(ch.options, ai))}
+      <div class="raised fp-var"><div class="fp-var-t">Оценка ИИ</div>
+        <div class="mono">${num(ai.kcal)} ккал · Б ${dec(ai.p)} · Ж ${dec(ai.f)} · У ${dec(ai.c)} <span class="muted">на 100 г</span></div>
+        <div class="a-row-btns"><button type="button" class="btn quiet" data-act="fc-ai" data-id="${esc(r.id)}" data-i="${i}">Оставить оценку ИИ</button></div></div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn quiet" data-act="fc-later" data-id="${esc(r.id)}" data-i="${i}">Позже</button></div>`;
+}
+function openChoice() {
+  const all = pendingChoices();
+  if (!all.length) { if (document.querySelector('#modal .fc-open')) closeModal(); return; }
+  choiceSeen.add(`${all[0].r.id}:${all[0].i}`);
+  openModal(choiceHtml(all));
+  document.querySelector('#modal .modal')?.classList.add('fc-open');
+}
+// фон экрана: есть что выбрать, окно свободно, человек ничего не вводит - показываем
+function askChoices() {
+  if (isModalOpen() || S.pressing || document.activeElement?.matches?.('input, textarea, select')) return;
+  if (pendingChoices().some(({ r, i }) => !choiceSeen.has(`${r.id}:${i}`))) openChoice();
+}
+async function applyChoice(el, f, per100, source) {
+  const r = store.get(el.dataset.id), i = Number(el.dataset.i);
+  const items = (r?.data.items || []).map(x => ({ ...x }));
+  const it = items[i];
+  if (!it?.choice) return openChoice();
+  const k = (it.grams || 0) / 100;
+  Object.assign(it, { kcal: Math.round(per100.kcal * k), p: Math.round(per100.p * k * 10) / 10, f: Math.round(per100.f * k * 10) / 10,
+    c: Math.round(per100.c * k * 10) / 10, source });
+  if (f) Object.assign(it, { name: f.name, food_id: f.id });
+  delete it.choice; delete it.base100;
+  await store.patch(r.id, { items, totals: sumItems(items) });
+  await afterChange(r.date);
+  openChoice();
+}
+
 const pickerActions = {
+  'fc-pick': async el => {
+    const v = store.get(el.dataset.id)?.data.items?.[Number(el.dataset.i)]?.choice?.options?.[Number(el.dataset.o)];
+    if (!v) return openChoice();
+    let f;
+    try { f = await saveVariant(v); } catch (e) { return toast(e.message, 6000); }
+    await applyChoice(el, f, v, 'web');
+    toast('Сохранено в общий справочник');
+  },
+  'fc-ai': async el => {
+    const it = store.get(el.dataset.id)?.data.items?.[Number(el.dataset.i)];
+    if (!it?.choice) return openChoice();
+    const ai = it.choice.ai;
+    let f = null;
+    try { f = (await foods.save({ name: it.name, ...ai, source: 'ai' }, { force: true })).food; }
+    catch (e) { if (e.status === 409) f = foods.findByName(it.name); }
+    await applyChoice(el, f, ai, 'ai');
+  },
+  'fc-open': () => { choiceLater.clear(); openChoice(); },
+  'fc-later': el => { choiceLater.add(`${el.dataset.id}:${el.dataset.i}`); openChoice(); },
   'fp-open': el => openPicker(el.dataset.date),
   'fp-recent': el => {
     const f = foods.get(idOf(el.dataset.id));
@@ -687,6 +793,16 @@ const pickerActions = {
       paint();
       setTimeout(pollLookup, 2500);
     } catch (e) { a.error = aiErr(e); paint(); }
+  },
+  'fp-var-pick': async el => {
+    const r = P.ai.result, v = r?.variants?.[Number(el.dataset.i)];
+    if (!v) return;
+    let f;
+    try { f = await saveVariant(v, { state: r.state || null, group: r.group || null }); } catch (e) { return toast(e.message, 6000); }
+    if (!f) return toast('Не получилось сохранить - попробуйте ещё раз');
+    P.ai = {}; P.view = 'search'; P.q = f.name; P.sel = f.id; P.grams = '100';
+    toast('Сохранено в общий справочник');
+    paint('fp-g');
   },
   'fp-ai-accept': () => {
     const r = P.ai.result;
@@ -922,7 +1038,7 @@ function foodEntry(e, win) {
     // одна строка из пяти равных полей: граммы и КБЖУ съеденного (подписи сверху - помещается и на телефоне)
     const macRow = `<div class="mac mac-edit"><label class="mac-f mac-g"><span class="mac-l">г</span><input class="control mono g-in" type="number" inputmode="numeric" min="0" value="${it.grams}" data-act="food-grams" data-id="${e.id}" data-i="${i}" aria-label="граммы: ${esc(it.name)}"></label>${macF('ккал', 'kcal', it.kcal, it.name, i, 'food-macro')}${macF('Б', 'p', it.p, it.name, i, 'food-macro')}${macF('Ж', 'f', it.f, it.name, i, 'food-macro')}${macF('У', 'c', it.c, it.name, i, 'food-macro')}</div>
         ${it.grams ? `<div class="mac-calc note">на 100 г: ${num(Math.round(p100.kcal))} ккал · Б ${dec(p100.p)} · Ж ${dec(p100.f)} · У ${dec(p100.c)}</div>` : ''}`;
-    return `<div class="fi"><div class="ell nm">${esc(it.name)}${stBadge(is.st)}${it.source === 'ai' ? '<span class="src-ai" title="Оценка ИИ: продукта нет в справочнике">≈ИИ</span>' : it.source === 'brain' ? '<span class="src-brain" title="Так эту фразу раньше разобрала ИИ - теперь считается без неё">память</span>' : it.source === 'manual' ? '<span class="src-brain" title="БЖУ заданы вручную">своё</span>' : ''}</div>
+    return `<div class="fi"><div class="ell nm">${esc(it.name)}${it.dish ? `<span class="src-brain" title="Ингредиент блюда: вес - его доля в порции">${esc(it.dish)}</span>` : ''}${stBadge(is.st)}${it.source === 'ai' ? '<span class="src-ai" title="Оценка ИИ: продукта нет в справочнике">≈ИИ</span>' : it.source === 'brain' ? '<span class="src-brain" title="Так эту фразу раньше разобрала ИИ - теперь считается без неё">память</span>' : it.source === 'manual' ? '<span class="src-brain" title="БЖУ заданы вручную">своё</span>' : it.source === 'web' ? '<span class="src-brain" title="Найдено в интернете и сохранено в общий справочник">из сети</span>' : ''}${it.choice ? ` <button type="button" class="a-linkbtn" data-act="fc-open">выбрать вариант</button>` : ''}</div>
     <button class="btn quiet a-mini fi-edit" data-act="fi-open" data-id="${e.id}" data-i="${i}" aria-label="Править продукт: ${esc(it.name)}" title="Править: название, вес, КБЖУ на 100 г">${glyph('pencil')}</button>
     <button class="btn quiet a-mini fi-del" data-act="food-item-del" data-id="${e.id}" data-i="${i}" aria-label="Убрать из записи: ${esc(it.name)}" title="Убрать эту строку">${glyph('cross')}</button>
     ${macRow}
@@ -1357,4 +1473,5 @@ export async function background() {
     await store.patch(r.id, { calc_pending: false });
     await calcFood(store.get(r.id), true);
   }
+  askChoices();
 }
