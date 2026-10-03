@@ -31,7 +31,7 @@ export const SLEEP_Q = [
   ['fall', 'Засыпание', [['fast', 'сразу'], ['moderate', 'умеренно'], ['long', 'долго']]],
   ['continuity', 'Сон', [['solid', 'сплошной'], ['interrupted', 'прерывался']]],
   ['awakening', 'Пробуждение', [['self', 'сам'], ['alarm', 'по будильнику']]],
-  ['rise', 'Подъём', [['fresh', 'бодро'], ['hard', 'тяжело']]],
+  ['rise', 'Подъём', [['fresh', 'бодро'], ['ok', 'нормально'], ['hard', 'тяжело']]],
 ];
 export const STATE_Q = [
   ['wellbeing', 'Общее', [['great', 'отлично'], ['good', 'хорошо'], ['meh', 'так себе'], ['broken', 'разбит']]],
@@ -77,7 +77,7 @@ function sleepInfoLocal(d) {
   score += { fast: 10, moderate: 5 }[d.fall] || 0;
   score += d.continuity === 'solid' ? 10 : 0;
   score += { self: 10, alarm: 4 }[d.awakening] || 0;
-  score += d.rise === 'fresh' ? 10 : 0;
+  score += { fresh: 10, ok: 5 }[d.rise] || 0;
   return { hours, verdict, score: Math.round(Math.min(100, score)), label: VERDICT[verdict] };
 }
 // → { hours, verdict, score, label } | null
@@ -648,7 +648,7 @@ async function migrateMorning() {
 
 const MEAL_RU = { breakfast: 'Завтрак', lunch: 'Обед', dinner: 'Ужин', snack: 'Перекус' };
 // окно чашек дня: время каждой правится (сохраняется сразу), лишнюю можно удалить, новую - добавить с любым временем
-function cupEditor(kind, date, focusNew = false) {
+function cupEditor(kind, date, focusNew = false, amt = 1) {
   const list = C.cupList(date, kind), c = C.CUPS[kind];
   const def = date === C.today() ? nowHM() : '';
   // кофе с молоком - молоко идёт в БЖУ дня отдельной записью (C.setCupMilk), как протеин у добавок
@@ -669,7 +669,7 @@ function cupEditor(kind, date, focusNew = false) {
       <button class="btn quiet" data-act="cup-rm" data-id="${r.id}" data-kind="${kind}" data-date="${date}" aria-label="Удалить чашку ${i + 1}">${glyph('cross')}</button></div>${milkRow(r)}`).join('')}</div>`
       : '<p class="note">Пока ни одной чашки.</p>'}
     <div class="a-cup-line a-cup-new"><span class="smallcaps muted">+</span><input class="control" type="time" id="cup-new-time" value="${def}" aria-label="Время новой чашки">
-      <button class="btn" data-act="cup-new" data-kind="${kind}" data-date="${date}">Добавить</button></div>
+      <button class="btn" data-act="cup-new" data-kind="${kind}" data-date="${date}"${amt < 1 ? ' data-amt="0.5"' : ''}>${amt < 1 ? 'Добавить ½' : 'Добавить'}</button></div>
     <p class="note">После 14:00 кофеин заметнее мешает сну - тренер сравнит такие дни с ночами.${kind === 'coffee' ? (C.milkMode() === 'meal' ? ' Молоко в кофе считается в БЖУ дня и показывается в выбранном приёме пищи.' : ' Молоко в кофе считается в БЖУ дня, в приёмах пищи его нет (Профиль → Режим питания).') : ''}</p>
     </div><div class="modal-foot"><button class="btn solid" data-act="close">Готово</button></div>`);
   if (focusNew) document.getElementById('cup-new-time')?.focus();
@@ -1054,7 +1054,7 @@ function itemRow(it, date) {
     return `<div class="row a-cup"${da}><button class="a-cup-g" data-act="cup-edit" ${ka} aria-label="Чашки: ${esc(d.title)}, изменить время">${glyph('cup')}</button>
       <button class="a-cup-t" data-act="cup-edit" ${ka}><span class="title">${esc(d.title)}</span><span class="hint">${esc(hint)}${v ? ' · изменить' : ''}</span></button>
       <div class="stepper"><button data-act="cup-del-last" ${ka} aria-label="Убрать последнюю: ${esc(d.title)}" ${v ? '' : 'disabled'}>−</button>
-        <span class="val">${C.cupNum(v)}</span><button data-act="cup-add" ${ka} aria-label="Ещё чашка: ${esc(d.title)}">+</button></div></div>`;
+        <span class="val">${C.glassNum(v)}</span><button data-act="cup-add" ${ka} aria-label="Ещё чашка: ${esc(d.title)}">+</button><button class="half" data-act="cup-add" data-amt="0.5" ${ka} aria-label="Полчашки: ${esc(d.title)}">½</button></div></div>`;
   }
   if (d.type === 'counter') {
     // вода - и по полстакана: «½» заполняет стакан наполовину, второй «½» - целиком
@@ -1186,11 +1186,12 @@ export const actions = {
   // чай и кофе: каждая чашка - запись drink со временем. Сегодня «+» ставит текущее время,
   // за прошлый день сразу открывает окно, где время вводится
   'cup-add': async el => {
-    const { kind, date } = el.dataset;
-    if (date !== C.today()) return cupEditor(kind, date, true);
-    await store.put('drink', store.newId(), { kind, time: nowHM(), created: Date.now() }, date);
+    // «½» у счётчика - полчашки (amount 0.5), как полстакана у воды
+    const { kind, date } = el.dataset, half = Number(el.dataset.amt) === 0.5;
+    if (date !== C.today()) return cupEditor(kind, date, true, half ? 0.5 : 1);
+    await store.put('drink', store.newId(), { kind, time: nowHM(), created: Date.now(), ...(half ? { amount: 0.5 } : {}) }, date);
     await afterChange(date);
-    toast(`${C.CUPS[kind].title} в ${nowHM()} - время можно поправить, нажав на строку`, 3000);
+    toast(`${C.CUPS[kind].title}${half ? ', полчашки,' : ''} в ${nowHM()} - время можно поправить, нажав на строку`, 3000);
   },
   'cup-del-last': async el => {
     const { kind, date } = el.dataset;
@@ -1216,8 +1217,8 @@ export const actions = {
   },
   'cup-new': async el => {
     const { kind, date } = el.dataset;
-    const t = document.getElementById('cup-new-time')?.value || nowHM();
-    await store.put('drink', store.newId(), { kind, time: t, created: Date.now() }, date);
+    const t = document.getElementById('cup-new-time')?.value || nowHM(), half = Number(el.dataset.amt) === 0.5;
+    await store.put('drink', store.newId(), { kind, time: t, created: Date.now(), ...(half ? { amount: 0.5 } : {}) }, date);
     await afterChange(date);
     cupEditor(kind, date);
   },

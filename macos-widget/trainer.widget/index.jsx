@@ -12,7 +12,7 @@ import { run } from "uebersicht";
 // Виджеты Übersicht живут в одном документе. Каждый помечает свой корень data-ins-stack="<порядок>",
 // и любой из них раскладывает всех сверху вниз с равным зазором. Высота виджета меняется (трек,
 // задача, выключен) — ResizeObserver сразу пересчитывает. Код одинаковый во всех виджетах
-// (vk-music, photo-gallery, transkribator, trainer): меняете раскладку — меняйте везде.
+// (vk-music, cinema, photo-gallery, transkribator, trainer): меняете раскладку — меняйте везде.
 const insStack = () => {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   const TOP = 40, LEFT = 40, GAP = 16;
@@ -118,7 +118,7 @@ export const render = ({ output }) => {
   const sum = data.sum && typeof data.sum === "object" ? data.sum : null;
   const theme = readTheme();
   return (
-    <div id="tn-widget-root" data-ins-stack="4" className={"tn-root theme-" + theme}>
+    <div id="tn-widget-root" data-ins-stack="5" className={"tn-root theme-" + theme}>
       <div className="tn-header">
         <DayRing running={running} pct={sum ? sum.pct : null} />
         <span className="tn-name" title="Открыть тренера" onClick={() => (running ? openApp() : startApp())}>

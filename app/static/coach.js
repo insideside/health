@@ -778,7 +778,7 @@ const SLEEP_ANS = {
   fall: { fast: 12, moderate: 7, long: 0, max: 12 },
   continuity: { solid: 10, interrupted: 3, max: 10 },
   awakening: { self: 8, alarm: 4, max: 8 },
-  rise: { fresh: 10, hard: 2, max: 10 },
+  rise: { fresh: 10, ok: 6, hard: 2, max: 10 },
 };
 
 // rec — запись sleep или её data → { hours, verdict, score, label, target }

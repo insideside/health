@@ -219,7 +219,7 @@ const FACTOR = {
   fall: ['Засыпание', { fast: 'сразу', moderate: 'умеренно', long: 'долго' }],
   continuity: ['Сон', { solid: 'сплошной', interrupted: 'прерывался' }],
   awakening: ['Пробуждение', { self: 'сам', alarm: 'будильник' }],
-  rise: ['Подъём', { fresh: 'бодро', hard: 'тяжело' }],
+  rise: ['Подъём', { fresh: 'бодро', ok: 'нормально', hard: 'тяжело' }],
   verdict: ['Длительность', { short: 'недосып', ok: 'норма', long: 'пересып' }],
 };
 function sleepBlock() {
