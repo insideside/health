@@ -196,6 +196,7 @@ async function relinkExcluded(mergedMap) {
   if (hit) await store.setMeta('mp_exclude', out);
 }
 
+// force: true - весь справочник заново; 'delta' - без 5-минутной паузы, но только новое с прошлого раза
 export async function refresh(force = false) {
   if (refreshing) return refreshing;
   if (!force && Date.now() - lastRefresh < 5 * 60e3 && store.getMeta('foods')) return;
@@ -203,7 +204,7 @@ export async function refresh(force = false) {
     try {
       await pushPending();
       const cache = store.getMeta('foods', null);
-      const since = cache?.ts && !force ? cache.ts : 0;
+      const since = cache?.ts && force !== true ? cache.ts : 0;
       const res = await store.api(`/api/foods/all${since ? `?since=${since}` : ''}`);
       if (res.full || !cache) await saveCache(res.foods, res.now, res.merged);
       else if (res.foods.length || res.deleted.length) {

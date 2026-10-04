@@ -1533,9 +1533,24 @@ export function afterRender() {
 }
 
 // записи, которые просили посчитать без связи, — досчитать, когда связь появилась
+// продукт, который сервер только что добавил в справочник при расчёте записи (ИИ, интернет), - в копию сразу,
+// не дожидаясь 5-минутного обновления: иначе поиск его не находит. Каждый id пробуем один раз (удалённый не крутим)
+const triedIds = new Set();
+function missingFoods() {
+  const ids = [];
+  for (const r of store.list('food', store.uid())) {
+    for (const it of r.data.items || []) {
+      if (it.food_id == null || triedIds.has(it.food_id) || foods.get(it.food_id)) continue;
+      triedIds.add(it.food_id);
+      ids.push(it.food_id);
+    }
+  }
+  return ids;
+}
+
 export async function background() {
   if (!store.state.online) return;
-  await foods.refresh();
+  await foods.refresh(missingFoods().length ? 'delta' : false);
   await BR.refresh();                                  // память «мозга»: дельта с сервера
   for (const r of store.list('food', store.uid(), r => r.data.calc_pending)) {
     await store.patch(r.id, { calc_pending: false });
