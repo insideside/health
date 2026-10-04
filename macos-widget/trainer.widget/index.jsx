@@ -72,9 +72,12 @@ const stopApp = () =>
 const openApp = () => run(`/usr/bin/open ${LOCAL}`);
 
 // ── темы ──
-const THEMES = ["auto", "dark", "light", "transparent"];
+// градиент в цветах приложения, нейтральная тёмная, светлая, прозрачная. «Авто» убрано:
+// в тёмной системе оно совпадало с тёмной, и кнопку приходилось нажимать дважды
+const THEMES = ["gradient", "dark", "light", "transparent"];
+const THEME_NAMES = { gradient: "градиент", dark: "тёмная", light: "светлая", transparent: "прозрачная" };
 const readTheme = () => {
-  try { return localStorage.getItem("tnWidgetTheme") || "auto"; } catch (e) { return "auto"; }
+  try { const t = localStorage.getItem("tnWidgetTheme"); return THEMES.includes(t) ? t : "gradient"; } catch (e) { return "gradient"; }
 };
 const applyTheme = (t) => {
   try { localStorage.setItem("tnWidgetTheme", t); } catch (e) {}
@@ -124,7 +127,7 @@ export const render = ({ output }) => {
         <span className="tn-name" title="Открыть тренера" onClick={() => (running ? openApp() : startApp())}>
           Тренер
         </span>
-        <span className="tn-theme" title={"Тема: " + theme} onClick={cycleTheme} />
+        <span className="tn-theme" title={"Тема: " + THEME_NAMES[theme] + " (нажмите - следующая)"} onClick={cycleTheme} />
         <div className={"tn-toggle " + (running ? "on" : "off")}
           title={running ? "Выключить сервер" : "Включить сервер"}
           onClick={() => (running ? stopApp() : startApp())}>
@@ -180,6 +183,11 @@ export const className = `
     -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
     user-select: none;
   }
+  /* градиент в цветах приложения: терракота в зелень, как кольцо дня */
+  .tn-root.theme-gradient {
+    --bg: linear-gradient(150deg, rgba(52, 30, 22, 0.93) 0%, rgba(22, 32, 30, 0.93) 55%, rgba(12, 16, 18, 0.93) 100%);
+    --border: rgba(212, 112, 90, 0.18);
+  }
   .tn-root.theme-light {
     --bg: rgba(250,250,252,0.95); --fg:#1c1c20; --muted: rgba(28,28,32,0.5); --accent: #b5533d; --warn: #a3651c;
     --border: rgba(0,0,0,0.08); --btn: rgba(0,0,0,0.06); --btn-hover: rgba(0,0,0,0.12);
@@ -188,12 +196,6 @@ export const className = `
     --bg: rgba(0,0,0,0.18); --fg:#fff; --muted: rgba(255,255,255,0.7);
     --border: rgba(255,255,255,0.18); --btn: rgba(255,255,255,0.14); --btn-hover: rgba(255,255,255,0.25);
     text-shadow: 0 1px 3px rgba(0,0,0,0.5); box-shadow: none;
-  }
-  @media (prefers-color-scheme: light) {
-    .tn-root.theme-auto {
-      --bg: rgba(250,250,252,0.95); --fg:#1c1c20; --muted: rgba(28,28,32,0.5); --accent: #b5533d; --warn: #a3651c;
-      --border: rgba(0,0,0,0.08); --btn: rgba(0,0,0,0.06); --btn-hover: rgba(0,0,0,0.12);
-    }
   }
 
   .tn-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
