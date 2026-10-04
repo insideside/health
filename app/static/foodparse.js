@@ -39,11 +39,47 @@ export function unitCode(u) {
 const QTY_DOT_RE = /(\d\s*(?:г|гр|грамм\p{L}*|кг|мл|л|шт|штук\p{L}*)?|\p{L}{3,})\.\s+(?=[\p{L}\d])/giu;
 // продолжение предыдущего продукта после запятой: «2 куриных ножки, запечённых с оливками», «кофе, на молоке»
 const CONT_RE = /^(?:(?:с|со|в|во|на|под|без|из|по)\s|[а-яё]+(?:нн|енн|анн|ённ)[а-яё]{1,3}(?:\s|$))/iu;
+// этикетка в тексте: «Маффин 140г\nНа 100 граммов:\nКалорийность: 308 ккал\nБелки: 11,7 г\nЖиры: …» - строки
+// «Белки: 11,7 г» подряд становятся «кбжу 308/11.7/16.5/27.7» в конце предыдущей строки (числа на 100 г блюда
+// перед ними), заголовок «(На 100 граммов:» убирается. Как food.label_inline.
+const LABEL_NUT_RE = new RegExp(`(калорийн${W}*|энергетическ${W}*(?:\\s+ценност${W}*)?|белк${W}*|жир${W}*|углевод${W}*)\\s*[:\\-–]?\\s*`
+  + `(\\d+(?:[.,]\\d+)?)\\s*(?:ккал|кал|гр|грамм${W}*|г)?\\.?(?!${W})`, 'giu');
+const LABEL_GAP_RE = /^[\s•·*,;\-–]*$/u;
+const LABEL_HEAD_RE = new RegExp(`\\(?\\s*(?:(?:пищев${W}*\\s+)?ценност${W}*\\s*)?(?:на|в)\\s+\\d+\\s*\\p{L}{0,10}\\.?\\s*:?\\s*$`, 'iu');
+export function labelInline(text) {
+  text = String(text || '');
+  const groups = [];
+  for (const m of text.matchAll(LABEL_NUT_RE)) {
+    const g = groups[groups.length - 1], prev = g?.[g.length - 1];
+    if (prev && LABEL_GAP_RE.test(text.slice(prev.index + prev[0].length, m.index))) g.push(m); else groups.push([m]);
+  }
+  let out = '', last = 0;
+  for (const g of groups) {
+    const vals = {};
+    for (const m of g) {
+      const w = m[1].toLowerCase();
+      const k = /^(?:калор|энерг)/.test(w) ? 'kcal' : w.startsWith('бел') ? 'p' : w.startsWith('жир') ? 'f' : 'c';
+      if (!(k in vals)) vals[k] = m[2].replace(',', '.');
+    }
+    if (!['p', 'f', 'c'].every(k => k in vals)) continue;
+    let head = text.slice(last, g[0].index).replace(/[\s•·*\-–]*$/u, ''), opened = false, h;
+    while ((h = LABEL_HEAD_RE.exec(head)) && h[0].trim()) { opened ||= h[0].includes('('); head = head.slice(0, h.index); }
+    if (/\(\s*$/.test(head)) { opened = true; head = head.replace(/\(\s*$/, ''); }
+    const lm = g[g.length - 1];
+    let end = lm.index + lm[0].length;
+    const t = opened ? /^[ \t]*\)/.exec(text.slice(end)) : null;
+    if (t) end += t[0].length;
+    const nums = ['kcal', 'p', 'f', 'c'].filter(k => k in vals).map(k => vals[k]).join('/');
+    out += head.trimEnd() + (head.trim() ? ' ' : '') + 'кбжу ' + nums;
+    last = end;
+  }
+  return out + text.slice(last);
+}
 // границы между заведомо разными блюдами: «;», перенос строки, «+». Запятая внутри — слабая граница (см. split):
 // у составного блюда через запятую часто перечислены его части («рис с креветками, яйцом и луком»), а не отдельные блюда.
 export function splitStrong(text) {
   // запятая внутри числа («молоко 1,5%») уже защищена этой заменой
-  return String(text || '').replace(QTY_DOT_RE, '$1, ').split(/[;\n]|\+(?![^()]*\))/).map(p => (p || '').trim()).filter(Boolean);
+  return labelInline(text).replace(QTY_DOT_RE, '$1, ').split(/[;\n]|\+(?![^()]*\))/).map(p => (p || '').trim()).filter(Boolean);
 }
 export function split(text) {
   return splitStrong(text).flatMap(splitWeak);
@@ -246,6 +282,8 @@ export function stem(name) {
 }
 const baseName = name => stem(norm(name).replace(new RegExp(STATE_WORDS.source, 'giu'), ' '));
 const STOP = new Set(['с', 'со', 'и', 'в', 'во', 'на', 'из', 'по', 'под', 'без', 'для', 'к', 'это', 'вид', 'виде', 'шт', 'г', 'гр', 'мл']);
+// единицы - не бренд, даже если стоят в бренде («Ноль Грамм»): «на 100 граммов» - не товар этой марки
+const UNIT_WORD_RE = /^(?:кило|милли)?(?:грамм|литр)|^штук/u;
 const bagOf = name => new Set(stem(name).split(' ').filter(w => w && !STOP.has(w) && !/^\d+$/.test(w)));
 const subset = (a, b) => [...a].every(x => b.has(x));
 
@@ -260,7 +298,7 @@ function brandWords(list) {
     bw.forEach(w => inc(inBrand, w));
     new Set([...bagOf(x.name), ...bw]).forEach(w => inc(inName, w));
   }
-  return new Set([...inBrand].filter(([w, n]) => n >= 2 && n >= 0.4 * inName.get(w) && w.length > 3 && !common.has(w) && !STOP.has(w)).map(([w]) => w));
+  return new Set([...inBrand].filter(([w, n]) => n >= 2 && n >= 0.4 * inName.get(w) && w.length > 3 && !common.has(w) && !STOP.has(w) && !UNIT_WORD_RE.test(w)).map(([w]) => w));
 }
 // товар с брендом из текста («сосиски папа может») по справочнику товаров (как Index.branded): все слова запроса
 // есть в «название + бренд», процент жирности тот же; название целиком - этот товар, иначе все подходящие; цифры

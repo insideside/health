@@ -63,6 +63,19 @@ def test_macros_with_comma_before_weight(idx):
     assert done[0]["grams"] == 290 and round(done[0]["p"]) == 36
 
 
+def test_label_block_is_macros_of_dish(idx):
+    # этикетка строками после блюда - КБЖУ этого блюда на 100 г, а не отдельные продукты
+    text = ("Английский маффин с лососем и соусом тартар 140г\n(На 100 граммов:\nКалорийность: 308 ккал\n"
+            "Белки: 11,7 г\nЖиры: 16,5 г\nУглеводы: 27,7 г)")
+    done, rest = food.quick_parse(text, idx)
+    assert not rest and len(done) == 1
+    assert done[0]["grams"] == 140 and done[0]["kcal"] == 431 and done[0]["name"].startswith("Английский маффин")
+
+
+def test_unit_word_is_not_brand(idx):
+    assert idx.branded("на граммов") == (None, [])
+
+
 def test_egg_categories(idx):
     assert names("яйцо С0 - 1 шт", idx)[0][0][1] == 61
     assert names("2 яйца С1", idx)[0][0][1] == 106

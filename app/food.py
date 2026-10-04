@@ -180,11 +180,53 @@ def macro_annotate(chunks: list[str]) -> list[tuple[str, dict | None]]:
     return [(name, macro) for name, macro in out if name]
 
 
+# ── этикетка в тексте: «Маффин 140г\nНа 100 граммов:\nКалорийность: 308 ккал\nБелки: 11,7 г\nЖиры: …» ──
+# строки «Белки: 11,7 г» подряд (между ними только разделители) - это КБЖУ блюда перед ними на 100 г: блок вместе
+# с заголовком «(На 100 граммов:» превращается в «кбжу 308/11.7/16.5/27.7» в конце предыдущей строки, дальше -
+# обычный разбор явных КБЖУ. Иначе каждая строка этикетки шла в разбор как отдельный продукт («на граммов» → товар
+# «Ноль Грамм»). Как labelInline в foodparse.js.
+LABEL_NUT_RE = re.compile(r"(калорийн\w*|энергетическ\w*(?:\s+ценност\w*)?|белк\w*|жир\w*|углевод\w*)\s*[:\-–]?\s*"
+                          r"(\d+(?:[.,]\d+)?)\s*(?:ккал|кал|гр|грамм\w*|г)?\.?(?!\w)", re.I)
+LABEL_GAP_RE = re.compile(r"[\s•·*,;\-–]*")
+LABEL_HEAD_RE = re.compile(r"\(?\s*(?:(?:пищев\w*\s+)?ценност\w*\s*)?(?:на|в)\s+\d+\s*[^\W\d_]{0,10}\.?\s*:?\s*$", re.I)
+
+
+def label_inline(text: str) -> str:
+    groups: list[list] = []
+    for m in LABEL_NUT_RE.finditer(text or ""):
+        if groups and LABEL_GAP_RE.fullmatch(text[groups[-1][-1].end():m.start()]):
+            groups[-1].append(m)
+        else:
+            groups.append([m])
+    out, last = "", 0
+    for g in groups:
+        vals: dict[str, str] = {}
+        for m in g:
+            w = m.group(1).lower()
+            k = "kcal" if w.startswith(("калор", "энерг")) else "p" if w.startswith("бел") else "f" if w.startswith("жир") else "c"
+            vals.setdefault(k, m.group(2).replace(",", "."))
+        if not all(k in vals for k in ("p", "f", "c")):
+            continue
+        head, opened = re.sub(r"[\s•·*\-–]*$", "", text[last:g[0].start()]), False
+        while (h := LABEL_HEAD_RE.search(head)) and h.group(0).strip():
+            opened = opened or "(" in h.group(0)
+            head = head[:h.start()]
+        if re.search(r"\(\s*$", head):
+            opened, head = True, re.sub(r"\(\s*$", "", head)
+        end = g[-1].end()
+        if opened and (t := re.match(r"[ \t]*\)", text[end:])):
+            end += t.end()
+        nums = "/".join(vals[k] for k in ("kcal", "p", "f", "c") if k in vals)
+        out += head.rstrip() + (" " if head.strip() else "") + "кбжу " + nums
+        last = end
+    return out + (text or "")[last:]
+
+
 def split_strong(text: str) -> list[str]:
     """Границы между заведомо разными блюдами: точка с запятой, перенос строки, «+». Запятая внутри —
     слабая граница (см. split): у составного блюда через запятую часто перечислены его части
     («рис с креветками, яйцом и луком»), а не отдельные блюда."""
-    text = QTY_DOT_RE.sub(r"\1, ", text or "")   # запятая внутри числа («молоко 1,5%») уже защищена этим шагом
+    text = QTY_DOT_RE.sub(r"\1, ", label_inline(text or ""))   # запятая внутри числа («молоко 1,5%») уже защищена этим шагом
     return [p.strip() for p in re.split(r"[;\n]|\+(?![^()]*\))", text) if p and p.strip()]
 
 
@@ -368,6 +410,8 @@ STATE_WORDS = re.compile(r"\b(сух\w*|сыр(ой|ая|ое|ые|ом|ую)|в
 
 
 STOP = {"с", "со", "и", "в", "во", "на", "из", "по", "под", "без", "для", "к", "это", "вид", "виде", "шт", "г", "гр", "мл"}
+# единицы - не бренд, даже если стоят в бренде («Ноль Грамм»): «на 100 граммов» - не товар этой марки
+UNIT_WORD_RE = re.compile(r"(?:кило|милли)?(?:грамм|литр)|штук", re.I)
 SMALL_G = 20          # «немного» без числа - горсть или 20 г
 
 
@@ -433,7 +477,7 @@ def brand_words(foods: list[dict]) -> frozenset:
             for w in bag(x["name"]) | bw:
                 in_name[w] = in_name.get(w, 0) + 1
     return frozenset(w for w, n in in_brand.items() if n >= 2 and n >= 0.4 * in_name[w] and len(w) > 3
-                     and w not in common and w not in STOP)
+                     and w not in common and w not in STOP and not UNIT_WORD_RE.match(w))
 
 
 class Index:
