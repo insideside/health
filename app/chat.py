@@ -21,7 +21,7 @@ from .health import match_activity
 router = APIRouter()
 
 HISTORY = 12
-ACTION_KINDS = ("skip_today", "move_workout", "lighten_today", "swap_exercise", "recalc_norms", "set_macros", "rebuild_program",
+ACTION_KINDS = ("skip_today", "move_workout", "lighten_today", "swap_exercise", "recalc_norms", "set_macros", "set_norms", "rebuild_program",
                 "set_daytype", "add_injury", "set_pace", "log_food", "log_activity", "mark_supp", "check_item")
 # отметки выполняются сразу (просьба «отметь / сними» однозначна), кнопка в ответе - «Отменить»
 AUTO_KINDS = ("mark_supp", "check_item")
@@ -44,7 +44,8 @@ CHAT_SCHEMA = {
                 "pace": {"type": "string"}, "text": {"type": "string"}, "meal": {"type": "string"},
                 "minutes": {"type": "number"}, "intensity": {"type": "string"},
                 "kcal": {"type": "number"}, "p": {"type": "number"}, "f": {"type": "number"}, "c": {"type": "number"},
-                "name": {"type": "string"}, "value": {"type": "number"}, "time": {"type": "string"}, "undo": {"type": "boolean"}}},
+                "name": {"type": "string"}, "value": {"type": "number"}, "time": {"type": "string"}, "undo": {"type": "boolean"},
+                "place": {"type": "string"}, "sleep_hours": {"type": "number"}, "steps": {"type": "number"}}},
         }, "required": ["kind", "label", "params"]}},
     },
     "required": ["reply", "actions"],
@@ -78,9 +79,12 @@ ACTIONS_HELP = """actions - кнопки, которые клиент может
 - recalc_norms {} - пересчитать нормы ЗАНОВО ПО ФОРМУЛАМ (цифры не меняет по просьбе, только после изменений в профиле);
 - set_macros {kcal?, p?, f?, c?} - поставить свои цифры, о которых договорились («углеводы до 200» → {c: 200});
   указывай только то, что меняем; калории пересчитаются сами (минус 4 ккал на каждый убранный грамм углеводов);
-- rebuild_program {note?} - пересобрать будущий план тренировок; note - коротко перескажи, что учесть при пересборке
+- set_norms {sleep_hours?, steps?} - своя норма сна (часы, 5-12) или цель шагов, о которых договорились
+  («мне нужно 10 часов сна» → {sleep_hours: 10}); ты сам норму не меняешь и не «запоминаешь» - только этой кнопкой;
+- rebuild_program {note?, place?} - пересобрать будущий план тренировок; note - коротко перескажи, что учесть при пересборке
   (акценты по зонам, что убрать/оставить, предпочтения по кардио и т. п. - из того, что клиент только что описал),
-  иначе пересборка о разговоре ничего не узнает и придумает своё;
+  иначе пересборка о разговоре ничего не узнает и придумает своё; place - home (дома) или gym (зал), если клиент
+  меняет место («не могу ходить в зал» → home); без place остаётся место текущей программы;
 - set_daytype {date, type} - тип дня: cheat (читмил), special (особый), sick (болею), rest (отдых);
 - add_injury {zone, note} - записать, что болит (отметится и в самочувствии на «Сегодня», план дня подстроится);
   zone: head (голова), stomach (живот), chest, shoulders, arms, back, abs, sides, glutes, legs, neck,
@@ -103,9 +107,10 @@ ACTIONS_HELP = """actions - кнопки, которые клиент может
 Просит записать еду или активность - обязательно предложи log_food / log_activity.
 Служебные id (из каталога упражнений, «можно на замену» и т. п.) - только внутри params действий, их не видит
 человек, которому ты отвечаешь. В тексте ответа называй упражнения обычными русскими названиями, никогда не id.
-Имена действий и параметров (rebuild_program, note, from, to, params и т. п.) в тексте тоже не пиши: что учесть, ты
-кладёшь в note кнопки, а человеку своими словами говоришь, что поменяешь («Пересоберу: верх и кор, ноги уберу,
-кардио на эллипсе»)."""
+Имена действий и параметров (rebuild_program, note, from, to, params и т. п.) в тексте тоже не пиши, и не проси
+«нажать кнопку с note»: что учесть, ты кладёшь в note кнопки, а человеку своими словами говоришь, что поменяешь
+(«Пересоберу: верх и кор, ноги уберу, кардио на эллипсе»). Настройки профиля, которых нет среди действий, ты поменять
+не можешь - так и скажи и подскажи, где это в профиле, а не обещай «запомнить»."""
 
 
 # ── контекст ──
@@ -174,6 +179,9 @@ def _context(uid: str, text: str = "") -> str:
         cand = [e for e in cat if e.get("pattern") in pats and e["id"] not in have][:25]
         swap = ("\nМожно на замену, для to в swap_exercise (название [id], id клиенту не показывай): "
                 + "; ".join(f"{e['name']} [{e['id']}]" for e in cand))
+    act_prog = next((p["data"] for p in db.list_kind(uid, "program") if p["data"].get("active")), None)
+    prog_place = ("нет" if not act_prog else "в зале" if act_prog.get("place") == "gym" else "дома") + \
+        f", инвентарь дома: {', '.join(jobs.EQUIP_LABEL.get(x, x) for x in userdata.profile(uid).get('equipment') or [])}"
     free = [d for d in ((today + timedelta(days=i)).isoformat() for i in range(1, 5)) if d not in wos]
     acts_cat = ", ".join(f"{a['id']} ({a.get('name')})" for a in db.activities()) or "walking, running, cycling, swimming, other"
     injuries = userdata.open_injuries(uid)
@@ -185,10 +193,11 @@ def _context(uid: str, text: str = "") -> str:
 Сегодня {today.isoformat()}, {WEEKDAYS[today.weekday()]}, {datetime.now():%H:%M}.
 Клиент: {person_text(uid)}. Цели: {goals_text(goal)}.
 Нормы: {t.get('kcal', '-')} ккал, Б {t.get('p', '-')} / Ж {t.get('f', '-')} / У {t.get('c', '-')} г, вода {t.get('water_glasses', '-')} стак.,
-шаги {t.get('steps_manual') or t.get('steps', '-')}, сон {t.get('sleep_hours', '-')} ч, темп: {(t.get('intensity') or {}).get('label', '-')}.
+шаги {t.get('steps_manual') or t.get('steps', '-')}, сон {norms.sleep_of(t) or '-'} ч{' (своя норма)' if t.get('sleep_manual') else ''}, темп: {(t.get('intensity') or {}).get('label', '-')}.
 Травмы: {'; '.join(f"{i.get('zone')} {i.get('note') or ''} с {i.get('since')}" for i in injuries) or 'нет'}.
 Последние 7 дней:
 {chr(10).join(lines)}
+Программа тренировок: {prog_place}.
 Тренировка сегодня: {today_wo}{swap}
 Ближайшие тренировки: {'; '.join(upcoming) or 'нет'}
 Свободные для переноса дни: {', '.join(f"{d} {WEEKDAYS[date.fromisoformat(d).weekday()]}" for d in free) or 'нет'}
@@ -265,6 +274,12 @@ def _clean_actions(raw: list, uid: str) -> list[dict]:
             continue
         if k == "set_pace" and p.get("pace") not in norms.PACE_LEVEL:
             continue
+        if k == "rebuild_program" and p.get("place") not in ("home", "gym"):
+            p.pop("place", None)
+        if k == "set_norms":
+            p = {kk: p[kk] for kk in ("sleep_hours", "steps") if isinstance(p.get(kk), (int, float))}
+            if not p or not (5 <= p.get("sleep_hours", 8) <= 12 and 1000 <= p.get("steps", 5000) <= 40000):
+                continue
         if k == "log_food":
             if not p.get("text"):
                 continue
@@ -290,6 +305,19 @@ def _clean_actions(raw: list, uid: str) -> list[dict]:
     return out[:3]
 
 
+_NO_GYM_RE = re.compile(r"(?i)(без\s+зала|не\s+(?:могу|буду|получается|смогу)\s+(?:\S+\s+){0,2}(?:в\s+)?зал|"
+                        r"(?:тренироваться|заниматься|занятия|тренировки)\s+дома|домашн\w+\s+(?:трениров|программ))")
+_TO_GYM_RE = re.compile(r"(?i)(снова|опять|теперь|начал\w*|буду)\s+(?:\S+\s+){0,2}(?:в\s+)?зал")
+
+
+def _place_intent(text: str) -> str | None:
+    if _NO_GYM_RE.search(text):
+        return "home"
+    if _TO_GYM_RE.search(text):
+        return "gym"
+    return None
+
+
 def _guess_meal(text: str) -> str:
     t = text.lower()
     for key, meal in (("завтрак", "breakfast"), ("обед", "lunch"), ("ужин", "dinner"), ("перекус", "snack")):
@@ -303,7 +331,15 @@ def _guess_meal(text: str) -> str:
 _PARAM_RE = re.compile(r"\s*(?:\(\s*)?(?:с\s+)?\b(?:note|params|from|to|reason)\s*[:=]\s*(?:«[^»]*»|\"[^\"]*\"|[^.,;)\n]*)\)?", re.I)
 
 
+# имя действия в тексте: «жми rebuild_program» → «жми кнопку», «кнопку set_norms» → «кнопку»
+_KIND_RE = re.compile(r"(\s*)(?:(кнопк[ауеи])|(жми|нажми|нажать|нажимай))?\s*\b(?:" + "|".join(ACTION_KINDS) +
+                      r")\b(?:\s*\([^)]*\))?", re.I)
+_NOTE_RE = re.compile(r"\s*(?:с|и)\s+(?:note|примечанием)\b\s*[:=]?\s*(?:«[^»]*»|\"[^\"]*\")?", re.I)
+
+
 def _humanize(reply: str) -> str:
+    reply = _KIND_RE.sub(lambda m: m.group(1) + (m.group(2) or (m.group(3) + " кнопку" if m.group(3) else "")), reply)
+    reply = _NOTE_RE.sub("", reply)
     reply = _PARAM_RE.sub("", reply)
     reply = re.sub(r"\s*[—–]\s*", " - ", reply)
     return re.sub(r"[ \t]{2,}", " ", reply).replace(" .", ".").strip()
@@ -396,6 +432,12 @@ async def job_chat(uid: str, inp: dict) -> dict:
             names = [a["params"].get("name") for a in many if a["params"].get("name")]
             actions = [a for a in actions if a["kind"] != "mark_supp"]
             reply = f"Уточни, что отметить: {', '.join(names)} - какие из них?"
+    for a in actions:
+        if a["kind"] == "rebuild_program":
+            # место из самой просьбы, если модель его не передала; слова клиента - в пересборку как есть
+            if "place" not in a["params"] and (pl := _place_intent(text)):
+                a["params"]["place"] = pl
+            a["params"]["request"] = text[:600]
     actions, marked, ask = _apply_marks(uid, actions, text)
     if not marked and not ask and daylog.MARK_RE.search(text) and re.search(r"(?i)(отметил|снял|записал|поставил|убрал)", reply):
         # «отметил», а на деле ничего не сделано и понять, что именно, не вышло - честно переспрашиваем
@@ -586,9 +628,28 @@ async def execute(uid: str, kind: str, p: dict) -> dict:
             raise HTTPException(400, "Нет активной программы")
         if userdata.ai_mode(uid) == "off":
             raise HTTPException(403, "ИИ выключена в профиле - план можно поправить вручную в «Тренировках»")
-        return {"text": "Пересобираю план - это займёт пару минут",
+        notes = p.get("note") or ""
+        if p.get("request"):
+            notes = (notes + "\n" if notes else "") + f"Слова клиента: «{p['request']}»"
+        # кнопки, предложенные до появления place, - место по их заметке
+        place = p.get("place") if p.get("place") in ("home", "gym") else _place_intent(f"{p.get('note') or ''} {p.get('request') or ''}")
+        where = {"home": " дома", "gym": " в зале"}.get(place or "", "")
+        return {"text": f"Пересобираю план{where} - это займёт пару минут",
                 "job_id": jobs.submit(uid, "program", {"rebuild": True, "reason": p.get("note") or "по просьбе в чате",
-                                                        "notes": p.get("note") or ""})}
+                                                        "notes": notes, **({"place": place} if place else {})})}
+    if kind == "set_norms":
+        fields = {}
+        if isinstance(p.get("sleep_hours"), (int, float)) and 5 <= p["sleep_hours"] <= 12:
+            fields["sleep_manual"] = round(p["sleep_hours"] * 4) / 4
+        if isinstance(p.get("steps"), (int, float)) and 1000 <= p["steps"] <= 40000:
+            fields["steps_manual"] = round(p["steps"] / 100) * 100
+        t = userdata.latest_target(uid)
+        if not fields or not t:
+            raise HTTPException(400, "Нормы ещё не посчитаны" if not t else "Не указано, что поменять")
+        db.server_put(uid, "target", t["id"], {**t["data"], **fields}, t.get("date"))
+        bits = ([f"сон {norms.hours_text(fields['sleep_manual'])} ч"] if "sleep_manual" in fields else []) + \
+               ([f"шаги {fields['steps_manual']}"] if "steps_manual" in fields else [])
+        return {"text": "Своя норма: " + ", ".join(bits)}
     if kind == "set_daytype":
         _set_daytype(uid, p.get("date") or today, p["type"], p.get("note") or "")
         return {"text": "Тип дня отмечен"}

@@ -772,7 +772,7 @@ export function naps(date, uid = store.uid()) {
     .filter(n => n.min > 0 && n.min <= 300);
 }
 export const napMinutes = (date, uid = store.uid()) => naps(date, uid).reduce((a, n) => a + n.min, 0);
-export function sleepTarget(uid = store.uid()) { return Number(target(uid)?.sleep_hours) || 7.75; }
+export function sleepTarget(uid = store.uid()) { const t = target(uid); return Number(t?.sleep_manual) || Number(t?.sleep_hours) || 7.75; }
 
 const SLEEP_ANS = {
   fall: { fast: 12, moderate: 7, long: 0, max: 12 },

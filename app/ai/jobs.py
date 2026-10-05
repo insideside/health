@@ -116,10 +116,23 @@ async def _worker() -> None:
                     _set(job_id, "queued")
                     continue
                 _set(job_id, "error", error=str(e))
+                _say_fail(job, str(e))
             except Exception as e:  # noqa: BLE001 - любая ошибка задачи должна дойти до пользователя
                 traceback.print_exc()
                 _set(job_id, "error", error=f"{type(e).__name__}: {e}")
+                _say_fail(job, "ошибка на сервере")
             break
+
+
+def _say_fail(job, err: str) -> None:
+    tpl = FAIL_SAY.get(job["kind"])
+    if not tpl:
+        return
+    try:
+        inp = json.loads(job["input"])
+        _chat_say(job["user_id"], tpl.format(what="пересобрать" if inp.get("rebuild") else "составить", err=err.rstrip(".")))
+    except Exception:  # noqa: BLE001 - сообщение о провале не должно ронять очередь
+        traceback.print_exc()
 
 
 def _set(job_id: str, status: str, result=None, error=None) -> None:
@@ -447,7 +460,7 @@ async def job_norms(uid: str, inp: dict) -> dict:
 Режим: {t.get('mode')}, интенсивность: {(t.get('intensity') or {}).get('label', '-')}.
 Базовый обмен {t.get('bmr')} ккал, расход {t.get('tdee')} ккал (из них плановые нагрузки ~{t.get('exercise_kcal', 0)} ккал/день).
 Нормы: {t.get('kcal')} ккал, белок {t.get('p')} г, жиры {t.get('f')} г, углеводы {t.get('c')} г, клетчатка {t.get('fiber', '-')} г,
-вода {t.get('water_glasses')} стаканов, шаги {t.get('steps')}, сон {t.get('sleep_hours', '-')} ч.
+вода {t.get('water_glasses')} стаканов, шаги {t.get('steps')}, сон {norms.sleep_of(t) or '-'} ч.
 Силовых в неделю: {(t.get('intensity') or {}).get('weekly_sessions', '-')}, кардио {(t.get('intensity') or {}).get('cardio_minutes', '-')} мин/нед.
 Реалистично нужно недель: {t.get('weeks_needed') or '-'}. Варианты срока: {opts or '-'}.
 Предупреждения: {'; '.join(t.get('warnings') or []) or 'нет'}.
@@ -506,6 +519,9 @@ WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 INTENSITY_LABEL = {"low": "лёгкая", "mid": "средняя", "high": "высокая"}
 SLOT_LABEL = {"morning": "утром", "day": "днём", "evening": "вечером", "any": "в любое время", "none": "нет времени"}
 LOWER_ZONES = {"legs", "glutes"}
+# клиент прямо просит не тренировать ноги («ноги можно вообще не трогать», «без ног», «ноги убрать»)
+NO_LEGS_RE = re.compile(r"(?i)(ноги\s+(?:можно\s+|лучше\s+)?(?:вообще\s+|совсем\s+|пока\s+)?не\s+(?:трогать|тренировать|качать|нужн)|"
+                        r"без\s+(?:упражнений\s+на\s+)?ног|ноги\s+убра|убра\w*\s+ноги|не\s+(?:трогать|тренировать|качать)\s+ноги)")
 
 
 def excluded_codes(uid: str, prof: dict) -> set[str]:
@@ -718,6 +734,17 @@ def _cardio_text(prof: dict, goal: dict, target: dict, place: str, catalog: list
     return "\n".join(lines), info
 
 
+PREV_NOTES = "\nПрежние пожелания (если не противоречат новым): "
+
+
+def _merge_notes(new: str, old: str) -> str:
+    """Пересборка: новые пожелания + прежние (одним уровнем), чтобы «ноги не трогать» не терялось со следующей просьбой."""
+    old = old.split(PREV_NOTES)[0].strip()
+    if not new:
+        return old
+    return new if not old or old in new else new + PREV_NOTES + old[:500]
+
+
 async def job_program(uid: str, inp: dict) -> dict:
     prof, goal = userdata.profile(uid), userdata.goal(uid)
     today = date.today()
@@ -729,7 +756,8 @@ async def job_program(uid: str, inp: dict) -> dict:
         end = date.fromisoformat(act.get("end") or (today + timedelta(weeks=6)).isoformat())
         inp = {"place": act.get("place"), "weekdays": act.get("weekdays"), "minutes": act.get("minutes"),
                "level": act.get("level"), "weeks": max(1, math.ceil((end - today).days / 7)),
-               "notes": inp.get("notes") or act.get("notes") or "", "start": today.isoformat(),
+               "notes": _merge_notes(inp.get("notes") or "", act.get("notes") or ""), "start": today.isoformat(),
+               **({"place": inp["place"]} if inp.get("place") in ("home", "gym") else {}),
                "reason": inp.get("reason") or "", "rebuild": True}
     place = inp.get("place") or "home"
     if place == "gym" and prof.get("gym_program") == "own":
@@ -827,6 +855,11 @@ async def job_program(uid: str, inp: dict) -> dict:
         prefs_text += ("\nСвои упражнения клиента (он добавил их сам - они в каталоге, ставь по смыслу дня): "
                        + ", ".join(f"{e['name']}{' (' + e['how'] + ')' if e.get('how') else ''}" for e in own[:12]) + ".")
     sw_text = swaps_text(uid, prof, place)
+    no_legs = bool(NO_LEGS_RE.search(inp.get("notes") or ""))
+    legs_rule = ("- клиент сам попросил не тренировать ноги: НЕ ставь дней ног и силовых упражнений на ноги и ягодицы\n"
+                 "  (region lower), упор на верх и кор; степпер, ходьба и другое кардио - можно;" if no_legs else
+                 "- за неделю - минимум 3 силовых упражнения на ноги и ягодицы (region lower): велосипед и сноуборд не заменяют силовую\n"
+                 "  работу ног, просто не ставь ноги накануне этих активностей;")
     if sw_text:
         prefs_text += "\nКлиент сам менял упражнения (было → стало): " + sw_text + ". Учитывай его выбор."
     if place == "gym" and gym_missing:
@@ -850,7 +883,7 @@ async def job_program(uid: str, inp: dict) -> dict:
 {lines}
 
 Требования:
-- days - ровно {n_days} разных тренировочных дней, в том же порядке, что в списке дней выше; вместе покрывают всё тело
+- days - ровно {n_days} разных тренировочных дней, в том же порядке, что в списке дней выше; вместе покрывают {'верх и кор' if no_legs else 'всё тело'}
   с упором на главные цели и зоны клиента;
 - name у дня - по мышцам/фокусу («Ноги и кор», «Спина и бицепс»), НЕ «День 1», «День 2 (ср)» и не буквой A/B -
   день недели и дата и так видны в календаре, повторять их в названии не нужно;
@@ -862,8 +895,7 @@ async def job_program(uid: str, inp: dict) -> dict:
 - warmup - 3–5 упражнений категорий warmup/mobility; cooldown - 2–3 упражнения mobility;
 - exercises - {n_ex_lo}–{n_ex_hi} основных упражнений в день, 3–4 подхода, чтобы занять указанные минуты; сначала
   базовые многосуставные, потом изолирующие, в конце кор;
-- за неделю - минимум 3 силовых упражнения на ноги и ягодицы (region lower): велосипед и сноуборд не заменяют силовую
-  работу ног, просто не ставь ноги накануне этих активностей;
+{legs_rule}
 - подходы пиши для полной нагрузки: плавный вход в первые недели приложение сделает само;
 - уровень упражнений не выше уровня клиента + 1;
 - reps - строка: «8-12» для повторений или «30-45 с» для упражнений на время;
@@ -879,13 +911,15 @@ async def job_program(uid: str, inp: dict) -> dict:
             problems.append(f"нужно ровно {n_days} дней, а годных получилось {len(days)}")
         lower = sum(1 for d in days for x in d["exercises"]
                     if by_id[x["id"]].get("region") == "lower" and by_id[x["id"]].get("category") == "strength")
-        if lower < 2 and any(e.get("region") == "lower" and e.get("category") == "strength" for e in catalog):
+        if not no_legs and lower < 2 and any(e.get("region") == "lower" and e.get("category") == "strength" for e in catalog):
             problems.append("почти нет упражнений на ноги и ягодицы")
         short = [d["name"] for d in days if len(d["exercises"]) < n_ex_lo - 1]
         if short:
             problems.append("слишком мало упражнений в днях: " + ", ".join(short))
         # акцентные зоны: за неделю хотя бы 2 упражнения (и 3 при ×1,4 и выше), если в каталоге такие есть
         for z, k in focus_zones.items():
+            if no_legs and z in LOWER_ZONES:
+                continue
             need = 3 if k >= 1.4 else 2
             have = sum(1 for d in days for x in d["exercises"] if z in (by_id[x["id"]].get("zones") or []))
             if have < need and sum(1 for e in catalog if z in (e.get("zones") or [])) >= need:
@@ -910,6 +944,7 @@ async def job_program(uid: str, inp: dict) -> dict:
 
     # старые программы и их будущие тренировки без отметок снимаем; с отметками - не трогаем
     keep_dates = set()
+    prev = next((p["data"] for p in db.list_kind(uid, "program") if p["data"].get("active")), None)
     for p in db.list_kind(uid, "program"):
         if p["data"].get("active"):
             db.server_put(uid, "program", p["id"], {**p["data"], "active": False})
@@ -951,7 +986,72 @@ async def job_program(uid: str, inp: dict) -> dict:
                 "planned_minutes": tpl["minutes"],
                 "ramp": {"week": rw, "sets_delta": delta, "factor": (0.6, 0.8, 1.0)[min(max(rw, 1), 3) - 1] if smooth else 1.0},
             }, day.isoformat())
-    return {"program_id": program_id, "workouts": i, "kept": sorted(keep_dates)}
+    result = {"program_id": program_id, "workouts": i, "kept": sorted(keep_dates)}
+    # итог - сообщением тренера в чат: что сделал, где, по каким дням (тост на устройстве живёт секунды)
+    _chat_say(uid, program_report(program, result, prev, equipment, no_legs),
+              [{"id": "open", "label": "Открыть тренировки", "kind": "open", "params": {"href": "#workout"},
+                "status": "offered", "local": True}])
+    return result
+
+
+MONTH_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+WEEKDAY_FULL = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
+
+
+def _d_text(d: str) -> str:
+    x = date.fromisoformat(d)
+    return f"{x.day} {MONTH_GEN[x.month - 1]}"
+
+
+def program_report(program: dict, result: dict, prev: dict | None, equipment: list[str], no_legs: bool) -> str:
+    """Текст тренера о готовой программе: что сделано, место, дни, что учтено, сколько тренировок в календаре."""
+    rebuilt = bool(program.get("rebuilt"))
+    home = program.get("place") != "gym"
+    where = "дома" if home else "в зале"
+    head = f"Готово: {'пересобрал' if rebuilt else 'составил'} программу тренировок, все тренировки {where}."
+    if rebuilt and prev and prev.get("place") and prev.get("place") != program.get("place"):
+        head = f"Готово: пересобрал программу - {'зал убрал, теперь все тренировки дома' if home else 'теперь тренировки в зале'}."
+    lines = [head]
+    if home and (not prev or prev.get("place") == "gym"):
+        gear = [EQUIP_LABEL.get(x, x) for x in equipment]
+        if gear:
+            lines.append("Инвентарь: " + ", ".join(gear) + ".")
+    # дни: одинаковые шаблоны вместе («пн, чт - «Верх и кор»»)
+    by_name: dict[str, list[str]] = {}
+    for wd, d in zip(program.get("weekdays") or [], program.get("days") or []):
+        by_name.setdefault(d.get("name") or "Тренировка", []).append(WEEKDAY_FULL[wd])
+    if by_name:
+        lines.append("По дням: " + "; ".join(f"{', '.join(w)} - «{n}»" for n, w in by_name.items()) + ".")
+    if program.get("reason") and program["reason"] not in ("по просьбе в чате", ""):
+        lines.append(f"Учёл: {program['reason'].rstrip('.')}.")
+    if no_legs:
+        lines.append("Упражнений на ноги в программе нет, как договорились.")
+    cardio = sorted({x.get("name") for d in program.get("days") or [] for x in d.get("exercises") or []
+                     if "мин" in str(x.get("reps") or "")} - {None})
+    if cardio:
+        lines.append("Кардио в тренировках: " + ", ".join(cardio) + ".")
+    n, kept = result.get("workouts") or 0, result.get("kept") or []
+    lines.append(f"В календаре {n} {('тренировка', 'тренировки', 'тренировок')[_plural_i(n)]} с {_d_text(program['start'])} "
+                 f"по {_d_text((date.fromisoformat(program['end']) - timedelta(days=1)).isoformat())}"
+                 + (f"; уже начатые ({len(kept)}) не трогал." if kept else "."))
+    if program.get("summary"):
+        lines.append(re.sub(r"\s*[—–]\s*", " - ", program["summary"].strip()))
+    return "\n".join(lines)
+
+
+def _plural_i(n: int) -> int:
+    n = abs(n) % 100
+    return 2 if 11 <= n <= 19 else 0 if n % 10 == 1 else 1 if 2 <= n % 10 <= 4 else 2
+
+
+def _chat_say(uid: str, text: str, actions: list | None = None) -> None:
+    db.server_put(uid, "chat", uuid.uuid4().hex, {"role": "coach", "text": text, "created": db.now_ms(), "source": "ai",
+                                                  "job_done": True, **({"actions": actions} if actions else {})},
+                  date.today().isoformat())
+
+
+# задачи, о провале которых тренер пишет в чат сам (о готовности пишет сама задача)
+FAIL_SAY = {"program": "Не получилось {what} программу: {err}. Попробуй ещё раз - старые тренировки на месте."}
 
 
 # ── разбор недели ──
@@ -1063,7 +1163,7 @@ def week_stats(uid: str, end: date) -> dict:
         # замены упражнений руками за неделю (было → стало): тренер видит, что клиенту не подошло
         "exercise_swaps": [f"{names.get(x['swapped_from'], x['swapped_from'])} → {names.get(x.get('id'), x.get('name') or x.get('id'))}"
                            for w in workouts for x in w["data"].get("exercises") or [] if x.get("swapped_from")][:10],
-        "target": {k: target.get(k) for k in ("kcal", "p", "f", "c", "water_glasses", "steps", "sleep_hours")},
+        "target": {k: target.get(k) for k in ("kcal", "p", "f", "c", "water_glasses", "steps", "sleep_hours")} | {"sleep_hours": norms.sleep_of(target)},
         "food_days_logged": len(food_days),
         "food_avg": {k: round(sum(f[k] for f in food_days) / len(food_days)) for k in ("kcal", "p", "f", "c")} if food_days else None,
         "food_avg_score": round(sum(f["score"] for f in food_days) / len(food_days)) if food_days else None,

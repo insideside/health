@@ -350,6 +350,15 @@ def sleep_hours(age: int) -> float:
     return 8.5 if age < 26 else 8.0 if age < 46 else 7.5
 
 
+def sleep_of(t: dict) -> float | None:
+    """Норма сна: своя (target.sleep_manual), иначе по формуле."""
+    return (t or {}).get("sleep_manual") or (t or {}).get("sleep_hours")
+
+
+def hours_text(h: float) -> str:
+    return f"{h:g}".replace(".", ",")
+
+
 def compute(profile: dict, weight: float, goal: dict, today: date | None = None,
             deadline: str | None = None, pace: str | None = None) -> dict:
     """Нормы и сроки.
@@ -653,10 +662,11 @@ def recalc_for(uid: str, deadline: str | None = None, pace: str | None = None) -
         db.server_put(uid, "goal", f"goal:{uid}", {**goal, "deadline": deadline})
     res = compute(prof, float(weight), goal, deadline=deadline, pace=pace)
     prev = userdata.latest_target(uid)
-    manual = (prev or {}).get("data", {}).get("steps_manual")     # ручная правка шагов переживает пересчёт
+    # свои цель шагов и норма сна переживают пересчёт
+    keep = {k: v for k, v in ((prev or {}).get("data") or {}).items() if k in ("steps_manual", "sleep_manual") and v}
     target_id = uuid.uuid4().hex
     data = {**res, "weight": float(weight), "valid_from": date.today().isoformat(), "source": "formula",
-            "explanation": "", "tips": [], **({"steps_manual": manual} if manual else {})}
+            "explanation": "", "tips": [], **keep}
     # свои БЖУ тоже переживают пересчёт: калории сдвигаются от нового расчёта на ту же разницу
     data = apply_manual(data, (prev or {}).get("data", {}).get("macros_manual"))
     db.server_put(uid, "target", target_id, data)

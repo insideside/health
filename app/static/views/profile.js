@@ -621,7 +621,7 @@ function normsBody(tgRec) {
         ${tg.fiber ? `<div><b>${tg.fiber}</b><span>клетчатка, г</span></div>` : ''}
         <div><b>${tg.water_glasses ?? '-'}${tg.water_glasses_gym && tg.water_glasses_gym !== tg.water_glasses ? '–' + tg.water_glasses_gym : ''}</b><span>стаканов воды${tg.water_ml ? ` (${num(tg.water_ml)} мл)` : ''}${waterGoal() ? ` · в чек-листе ${waterGoal()} - ваша цель` : ''}</span></div>
         <div><b>${num(tg.steps_manual || tg.steps)}</b><span>шагов${tg.steps_manual ? ' (своя цель)' : ''}</span></div>
-        ${tg.sleep_hours ? `<div><b>${String(tg.sleep_hours).replace('.', ',')}</b><span>часов сна</span></div>` : ''}
+        ${tg.sleep_manual || tg.sleep_hours ? `<div><b>${String(tg.sleep_manual || tg.sleep_hours).replace('.', ',')}</b><span>часов сна${tg.sleep_manual ? ' (своя норма)' : ''}</span></div>` : ''}
         ${tg.tdee ? `<div><b>${num(tg.tdee)}</b><span>расход, ккал</span></div>` : ''}
         ${(tl?.realistic_weeks ?? tg.weeks_needed) ? `<div><b>${tl?.realistic_weeks ?? tg.weeks_needed}</b><span>недель до цели - реалистично</span></div>` : ''}
       </div>
@@ -639,7 +639,10 @@ function normsBody(tgRec) {
       ${(tg.manual_warnings || []).map(w => `<div class="notice">${esc(w)}</div>`).join('')}
       <div class="pf-steps"><label class="pf-inline"><span class="smallcaps muted">своя цель шагов</span>
         <input class="control pf-num" type="number" inputmode="numeric" step="500" min="1000" placeholder="${num(tg.steps)}" value="${esc(tg.steps_manual || '')}" data-act="pf-steps" data-id="${tgRec.id}"></label>
-        <span class="note">пусто - по формуле</span></div>`
+        <span class="note">пусто - по формуле</span></div>
+      <div class="pf-steps"><label class="pf-inline"><span class="smallcaps muted">своя норма сна, ч</span>
+        <input class="control pf-num" type="number" inputmode="decimal" step="0.25" min="5" max="12" placeholder="${String(tg.sleep_hours || '').replace('.', ',')}" value="${esc(tg.sleep_manual || '')}" data-act="pf-sleep" data-id="${tgRec.id}" aria-label="Своя норма сна, часов"></label>
+        <span class="note">пусто - по формуле; от неё считаются «недосып» и «пересып»</span></div>`
     : '<p class="note" style="margin-top:0">Нормы ещё не считались. Заполните параметры и цели, сохраните и нажмите «Пересчитать».</p>'}
     <div class="actions"><button class="btn" data-act="norms">Пересчитать нормы</button><span class="note">${profile().ai === 'off' ? 'по формулам; комментарий тренера - при включённой ИИ' : 'формулы + комментарий локальной ИИ'}</span></div>`;
 }
@@ -1157,6 +1160,13 @@ export const changes = {
     const v = n(el.value);
     await store.patch(el.dataset.id, { steps_manual: v && v >= 1000 ? Math.round(v) : null });
     toast(v ? 'Своя цель шагов сохранена' : 'Цель шагов - по формуле');
+    await afterChange(C.today());
+  },
+  'pf-sleep': async el => {
+    const v = n(String(el.value).replace(',', '.'));
+    if (v && (v < 5 || v > 12)) { toast('Норма сна - от 5 до 12 часов', 4000); return; }
+    await store.patch(el.dataset.id, { sleep_manual: v ? Math.round(v * 4) / 4 : null });
+    toast(v ? 'Своя норма сна сохранена' : 'Норма сна - по формуле');
     await afterChange(C.today());
   },
 };

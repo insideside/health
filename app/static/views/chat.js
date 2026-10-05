@@ -41,6 +41,20 @@ function messages() {
   return out;
 }
 
+// действия чата, которые ставят задачу ИИ (вид задачи для опроса)
+const JOB_KIND = { rebuild_program: 'program', set_pace: 'program' };
+const TASK_TEXT = { program: 'Пересобираю программу тренировок' };
+// идёт задача, запущенная кнопкой в чате: «Пересобираю программу…», сколько идёт, очередь или «ИИ спит»
+function taskHtml() {
+  const t = jobFor('chat-task');
+  if (!t) return '';
+  const min = Math.floor((Date.now() - (t.started || Date.now())) / 60000);
+  const st = t.waiting ? `${glyph('moon')} ждёт, пока проснётся ИИ на сервере - выполнится само`
+    : t.ahead ? `в очереди: ${t.ahead}` : t.status === 'running' ? `идёт ${min ? `${min} мин` : 'меньше минуты'}, обычно 1-3 минуты` : 'начинаю';
+  return `<div class="msg m-coach typing"><div class="bubble">${esc(TASK_TEXT[t.kind] || 'Выполняю')} <span class="dots"><i></i><i></i><i></i></span>
+    <div class="note">${st}. Когда закончу - напишу здесь, что сделал.</div></div></div>`;
+}
+
 // ── экран ──
 function listHtml() {
   const msgs = messages();
@@ -54,6 +68,7 @@ function listHtml() {
   }).join('');
   return `${msgs.length ? '' : `<div class="msg m-coach intro"><div class="bubble">Привет! Я на связи. Спрашивай про питание, упражнения и план - или жми кнопку ниже: частые ситуации решаются сразу, даже без сети.${profile().setup_done ? '' : ' Но сначала заполни <a class="link" href="#profile">профиль</a> - без роста, веса и цели мои советы будут общими.'}</div></div>`}
     ${list}
+    ${taskHtml()}
     ${job ? `<div class="msg m-coach typing"><div class="bubble"><span class="dots"><i></i><i></i><i></i></span>${job.ahead ? ` <span class="note">в очереди ${job.ahead}</span>` : ''}</div></div>` : ''}`;
 }
 
@@ -102,7 +117,7 @@ function msgHtml(m) {
   const tag = src === 'rule' ? (d.rule && /remind|^r_|reminder/.test(d.rule) ? 'напоминание' : 'тренер заметил') : src === 'quick' ? 'быстрый ответ' : '';
   const acts = (d.actions || []);
   // «Отменить» у уже сделанной отметки - одна кнопка, без «Не надо» (отменять отмену нечего)
-  const offered = acts.filter(a => (a.status || 'offered') === 'offered' && !a.undo_of);
+  const offered = acts.filter(a => (a.status || 'offered') === 'offered' && !a.undo_of && a.kind !== 'open');
   const actHtml = acts.length ? `<div class="msg-acts">${acts.map(a => {
     const st = a.status || 'offered';
     const key = `${m.id}|${a.id}`;
@@ -350,6 +365,8 @@ export const actions = {
         if (store.get(m.id)?.data.actions?.find(x => x.id === a.id)?.status === 'offered') await setStatus(m.id, a.id, 'done');
         const msg = typeof res?.result === 'string' ? res.result : res?.result?.text;
         toast(msg || 'Готово');
+        // долгая задача (пересборка программы): ход виден в чате, итог тренер напишет сам
+        if (res?.result?.job_id && JOB_KIND[a.kind]) await addJob(res.result.job_id, JOB_KIND[a.kind], 'chat-task');
       }
     } catch (e) {
       toast(e.status === 404 ? 'Сервер ещё не умеет выполнять действия чата - обновите сервер' : e.status === 0 ? 'Нет связи с сервером' : (e.message || 'Ошибка'), 5000);

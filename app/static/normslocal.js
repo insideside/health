@@ -106,6 +106,7 @@ export async function saveEstimate(uid = store.uid()) {
   if (t.missing) return t;
   const prev = C.target(uid);
   if (prev?.steps_manual) t.steps_manual = prev.steps_manual;
+  if (prev?.sleep_manual) t.sleep_manual = prev.sleep_manual;
   if (prev?.macros_manual) t = applyManual(t, prev.macros_manual);
   await store.put('target', store.newId(), t, null);
   return t;

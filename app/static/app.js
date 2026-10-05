@@ -708,7 +708,8 @@ async function poll() {
             toast(done, 4000);
             // тост живёт секунды, а в чате остаётся видно, что тренер закончил и что сделал - не только для
             // разбора недели/программы, туда и так заглянут за текстом, а чтобы не пропустить сам факт завершения
-            if (['program', 'weekly', 'mealplan', 'analysis'].includes(j.kind)) chat.announce(done);
+            // о программе пишет сам сервер (что сделал, где, по каким дням) - не дублируем
+            if (['weekly', 'mealplan', 'analysis'].includes(j.kind)) chat.announce(done);
           }
         }
       } catch (e) {
