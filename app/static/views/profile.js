@@ -258,7 +258,7 @@ function paramsBody(fm) {
     ${field('Имя', input(F, 'name', fm.name))}
     ${field('Пол', select(F, 'sex', fm.sex, [['', '-'], ['m', 'Мужской'], ['f', 'Женский']], 'data-rerender'))}
     ${field('Дата рождения', input(F, 'birth', fm.birth, 'type="date"'))}
-    ${field('Рост, см', input(F, 'height', fm.height, 'type="number" inputmode="numeric" min="100" max="250"'))}
+    ${field('Рост, см', input(F, 'height', fm.height, 'type="number" inputmode="numeric" pattern="[0-9]*" min="100" max="250"'))}
     ${field('Вес, кг', input(F, 'weight', fm.weight, 'type="number" inputmode="decimal" step="0.1"'))}
     ${field('Активность вне тренировок', select(F, 'activity', fm.activity, ACT))}
   </div>
@@ -435,8 +435,8 @@ function cycleBody(fm) {
     ${chk('cycle_on', 'Учитывать цикл', fm.cycle_on)}
     ${fm.cycle_on ? `<div class="grid3" style="margin-top:12px">
       ${field('Начало последнего цикла', input(F, 'cycle_last', fm.cycle_last, 'type="date"'))}
-      ${field('Длина цикла, дней', input(F, 'cycle_len', fm.cycle_len, 'type="number" inputmode="numeric" min="20" max="45"'))}
-      ${field('Длительность, дней', input(F, 'cycle_period', fm.cycle_period, 'type="number" inputmode="numeric" min="2" max="10"'))}
+      ${field('Длина цикла, дней', input(F, 'cycle_len', fm.cycle_len, 'type="number" inputmode="numeric" pattern="[0-9]*" min="20" max="45"'))}
+      ${field('Длительность, дней', input(F, 'cycle_period', fm.cycle_period, 'type="number" inputmode="numeric" pattern="[0-9]*" min="2" max="10"'))}
     </div>` : ''}`;
 }
 
@@ -460,7 +460,7 @@ function trainingBody(fm) {
       ${chk('sched_irregular', 'График плавающий (смены)', fm.sched_irregular)}
       <p class="note">${fm.sched_irregular ? 'Тренер будет подстраиваться по дням и предлагать короткие тренировки, когда окно маленькое.' : 'Укажите занятые часы и удобное время - тренировки встанут в свободные окна.'}</p>
       <div class="pf-sched">${WD.map((w, i) => `<div class="pf-sched-r"><span class="smallcaps">${w}</span>
-        <input class="control mono" data-act="pf-sched" data-d="${i}" data-k="busy" value="${esc(fm.sched_days[i].busy)}" placeholder="09:00-18:00" inputmode="numeric" aria-label="Занят ${w}">
+        <input class="control mono" data-act="pf-sched" data-d="${i}" data-k="busy" value="${esc(fm.sched_days[i].busy)}" placeholder="09:00-18:00" inputmode="numeric" pattern="[0-9]*" aria-label="Занят ${w}">
         <select class="control" data-act="pf-sched" data-d="${i}" data-k="slot" aria-label="Удобно ${w}">${SLOTS.map(([k, l]) => `<option value="${k}" ${fm.sched_days[i].slot === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}</div>
     </details>
     <div class="actions">${own ? '<a class="btn quiet" href="#workout">Записанные тренировки <span class="arrow">→</span></a>' : '<a class="btn quiet" href="#program">Программа тренировок <span class="arrow">→</span></a>'}</div>`;
@@ -522,7 +522,7 @@ function activitiesBody(fm) {
       <label class="pf-inline"><span class="smallcaps muted">раз в неделю</span>
         <select class="control" data-act="pf-act" data-i="${i}" data-k="per_week">${[1, 2, 3, 4, 5, 6, 7].map(k => `<option value="${k}" ${Number(a.per_week) === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
       <label class="pf-inline"><span class="smallcaps muted">минут</span>
-        <input class="control pf-num" type="number" inputmode="numeric" min="5" step="5" value="${esc(a.minutes ?? '')}" data-act="pf-act" data-i="${i}" data-k="minutes"></label>
+        <input class="control pf-num" type="number" inputmode="numeric" pattern="[0-9]*" min="5" step="5" value="${esc(a.minutes ?? '')}" data-act="pf-act" data-i="${i}" data-k="minutes"></label>
       <label class="pf-inline"><span class="smallcaps muted">интенсивность</span>
         <select class="control" data-act="pf-act" data-i="${i}" data-k="intensity">${INTENSITY.map(([k, l]) => `<option value="${k}" ${a.intensity === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     </div>
@@ -570,7 +570,7 @@ function foodBody(fm) {
   return `${chk('ew_on', 'Есть в окне (интервальное питание)', fm.ew_on)}
     ${fm.ew_on ? `<div class="grid3" style="margin-top:12px">${field('С', input(F, 'ew_from', fm.ew_from, 'type="time"'))}${field('До', input(F, 'ew_to', fm.ew_to, 'type="time"'))}</div>
       <p class="note">Приёмы пищи вне окна тренер отметит - без упрёков, просто для статистики.</p>` : ''}
-    <div class="grid3" style="margin-top:12px">${field('Объём стакана, мл', input(F, 'glass_ml', fm.glass_ml, 'type="number" inputmode="numeric" min="100" max="600"'))}</div>
+    <div class="grid3" style="margin-top:12px">${field('Объём стакана, мл', input(F, 'glass_ml', fm.glass_ml, 'type="number" inputmode="numeric" pattern="[0-9]*" min="100" max="600"'))}</div>
     <div class="field" style="margin-top:14px"><span class="smallcaps">Молоко в кофе</span>
       ${chips(F, 'milk_mode', fm.milk_mode, [['meal', 'Показывать в приёмах пищи'], ['hidden', 'Только в итогах дня']])}
       <p class="note">${fm.milk_mode === 'hidden'
@@ -634,11 +634,11 @@ function normsBody(tgRec) {
         ${tg.tips?.length ? `<ul>${tg.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</div>` : ''}
       <div class="pf-steps pf-macros"><span class="smallcaps muted">свои БЖУ, г</span>
         ${[['p', 'белки'], ['f', 'жиры'], ['c', 'углеводы']].map(([k, l]) => `<label class="pf-inline"><span class="note">${l}</span>
-          <input class="control pf-num" type="number" inputmode="numeric" step="5" min="0" placeholder="${num(tg.formula?.[k] ?? tg[k])}" value="${esc(tg.macros_manual?.[k] ?? '')}" data-act="pf-macro" data-k="${k}" data-id="${tgRec.id}" aria-label="Своя норма: ${l}"></label>`).join('')}
+          <input class="control pf-num" type="number" inputmode="numeric" pattern="[0-9]*" step="5" min="0" placeholder="${num(tg.formula?.[k] ?? tg[k])}" value="${esc(tg.macros_manual?.[k] ?? '')}" data-act="pf-macro" data-k="${k}" data-id="${tgRec.id}" aria-label="Своя норма: ${l}"></label>`).join('')}
         <span class="note">${tg.macros_manual ? `по формуле было ${num(tg.formula?.kcal)} ккал, ${tg.formula?.p} / ${tg.formula?.f} / ${tg.formula?.c} г; пусто - вернуть расчёт` : 'пусто - по формуле; калории пересчитаются сами'}</span></div>
       ${(tg.manual_warnings || []).map(w => `<div class="notice">${esc(w)}</div>`).join('')}
       <div class="pf-steps"><label class="pf-inline"><span class="smallcaps muted">своя цель шагов</span>
-        <input class="control pf-num" type="number" inputmode="numeric" step="500" min="1000" placeholder="${num(tg.steps)}" value="${esc(tg.steps_manual || '')}" data-act="pf-steps" data-id="${tgRec.id}"></label>
+        <input class="control pf-num" type="number" inputmode="numeric" pattern="[0-9]*" step="500" min="1000" placeholder="${num(tg.steps)}" value="${esc(tg.steps_manual || '')}" data-act="pf-steps" data-id="${tgRec.id}"></label>
         <span class="note">пусто - по формуле</span></div>
       <div class="pf-steps"><label class="pf-inline"><span class="smallcaps muted">своя норма сна, ч</span>
         <input class="control pf-num" type="number" inputmode="decimal" step="0.25" min="5" max="12" placeholder="${String(tg.sleep_hours || '').replace('.', ',')}" value="${esc(tg.sleep_manual || '')}" data-act="pf-sleep" data-id="${tgRec.id}" aria-label="Своя норма сна, часов"></label>
@@ -657,7 +657,7 @@ function checklistBody() {
     <div class="grid3" style="margin-top:14px">
       ${field('Новый пункт', input('item', 'title', '', 'placeholder="например: 10 минут растяжки"'))}
       ${field('Тип', select('item', 'type', 'bool', [['bool', 'Галочка'], ['counter', 'Счётчик'], ['number', 'Число']]))}
-      ${field('Цель (для счётчика/числа)', input('item', 'target', '', 'type="number" inputmode="numeric"'))}
+      ${field('Цель (для счётчика/числа)', input('item', 'target', '', 'type="number" inputmode="numeric" pattern="[0-9]*"'))}
       ${field('Группа', select('item', 'group', 'day', [['morning', 'Зарядка'], ['day', 'В течение дня']]))}
     </div>
     <div class="actions"><button class="btn" data-act="item-add">Добавить пункт</button></div>

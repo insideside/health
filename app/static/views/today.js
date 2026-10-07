@@ -455,18 +455,18 @@ function timeBox(label, k, val, date, aria) {
   const m = /^(\d{1,2}):(\d{2})$/.exec(val || '');
   const a = `data-act="td-sleep-time" data-k="${k}" data-date="${date}"`;
   return `<label class="field"><span class="smallcaps">${label}</span><div class="a-hm">
-    <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="${esc(aria)}, часы">
+    <input class="control mono" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="${esc(aria)}, часы">
     <span class="a-hm-sep">:</span>
-    <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="${esc(aria)}, минуты"></div></label>`;
+    <input class="control mono" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="${esc(aria)}, минуты"></div></label>`;
 }
 // дневной сон: интервалы «с - до» (sleep.naps), отдельно от ночи; поля часы/минуты - как у ночного сна
 function napBox(i, end, val, date, label) {
   const m = /^(\d{1,2}):(\d{2})$/.exec(val || '');
   const a = `data-act="td-nap-time" data-i="${i}" data-end="${end}" data-date="${date}"`;
   return `<label class="a-napf"><span class="note">${label}</span><span class="a-hm">
-    <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="Дневной сон ${i + 1}, ${label}, часы">
+    <input class="control mono" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" placeholder="чч" value="${m ? m[1] : ''}" ${a} data-part="h" aria-label="Дневной сон ${i + 1}, ${label}, часы">
     <span class="a-hm-sep">:</span>
-    <input class="control mono" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="Дневной сон ${i + 1}, ${label}, минуты"></span></label>`;
+    <input class="control mono" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" placeholder="мм" value="${m ? m[2] : ''}" ${a} data-part="m" aria-label="Дневной сон ${i + 1}, ${label}, минуты"></span></label>`;
 }
 function napsBlock(date) {
   if (date > C.today()) return '';
@@ -657,7 +657,7 @@ function cupEditor(kind, date, focusNew = false, amt = 1) {
     ${r.data.milk ? `<select class="control" data-act="cup-milk-type" data-id="${r.id}" data-date="${date}" aria-label="Какое молоко">
         ${C.MILK_TYPES.map(([k, , l]) => `<option value="${k}" ${r.data.milk.type === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}
       </select>
-      <label class="a-cup-ml"><input class="control mono" type="number" inputmode="numeric" min="0" step="10" value="${r.data.milk.ml || 50}" data-act="cup-milk-ml" data-id="${r.id}" data-date="${date}" aria-label="Сколько молока, мл"> мл</label>
+      <label class="a-cup-ml"><input class="control mono" type="number" inputmode="numeric" pattern="[0-9]*" min="0" step="10" value="${r.data.milk.ml || 50}" data-act="cup-milk-ml" data-id="${r.id}" data-date="${date}" aria-label="Сколько молока, мл"> мл</label>
       ${C.milkMode() === 'meal' ? `<select class="control a-cup-meal" data-act="cup-milk-meal" data-id="${r.id}" data-date="${date}" aria-label="К какому приёму пищи отнести молоко">
         <option value="" ${r.data.milk.meal ? '' : 'selected'}>по времени: ${esc(MEAL_RU[C.milkMeal(null, r.data.time)] || '')}</option>
         ${Object.entries(MEAL_RU).map(([k, l]) => `<option value="${k}" ${r.data.milk.meal === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}` : ''}
@@ -950,7 +950,7 @@ function actModalHtml() {
       })()}
       <p class="note a-noresults" ${list.some(match) ? 'hidden' : ''}>Ничего не нашлось - выберите похожее по нагрузке: например, «Растяжка» или «Ходьба».</p>`}
       ${def ? `<div class="a-actform" data-dom="move">
-        <div class="a-times">${field('Минут', input('act', 'minutes', f.minutes, 'type="number" inputmode="numeric" min="1" max="600"'))}
+        <div class="a-times">${field('Минут', input('act', 'minutes', f.minutes, 'type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="600"'))}
           <div class="field"><span class="smallcaps">Ккал</span><div class="a-kcal mono">${kcal ? '≈ ' + num(kcal) : '-'}</div></div></div>
         <div class="field a-fld"><span class="smallcaps">Интенсивность</span><div class="chips">${INTENSITY.map(([k, l]) =>
           `<button type="button" class="chip ${f.intensity === k ? 'on' : ''}" aria-pressed="${f.intensity === k}" data-act="td-ac-f" data-k="intensity" data-v="${k}">${l}</button>`).join('')}</div>
@@ -1069,7 +1069,7 @@ function itemRow(it, date) {
   if (d.type === 'number') {
     return `<div class="row ${done ? 'done' : ''}"${da}>${tick(`data-act="focus-num" data-item="${it.id}"`)}
       <div><div class="title">${esc(d.title)}</div><div class="hint">цель ${num(p.target)} ${esc(d.unit || '')}</div></div>
-      <input class="control num-in" type="number" inputmode="numeric" min="0" placeholder="0" value="${p.value || ''}" data-act="setnum" ${attrs} aria-label="${esc(d.title)}"></div>`;
+      <input class="control num-in" type="number" inputmode="numeric" pattern="[0-9]*" min="0" placeholder="0" value="${p.value || ''}" data-act="setnum" ${attrs} aria-label="${esc(d.title)}"></div>`;
   }
   if (d.type === 'workout') {
     const w = p.value, total = w.data.exercises.reduce((a, x) => a + x.sets, 0);

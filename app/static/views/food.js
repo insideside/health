@@ -15,6 +15,12 @@ const MEAL_NAME = Object.fromEntries(MEALS);
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 const hm = t => /^\d{1,2}:\d{2}$/.test(t || '') ? t.padStart(5, '0') : null;
 const timeOf = e => hm(e.data.time) || (e.data.created ? new Date(e.data.created).toTimeString().slice(0, 5) : '');
+// время в форме по умолчанию: сегодня - сейчас; прошедший день - время последней записи этого приёма за тот день
+// (форма после «Добавить» сбрасывается, и вторая запись того же обеда задним числом уходила без времени)
+const defTime = (date, meal) => date === C.today() ? nowHM()
+  : store.byDate('food', date).filter(e => (e.data.meal || 'snack') === meal).map(e => hm(e.data.time)).filter(Boolean).sort().pop() || '';
+// протеин из добавок и молоко к кофе живут вместе с отметкой/чашкой своего дня - на другой день их не переносим
+const linked = r => !!(r.data.supp_id || r.data.drink_id || r.data.calc === 'supp');
 
 // ── окно питания ──
 function eatingWindow() {
@@ -1047,7 +1053,7 @@ function viewFood(date) {
     <div class="inset food-add">
       <textarea class="control" data-form="food" data-key="text" placeholder="гречка 200 г, 2 яйца, кофе с молоком" aria-label="Что съели" data-enter="food-add">${esc(fval('food', 'text'))}</textarea>
       <div class="actions">${select('food', 'meal', defMeal, MEALS, 'aria-label="Приём пищи" data-rerender')}
-        <input class="control mono a-time" type="time" data-form="food" data-key="time" value="${esc(fval('food', 'time', date === C.today() ? nowHM() : ''))}" aria-label="Время">
+        <input class="control mono a-time" type="time" data-form="food" data-key="time" value="${esc(fval('food', 'time', defTime(date, fval('food', 'meal', defMeal))))}" aria-label="Время">
         <button class="btn solid" data-act="food-add" data-date="${date}">Добавить</button>
         <button class="btn" data-act="fp-open" data-date="${date}">Из справочника</button>
         ${store.partners().length ? `<button class="btn" data-act="pm-open" data-date="${date}" title="Скопировать приём пищи партнёра к себе">Как у ${esc(store.partners().length === 1 ? N.decl(store.partners()[0].name, store.partners()[0].sex).gen : 'партнёра')}</button>` : ''}
@@ -1104,7 +1110,7 @@ function foodEntry(e, win) {
   const per100 = it => { const k = it.grams ? 100 / it.grams : 0; return { kcal: it.kcal * k, p: it.p * k, f: it.f * k, c: it.c * k }; };
   const items = (d.items || []).map((it, i) => { const is = itemState(it); const p100 = per100(it);
     // одна строка из пяти равных полей: граммы и КБЖУ съеденного (подписи сверху - помещается и на телефоне)
-    const macRow = `<div class="mac mac-edit"><label class="mac-f mac-g"><span class="mac-l">г</span><input class="control mono g-in" type="number" inputmode="numeric" min="0" value="${it.grams}" data-act="food-grams" data-id="${e.id}" data-i="${i}" aria-label="граммы: ${esc(it.name)}"></label>${macF('ккал', 'kcal', it.kcal, it.name, i, 'food-macro')}${macF('Б', 'p', it.p, it.name, i, 'food-macro')}${macF('Ж', 'f', it.f, it.name, i, 'food-macro')}${macF('У', 'c', it.c, it.name, i, 'food-macro')}</div>
+    const macRow = `<div class="mac mac-edit"><label class="mac-f mac-g"><span class="mac-l">г</span><input class="control mono g-in" type="number" inputmode="numeric" pattern="[0-9]*" min="0" value="${it.grams}" data-act="food-grams" data-id="${e.id}" data-i="${i}" aria-label="граммы: ${esc(it.name)}"></label>${macF('ккал', 'kcal', it.kcal, it.name, i, 'food-macro')}${macF('Б', 'p', it.p, it.name, i, 'food-macro')}${macF('Ж', 'f', it.f, it.name, i, 'food-macro')}${macF('У', 'c', it.c, it.name, i, 'food-macro')}</div>
         ${it.grams ? `<div class="mac-calc note">на 100 г: ${num(Math.round(p100.kcal))} ккал · Б ${dec(p100.p)} · Ж ${dec(p100.f)} · У ${dec(p100.c)}</div>` : ''}`;
     return `<div class="fi"><div class="ell nm">${esc(it.name)}${it.dish ? `<span class="src-brain" title="Ингредиент блюда: вес - его доля в порции">${esc(it.dish)}</span>` : ''}${stBadge(is.st)}${it.source === 'ai' ? '<span class="src-ai" title="Оценка ИИ: продукта нет в справочнике">≈ИИ</span>' : it.source === 'brain' ? '<span class="src-brain" title="Так эту фразу раньше разобрала ИИ - теперь считается без неё">память</span>' : it.source === 'manual' ? '<span class="src-brain" title="БЖУ заданы вручную">своё</span>' : it.source === 'web' ? '<span class="src-brain" title="Найдено в интернете и сохранено в общий справочник">из сети</span>' : ''}${it.choice ? ` <button type="button" class="a-linkbtn" data-act="fc-open">выбрать вариант</button>` : ''}</div>
     <button class="btn quiet a-mini fi-edit" data-act="fi-open" data-id="${e.id}" data-i="${i}" aria-label="Править продукт: ${esc(it.name)}" title="Править: название, вес, КБЖУ на 100 г">${glyph('pencil')}</button>
@@ -1251,17 +1257,28 @@ export const actions = {
     const r = store.get(el.dataset.id);
     openModal(`<div class="modal-head"><h2>Изменить запись</h2></div><div class="modal-body">
       ${field('Что съедено', `<textarea class="control" id="fe-text" rows="3">${esc(r.data.text)}</textarea>`)}
-      <div class="grid2" style="margin-top:12px">${field('Приём пищи', `<select class="control" id="fe-meal">${MEALS.map(([k, l]) => `<option value="${k}" ${r.data.meal === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`)}
+      <div class="${linked(r) ? 'grid2' : 'grid3'}" style="margin-top:12px">${field('Приём пищи', `<select class="control" id="fe-meal">${MEALS.map(([k, l]) => `<option value="${k}" ${r.data.meal === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`)}
+      ${linked(r) ? '' : field('Дата', `<input class="control mono" type="date" id="fe-date" value="${esc(r.date)}" max="${C.today()}">`)}
       ${field('Время', `<input class="control mono" type="time" id="fe-time" value="${esc(timeOf(r))}">`)}</div></div>
       <div class="modal-foot"><button class="btn quiet" data-act="close">Отмена</button><button class="btn solid" data-act="food-save" data-id="${r.id}">Сохранить</button></div>`);
   },
   'food-save': async el => {
-    const r = store.get(el.dataset.id);
+    let r = store.get(el.dataset.id);
     const text = document.getElementById('fe-text').value.trim(), meal = document.getElementById('fe-meal').value;
     const time = hm(document.getElementById('fe-time').value) || r.data.time || null;
+    // перенос на другой день (ошиблись датой при вводе); будущее - нельзя
+    const nd = document.getElementById('fe-date')?.value;
+    const date = nd && /^\d{4}-\d{2}-\d{2}$/.test(nd) && nd <= C.today() ? nd : r.date;
     const win = eatingWindow();
     const out_of_window = !!(win && time && !inWindow(time, win));
     closeModal();
+    if (date !== r.date) {
+      await store.put('food', r.id, { ...r.data, meal, time, out_of_window }, date);
+      await afterChange(r.date); await afterChange(date);
+      toast(`Перенесено на ${fmt(date, { day: 'numeric', month: 'long' })}`);
+      if (text === r.data.text) return;
+      r = store.get(r.id);
+    }
     // тот же текст: запись, посчитанная справочником на устройстве и не правленная руками, разбираем заново -
     // так чинятся записи, разобранные старыми правилами (результат ИИ и ручные правки не трогаем)
     if (text === r.data.text && (r.data.calc !== 'local' || r.data.edited)) { await store.patch(r.id, { meal, time, out_of_window }); return; }
@@ -1329,7 +1346,7 @@ export const actions = {
     const calc = f.data.totals && f.data.items?.length;
     const meal = fval('food', 'meal', document.querySelector('[data-form=food][data-key=meal]')?.value || f.data.meal || 'snack');
     const rec = await addEntry(el.dataset.date, { meal, text: f.data.text, items: structuredClone(f.data.items || []), totals: f.data.totals ? { ...f.data.totals } : null,
-      status: calc ? 'calculated' : 'raw', time: fval('food', 'time', '') });
+      status: calc ? 'calculated' : 'raw', time: fval('food', 'time', document.querySelector('[data-form=food][data-key=time]')?.value || '') });
     toast(`${f.data.title}: записано`);
     if (!calc && store.state.online) calcFood(rec, false);
   },
